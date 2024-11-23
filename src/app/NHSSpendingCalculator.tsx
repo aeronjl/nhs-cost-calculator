@@ -243,7 +243,9 @@ export default function NHSSpendingCalculator() {
 									handleQuickInput(option.cost, option.quantity, option)
 								}
 								className="text-sm h-auto py-2 px-3 whitespace-normal"
-								variant="outline"
+								variant={
+									selectedOption?.name === option.name ? "default" : "outline"
+								}
 							>
 								<span className="mr-1">{option.emoji}</span>
 								<span className="text-xs">
