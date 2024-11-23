@@ -9,6 +9,12 @@ import Link from "next/link";
 import { FaSpotify } from "react-icons/fa";
 import { SiApplepodcasts } from "react-icons/si";
 import { Badge } from "@/components/ui/badge";
+import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@/components/ui/accordion";
 const ANNUAL_NHS_SPENDING = 192000000000; // £192 billion
 const MINUTES_PER_YEAR = 525600;
 
@@ -223,6 +229,22 @@ export default function NHSSpendingCalculator() {
 								</p>
 							</div>
 						</CardContent>
+						<Accordion type="single" collapsible className="px-6 pb-6 hidden">
+							<AccordionItem value="spending-breakdown">
+								<AccordionTrigger>Where does the money go?</AccordionTrigger>
+								<AccordionContent>
+									<ul className="space-y-2 text-sm text-muted-foreground">
+										<li>• Staff costs (£56.8bn)</li>
+										<li>• Hospital drugs (£20.7bn)</li>
+										<li>• Primary care (£14.2bn)</li>
+										<li>• Community health services (£11.5bn)</li>
+										<li>• Mental health (£14.3bn)</li>
+										<li>• Specialist care (£19.6bn)</li>
+										<li>• Other costs (£54.9bn)</li>
+									</ul>
+								</AccordionContent>
+							</AccordionItem>
+						</Accordion>
 					</Card>
 
 					<div className="flex flex-wrap gap-2 mb-4">
@@ -263,7 +285,7 @@ export default function NHSSpendingCalculator() {
 				<div className="max-w-[1024px] w-screen mx-auto px-4">
 					<div className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
 						<h2 className="text-xl font-light mb-2">
-							Alternative Progress-Focused Spending Options:
+							What else could {formatMoney(amount)} fund?
 						</h2>
 						<ul className="space-y-3">
 							{spendingOptions.map((option, index) => {
