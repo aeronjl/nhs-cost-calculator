@@ -79,6 +79,9 @@ const spendingOptions: SpendingOption[] = [
 export default function NHSSpendingCalculator() {
 	const [amount, setAmount] = useState(ANNUAL_NHS_SPENDING);
 	const [inputValue, setInputValue] = useState(ANNUAL_NHS_SPENDING.toString());
+	const [selectedOption, setSelectedOption] = useState<SpendingOption | null>(
+		null,
+	);
 
 	useEffect(() => {
 		setInputValue(amount.toLocaleString());
@@ -90,13 +93,19 @@ export default function NHSSpendingCalculator() {
 		const numericValue = Number.parseFloat(value);
 		if (!Number.isNaN(numericValue)) {
 			setAmount(numericValue);
+			setSelectedOption(null);
 		}
 	};
 
-	const handleQuickInput = (cost: number, quantity: number) => {
+	const handleQuickInput = (
+		cost: number,
+		quantity: number,
+		option: SpendingOption,
+	) => {
 		const newAmount = cost * quantity;
 		setAmount(newAmount);
 		setInputValue(newAmount.toLocaleString());
+		setSelectedOption(option);
 	};
 
 	const timeInMinutes = (amount / ANNUAL_NHS_SPENDING) * MINUTES_PER_YEAR;
@@ -109,7 +118,17 @@ export default function NHSSpendingCalculator() {
 					<Card className="mb-6 w-full">
 						<CardHeader>
 							<CardTitle className="text-3xl font-light text-center">
-								{formatMoney(amount)} is
+								{selectedOption ? (
+									<>
+										{selectedOption.quantity}{" "}
+										{selectedOption.quantity > 1
+											? selectedOption.pluralName
+											: selectedOption.name}{" "}
+										({formatMoney(amount)}) is
+									</>
+								) : (
+									<>{formatMoney(amount)} is</>
+								)}
 							</CardTitle>
 						</CardHeader>
 						<CardContent>
@@ -148,10 +167,12 @@ export default function NHSSpendingCalculator() {
 					</Card>
 
 					<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 mb-8">
-						{spendingOptions.map((option, index) => (
+						{spendingOptions.map((option) => (
 							<Button
 								key={option.name}
-								onClick={() => handleQuickInput(option.cost, option.quantity)}
+								onClick={() =>
+									handleQuickInput(option.cost, option.quantity, option)
+								}
 								className="text-sm h-auto py-2 px-3 whitespace-normal"
 								variant="outline"
 							>
