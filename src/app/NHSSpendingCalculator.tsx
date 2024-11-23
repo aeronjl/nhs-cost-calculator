@@ -87,8 +87,8 @@ export default function NHSSpendingCalculator() {
 		<>
 			<div className="min-h-screen">
 				<div className="fixed top-1/2 -translate-y-1/2 left-0 right-0 bg-background z-10">
-					<div className="max-w-4xl mx-auto px-4">
-						<Card className="mb-6">
+					<div className="max-w-[1024px] mx-auto px-4">
+						<Card className="mb-6 w-full">
 							<CardHeader>
 								<CardTitle className="text-3xl font-light text-center">
 									{formatMoney(amount)} is
@@ -129,32 +129,28 @@ export default function NHSSpendingCalculator() {
 							</CardContent>
 						</Card>
 
-						<div className="mb-8">
-							<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-								{spendingOptions.map((option, index) => (
-									<Button
-										key={option.name}
-										onClick={() =>
-											handleQuickInput(option.cost, option.quantity)
-										}
-										className="text-sm h-auto py-2 px-3 whitespace-normal"
-										variant="outline"
-									>
-										<span className="mr-1">{option.emoji}</span>
-										<span className="text-xs">
-											{option.quantity} {option.name}
-											{option.quantity > 1 ? "s" : ""}
-										</span>
-									</Button>
-								))}
-							</div>
+						<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 mb-8">
+							{spendingOptions.map((option, index) => (
+								<Button
+									key={option.name}
+									onClick={() => handleQuickInput(option.cost, option.quantity)}
+									className="text-sm h-auto py-2 px-3 whitespace-normal"
+									variant="outline"
+								>
+									<span className="mr-1">{option.emoji}</span>
+									<span className="text-xs">
+										{option.quantity} {option.name}
+										{option.quantity > 1 ? "s" : ""}
+									</span>
+								</Button>
+							))}
 						</div>
 					</div>
 				</div>
 
 				<div className="pt-[80vh]">
-					<div className="max-w-4xl mx-auto px-4">
-						<div className="w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+					<div className="max-w-[1024px] w-screen mx-auto px-4">
+						<div className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
 							<h2 className="text-xl font-light mb-2">
 								Alternative Progress-Focused Spending Options:
 							</h2>
