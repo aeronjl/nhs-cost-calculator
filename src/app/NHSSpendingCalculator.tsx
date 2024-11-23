@@ -85,7 +85,7 @@ export default function NHSSpendingCalculator() {
 	}, [amount]);
 
 	const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const value = e.target.value.replace(/[^0-9.]/g, "");
+		const value = e.target.value.replace(/[^0-9]/g, "");
 		setInputValue(value);
 		const numericValue = Number.parseFloat(value);
 		if (!Number.isNaN(numericValue)) {
