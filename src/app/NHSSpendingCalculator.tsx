@@ -114,6 +114,14 @@ const spendingOptions: SpendingOption[] = [
 		citation:
 			"https://www.macrotrends.net/stocks/charts/KO/cocacola/gross-profit",
 	},
+	{
+		name: "year's annual full-time salary for a UK employee",
+		pluralName: "years' annual full-time salaries for UK employees",
+		cost: 37430,
+		emoji: "💼",
+		quantity: 1,
+		categories: ["Top", "Politics", "Business"],
+	},
 ];
 
 export default function NHSSpendingCalculator() {
