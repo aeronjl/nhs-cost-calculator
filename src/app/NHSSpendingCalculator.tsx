@@ -19,6 +19,7 @@ interface SpendingOption {
 	emoji: string;
 	quantity: number;
 	categories: string[];
+	citation?: string;
 }
 
 const spendingOptions: SpendingOption[] = [
@@ -45,6 +46,8 @@ const spendingOptions: SpendingOption[] = [
 		emoji: "🚅",
 		quantity: 10,
 		categories: ["Top", "Transport"],
+		citation:
+			"https://www.samdumitriu.com/p/britains-infrastructure-is-too-expensive",
 	},
 	{
 		name: "km of French-style tram system",
@@ -275,6 +278,16 @@ export default function NHSSpendingCalculator() {
 											{formatMoney(amount)} could fund{" "}
 											{quantity.toLocaleString()}{" "}
 											{quantity !== 1 ? option.pluralName : option.name}
+											{option.citation && (
+												<a
+													href={option.citation}
+													className="ml-1 text-blue-500 hover:underline"
+													target="_blank"
+													rel="noopener noreferrer"
+												>
+													[source]
+												</a>
+											)}
 										</span>
 									</li>
 								);
