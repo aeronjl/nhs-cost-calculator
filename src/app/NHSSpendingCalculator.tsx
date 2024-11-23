@@ -104,6 +104,16 @@ const spendingOptions: SpendingOption[] = [
 		categories: ["Politics"],
 		citation: "https://www.bbc.co.uk/news/articles/c04lyddv2p5o",
 	},
+	{
+		name: "year of profit for the Coca-Cola Company",
+		pluralName: "years of profit for the Coca-Cola Company",
+		cost: 28021000000,
+		emoji: "🥤",
+		quantity: 1,
+		categories: ["Business"],
+		citation:
+			"https://www.macrotrends.net/stocks/charts/KO/cocacola/gross-profit",
+	},
 ];
 
 export default function NHSSpendingCalculator() {
