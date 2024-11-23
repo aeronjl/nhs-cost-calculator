@@ -8,12 +8,15 @@ export function formatMoney(amount: number): string {
 }
 
 export function formatTime(totalMinutes: number): string {
-	const years = Math.floor(totalMinutes / 525600);
-	const months = Math.floor((totalMinutes % 525600) / 43800);
-	const weeks = Math.floor((totalMinutes % 43800) / 10080);
-	const days = Math.floor((totalMinutes % 10080) / 1440);
-	const hours = Math.floor((totalMinutes % 1440) / 60);
-	const minutes = Math.floor(totalMinutes % 60);
+	const totalSeconds = totalMinutes * 60;
+
+	const years = Math.floor(totalSeconds / (525600 * 60));
+	const months = Math.floor((totalSeconds % (525600 * 60)) / (43800 * 60));
+	const weeks = Math.floor((totalSeconds % (43800 * 60)) / (10080 * 60));
+	const days = Math.floor((totalSeconds % (10080 * 60)) / (1440 * 60));
+	const hours = Math.floor((totalSeconds % (1440 * 60)) / (60 * 60));
+	const minutes = Math.floor((totalSeconds % (60 * 60)) / 60);
+	const seconds = Math.floor(totalSeconds % 60);
 
 	if (years > 0) {
 		if (months > 0)
@@ -40,5 +43,10 @@ export function formatTime(totalMinutes: number): string {
 			return `${hours} hour${hours > 1 ? "s" : ""} and ${minutes} minute${minutes > 1 ? "s" : ""}`;
 		return `${hours} hour${hours > 1 ? "s" : ""}`;
 	}
-	return `${minutes} minute${minutes > 1 ? "s" : ""}`;
+	if (minutes > 0) {
+		if (seconds > 0)
+			return `${minutes} minute${minutes > 1 ? "s" : ""} and ${seconds} second${seconds > 1 ? "s" : ""}`;
+		return `${minutes} minute${minutes > 1 ? "s" : ""}`;
+	}
+	return `${seconds} second${seconds > 1 ? "s" : ""}`;
 }
