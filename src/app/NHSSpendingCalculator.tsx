@@ -122,7 +122,7 @@ export default function NHSSpendingCalculator() {
 						About
 					</Link>
 				</div>
-				<div className="max-w-[1024px] mx-auto px-4 mt-[20vh]">
+				<div className="max-w-[1024px] mx-auto px-4 mt-6">
 					<div className="flex flex-col items-center lg:items-end justify-end gap-3 mb-4 bg-gradient-to-r from-neutral-100 to-neutral-50 shadow-sm border p-4 rounded-lg">
 						<span className="text-muted-foreground w-fit text-sm order-2 lg:order-1 text-center">
 							Join the conversation about Britain's future on the{" "}
