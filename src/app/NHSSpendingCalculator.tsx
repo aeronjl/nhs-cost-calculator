@@ -5,7 +5,9 @@ import { formatMoney, formatTime } from "./utils/formatters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { AnimatedNumber } from "@/components/ui/animated-number";
+import Link from "next/link";
+import { FaSpotify } from "react-icons/fa";
+import { SiApplepodcasts } from "react-icons/si";
 const ANNUAL_NHS_SPENDING = 192000000000; // £192 billion
 const MINUTES_PER_YEAR = 525600;
 
@@ -113,8 +115,30 @@ export default function NHSSpendingCalculator() {
 
 	return (
 		<>
-			<div className="min-h-screen">
-				<div className="max-w-[1024px] mx-auto px-4 mt-[calc(50vh-200px)]">
+			<div className="min-h-screen pb-24">
+				<div className="max-w-[1024px] mx-auto px-4 mt-[calc(50vh-300px)]">
+					<div className="flex flex-col items-center lg:items-end justify-end gap-3 mb-4 bg-gradient-to-r from-neutral-100 to-neutral-50 shadow-sm border p-4 rounded-lg">
+						<span className="text-muted-foreground w-fit text-sm order-2 lg:order-1 text-center">
+							Join the conversation about Britain's future on the{" "}
+							<span className="font-semibold">Anglofuturism Podcast</span>
+						</span>
+						<div className="flex flex-row gap-3 items-center order-1 lg:order-2">
+							<Link
+								href="https://podcasts.apple.com/gb/podcast/anglofuturism/id1743404902"
+								className="text-[#872EC4] hover:opacity-80 transition-opacity"
+								aria-label="Listen on Apple Podcasts"
+							>
+								<SiApplepodcasts size={24} />
+							</Link>
+							<Link
+								href="https://open.spotify.com/show/0PxQEO62ESL7DYmZHLgQID"
+								className="text-[#1DB954] hover:opacity-80 transition-opacity"
+								aria-label="Listen on Spotify"
+							>
+								<FaSpotify size={24} />
+							</Link>
+						</div>
+					</div>
 					<Card className="mb-6 w-full">
 						<CardHeader>
 							<CardTitle className="text-3xl font-light text-center">
