@@ -116,7 +116,7 @@ export default function NHSSpendingCalculator() {
 	return (
 		<>
 			<div className="min-h-screen pb-24">
-				<div className="bg-blue-500 text-white drop-shadow-sm flex flex-row items-center justify-between w-screen py-1 px-6 font-semibold">
+				<div className="bg-blue-500 text-white drop-shadow-sm flex flex-row items-center justify-between w-screen py-1 px-4 font-semibold">
 					<span>💰 NHSCostCalculator.com</span>
 					<Link href="/about" className="hover:underline hidden">
 						About
