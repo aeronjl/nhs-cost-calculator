@@ -8,6 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import { FaSpotify } from "react-icons/fa";
 import { SiApplepodcasts } from "react-icons/si";
+import { Badge } from "@/components/ui/badge";
 const ANNUAL_NHS_SPENDING = 192000000000; // £192 billion
 const MINUTES_PER_YEAR = 525600;
 
@@ -17,6 +18,7 @@ interface SpendingOption {
 	cost: number;
 	emoji: string;
 	quantity: number;
+	categories: string[];
 }
 
 const spendingOptions: SpendingOption[] = [
@@ -26,6 +28,7 @@ const spendingOptions: SpendingOption[] = [
 		cost: 32000000000,
 		emoji: "☢️",
 		quantity: 1,
+		categories: ["Top", "Energy"],
 	},
 	{
 		name: "South Korean-style nuclear plant",
@@ -33,6 +36,7 @@ const spendingOptions: SpendingOption[] = [
 		cost: 5300000000,
 		emoji: "⚡",
 		quantity: 1,
+		categories: ["Energy"],
 	},
 	{
 		name: "mile of HS2",
@@ -40,6 +44,7 @@ const spendingOptions: SpendingOption[] = [
 		cost: 396000000,
 		emoji: "🚅",
 		quantity: 10,
+		categories: ["Top", "Transport"],
 	},
 	{
 		name: "km of French-style tram system",
@@ -47,6 +52,7 @@ const spendingOptions: SpendingOption[] = [
 		cost: 20000000,
 		emoji: "🚊",
 		quantity: 50,
+		categories: ["Top", "Transport"],
 	},
 	{
 		name: "new home",
@@ -54,6 +60,7 @@ const spendingOptions: SpendingOption[] = [
 		cost: 250000,
 		emoji: "🏠",
 		quantity: 10000,
+		categories: ["Top", "Housing"],
 	},
 	{
 		name: "year of world-class research",
@@ -61,6 +68,7 @@ const spendingOptions: SpendingOption[] = [
 		cost: 1000000,
 		emoji: "🔬",
 		quantity: 100,
+		categories: ["Top", "Research"],
 	},
 	{
 		name: "CRISPR gene-editing experiment",
@@ -68,6 +76,7 @@ const spendingOptions: SpendingOption[] = [
 		cost: 100000,
 		emoji: "🧬",
 		quantity: 1000,
+		categories: ["Top", "Research"],
 	},
 	{
 		name: "advanced AI training run",
@@ -75,6 +84,7 @@ const spendingOptions: SpendingOption[] = [
 		cost: 1000000,
 		emoji: "🤖",
 		quantity: 100,
+		categories: ["Top", "AI"],
 	},
 ];
 
@@ -84,6 +94,7 @@ export default function NHSSpendingCalculator() {
 	const [selectedOption, setSelectedOption] = useState<SpendingOption | null>(
 		null,
 	);
+	const [selectedCategory, setSelectedCategory] = useState("Top");
 
 	useEffect(() => {
 		setInputValue(amount.toLocaleString());
@@ -112,6 +123,21 @@ export default function NHSSpendingCalculator() {
 
 	const timeInMinutes = (amount / ANNUAL_NHS_SPENDING) * MINUTES_PER_YEAR;
 	const formattedTime = formatTime(timeInMinutes);
+
+	const categories = [
+		"Top",
+		...new Set(
+			spendingOptions
+				.flatMap((option) => option.categories)
+				.filter((category) => category !== "Top"),
+		),
+	];
+	const filteredOptions =
+		selectedCategory === "Top"
+			? spendingOptions.filter((option) => option.categories.includes("Top"))
+			: spendingOptions.filter((option) =>
+					option.categories.includes(selectedCategory),
+				);
 
 	return (
 		<>
@@ -196,8 +222,21 @@ export default function NHSSpendingCalculator() {
 						</CardContent>
 					</Card>
 
+					<div className="flex flex-wrap gap-2 mb-4">
+						{categories.map((category) => (
+							<Badge
+								key={category}
+								variant={selectedCategory === category ? "default" : "outline"}
+								className="cursor-pointer"
+								onClick={() => setSelectedCategory(category)}
+							>
+								{category}
+							</Badge>
+						))}
+					</div>
+
 					<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 mb-8">
-						{spendingOptions.map((option) => (
+						{filteredOptions.map((option) => (
 							<Button
 								key={option.name}
 								onClick={() =>
