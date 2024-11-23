@@ -40,6 +40,14 @@ export default function RootLayout({
 							>
 								@DaysofNHS
 							</Link>
+							. Made by{" "}
+							<Link
+								href="https://x.com/findboundary"
+								className="hover:text-neutral-600 transition-colors duration-400"
+							>
+								Aeron Laffere
+							</Link>
+							.
 						</p>
 					</div>
 				</footer>
