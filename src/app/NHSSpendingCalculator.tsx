@@ -11,6 +11,7 @@ const MINUTES_PER_YEAR = 525600;
 
 interface SpendingOption {
 	name: string;
+	pluralName: string;
 	cost: number;
 	emoji: string;
 	quantity: number;
@@ -19,38 +20,56 @@ interface SpendingOption {
 const spendingOptions: SpendingOption[] = [
 	{
 		name: "Hinkley Point C-style nuclear plant",
+		pluralName: "Hinkley Point C-style nuclear plants",
 		cost: 32000000000,
 		emoji: "☢️",
 		quantity: 1,
 	},
 	{
 		name: "South Korean-style nuclear plant",
+		pluralName: "South Korean-style nuclear plants",
 		cost: 5300000000,
 		emoji: "⚡",
 		quantity: 1,
 	},
-	{ name: "mile of HS2", cost: 396000000, emoji: "🚅", quantity: 10 },
+	{
+		name: "mile of HS2",
+		pluralName: "miles of HS2",
+		cost: 396000000,
+		emoji: "🚅",
+		quantity: 10,
+	},
 	{
 		name: "km of French-style tram system",
+		pluralName: "km of French-style tram systems",
 		cost: 20000000,
 		emoji: "🚊",
 		quantity: 50,
 	},
-	{ name: "new home", cost: 250000, emoji: "🏠", quantity: 10000 },
+	{
+		name: "new home",
+		pluralName: "new homes",
+		cost: 250000,
+		emoji: "🏠",
+		quantity: 10000,
+	},
 	{
 		name: "year of world-class research",
+		pluralName: "years of world-class research",
 		cost: 1000000,
 		emoji: "🔬",
 		quantity: 100,
 	},
 	{
 		name: "CRISPR gene-editing experiment",
+		pluralName: "CRISPR gene-editing experiments",
 		cost: 100000,
 		emoji: "🧬",
 		quantity: 1000,
 	},
 	{
 		name: "advanced AI training run",
+		pluralName: "advanced AI training runs",
 		cost: 1000000,
 		emoji: "🤖",
 		quantity: 100,
@@ -139,8 +158,8 @@ export default function NHSSpendingCalculator() {
 								>
 									<span className="mr-1">{option.emoji}</span>
 									<span className="text-xs">
-										{option.quantity} {option.name}
-										{option.quantity > 1 ? "s" : ""}
+										{option.quantity}{" "}
+										{option.quantity > 1 ? option.pluralName : option.name}
 									</span>
 								</Button>
 							))}
@@ -165,8 +184,8 @@ export default function NHSSpendingCalculator() {
 											</span>
 											<span className="text-sm">
 												{formatMoney(amount)} could fund{" "}
-												{quantity.toLocaleString()} {option.name}
-												{quantity !== 1 ? "s" : ""}
+												{quantity.toLocaleString()}{" "}
+												{quantity !== 1 ? option.pluralName : option.name}
 											</span>
 										</li>
 									);
