@@ -105,93 +105,89 @@ export default function NHSSpendingCalculator() {
 	return (
 		<>
 			<div className="min-h-screen">
-				<div className="fixed top-1/2 -translate-y-1/2 left-0 right-0 bg-background z-10">
-					<div className="max-w-[1024px] mx-auto px-4">
-						<Card className="mb-6 w-full">
-							<CardHeader>
-								<CardTitle className="text-3xl font-light text-center">
-									{formatMoney(amount)} is
-								</CardTitle>
-							</CardHeader>
-							<CardContent>
-								<div className="mb-6">
-									<p
-										className="text-4xl text-center font-semibold"
-										aria-live="polite"
-									>
-										<span className="text-blue-500">{formattedTime}</span> of
-										NHS spending
-									</p>
-								</div>
-								<div className="mb-6">
-									<label
-										htmlFor="amount"
-										className="block text-sm font-medium text-gray-700 mb-2"
-									>
-										Enter amount (£):
-									</label>
-									<Input
-										type="text"
-										id="amount"
-										value={inputValue}
-										onChange={handleInputChange}
-										className="w-full rounded-full"
-										aria-describedby="amount-description"
-									/>
-									<p
-										id="amount-description"
-										className="mt-2 text-sm text-gray-500"
-									>
-										Enter an amount or use the quick input buttons below.
-									</p>
-								</div>
-							</CardContent>
-						</Card>
-
-						<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 mb-8">
-							{spendingOptions.map((option, index) => (
-								<Button
-									key={option.name}
-									onClick={() => handleQuickInput(option.cost, option.quantity)}
-									className="text-sm h-auto py-2 px-3 whitespace-normal"
-									variant="outline"
+				<div className="max-w-[1024px] mx-auto px-4 mt-[calc(50vh-200px)]">
+					<Card className="mb-6 w-full">
+						<CardHeader>
+							<CardTitle className="text-3xl font-light text-center">
+								{formatMoney(amount)} is
+							</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className="mb-6">
+								<p
+									className="text-4xl text-center font-semibold"
+									aria-live="polite"
 								>
-									<span className="mr-1">{option.emoji}</span>
-									<span className="text-xs">
-										{option.quantity}{" "}
-										{option.quantity > 1 ? option.pluralName : option.name}
-									</span>
-								</Button>
-							))}
-						</div>
+									<span className="text-blue-500">{formattedTime}</span> of NHS
+									spending
+								</p>
+							</div>
+							<div className="mb-6">
+								<label
+									htmlFor="amount"
+									className="block text-sm font-medium text-gray-700 mb-2"
+								>
+									Enter amount (£):
+								</label>
+								<Input
+									type="text"
+									id="amount"
+									value={inputValue}
+									onChange={handleInputChange}
+									className="w-full rounded-full"
+									aria-describedby="amount-description"
+								/>
+								<p
+									id="amount-description"
+									className="mt-2 text-sm text-gray-500"
+								>
+									Enter an amount or use the quick input buttons below
+								</p>
+							</div>
+						</CardContent>
+					</Card>
+
+					<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 mb-8">
+						{spendingOptions.map((option, index) => (
+							<Button
+								key={option.name}
+								onClick={() => handleQuickInput(option.cost, option.quantity)}
+								className="text-sm h-auto py-2 px-3 whitespace-normal"
+								variant="outline"
+							>
+								<span className="mr-1">{option.emoji}</span>
+								<span className="text-xs">
+									{option.quantity}{" "}
+									{option.quantity > 1 ? option.pluralName : option.name}
+								</span>
+							</Button>
+						))}
 					</div>
 				</div>
 
-				<div className="pt-[80vh]">
-					<div className="max-w-[1024px] w-screen mx-auto px-4">
-						<div className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-							<h2 className="text-xl font-light mb-2">
-								Alternative Progress-Focused Spending Options:
-							</h2>
-							<ul className="space-y-3">
-								{spendingOptions.map((option, index) => {
-									const quantity = Math.floor(amount / option.cost);
-									if (quantity < 1) return null;
-									return (
-										<li key={option.name} className="flex items-center">
-											<span className="text-2xl mr-3" aria-hidden="true">
-												{option.emoji}
-											</span>
-											<span className="text-sm">
-												{formatMoney(amount)} could fund{" "}
-												{quantity.toLocaleString()}{" "}
-												{quantity !== 1 ? option.pluralName : option.name}
-											</span>
-										</li>
-									);
-								})}
-							</ul>
-						</div>
+				<div className="max-w-[1024px] w-screen mx-auto px-4">
+					<div className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+						<h2 className="text-xl font-light mb-2">
+							Alternative Progress-Focused Spending Options:
+						</h2>
+						<ul className="space-y-3">
+							{spendingOptions.map((option, index) => {
+								const quantity = Math.floor(amount / option.cost);
+								if (quantity < 1) return null;
+								return (
+									<li key={option.name} className="flex items-center">
+										<span className="text-2xl mr-3" aria-hidden="true">
+											{option.emoji}
+										</span>
+										<span className="text-sm">
+											{formatMoney(amount)} could fund{" "}
+											{quantity.toLocaleString()}{" "}
+											{quantity !== 1 ? option.pluralName : option.name}
+										</span>
+									</li>
+								);
+							})}
+						</ul>
 					</div>
 				</div>
 			</div>
