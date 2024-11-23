@@ -95,6 +95,15 @@ const spendingOptions: SpendingOption[] = [
 		quantity: 100,
 		categories: ["Top", "AI"],
 	},
+	{
+		name: "coronation of King Charles III",
+		pluralName: "coronations of King Charles III",
+		cost: 72000000,
+		emoji: "🤴",
+		quantity: 1,
+		categories: ["Politics"],
+		citation: "https://www.bbc.co.uk/news/articles/c04lyddv2p5o",
+	},
 ];
 
 export default function NHSSpendingCalculator() {
