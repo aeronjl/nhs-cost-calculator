@@ -30,20 +30,20 @@ export default function RootLayout({
 				className={`${geistSans.variable} ${geistMono.variable} antialiased`}
 			>
 				{children}
+				<footer>
+					<div className="text-xs text-neutral-400 px-4 py-2 flex justify-center">
+						<p>
+							Inspired by{" "}
+							<Link
+								href="https://x.com/DaysofNHS"
+								className="hover:text-neutral-600 transition-colors duration-400"
+							>
+								@DaysofNHS
+							</Link>
+						</p>
+					</div>
+				</footer>
 			</body>
-			<footer>
-				<div className="text-xs text-neutral-400 px-4 py-2 flex justify-center">
-					<p>
-						Inspired by{" "}
-						<Link
-							href="https://x.com/DaysofNHS"
-							className="hover:text-neutral-600 transition-colors duration-400"
-						>
-							@DaysofNHS
-						</Link>
-					</p>
-				</div>
-			</footer>
 		</html>
 	);
 }
