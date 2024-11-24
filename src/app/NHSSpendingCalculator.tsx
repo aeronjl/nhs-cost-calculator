@@ -15,6 +15,8 @@ import {
 	AccordionItem,
 	AccordionTrigger,
 } from "@/components/ui/accordion";
+import GridPattern from "@/components/ui/grid-pattern";
+import { cn } from "@/lib/utils";
 const ANNUAL_NHS_SPENDING = 192000000000; // £192 billion
 const MINUTES_PER_YEAR = 525600;
 
@@ -129,10 +131,19 @@ const spendingOptions: SpendingOption[] = [
 			"https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/bulletins/annualsurveyofhoursandearnings/2024",
 	},
 	{
+		name: "average annual full-time salary for a US employee",
+		pluralName: "average annual full-time salaries for US employees",
+		cost: 61963, // $61,963
+		emoji: "💵",
+		quantity: 1,
+		categories: ["Politics", "Business"],
+		citation: "https://www.statista.com/topics/789/wages-and-salary/",
+	},
+	{
 		name: "year of tax revenue for the UK government",
 		pluralName: "years of tax revenue for the UK government",
 		cost: 829100000000, // £829.1 billion
-		emoji: "💷",
+		emoji: "🇬🇧",
 		quantity: 1,
 		categories: ["Politics"],
 		citation:
@@ -211,7 +222,23 @@ export default function NHSSpendingCalculator() {
 					</Link>
 				</div>
 				<div className="max-w-[1024px] mx-auto px-4 mt-6">
-					<div className="flex flex-col items-center lg:items-end justify-end gap-3 mb-4 bg-gradient-to-r from-neutral-100 to-neutral-50 shadow-sm border p-4 rounded-lg">
+					<div className="relative overflow-clip flex flex-col items-center lg:items-end justify-end gap-3 mb-4 bg-gradient-to-r from-neutral-100 to-neutral-50 shadow-sm border p-4 rounded-lg">
+						<GridPattern
+							squares={[
+								[4, 4],
+								[5, 1],
+								[8, 2],
+								[5, 3],
+								[5, 5],
+								[10, 10],
+								[12, 15],
+								[15, 10],
+							]}
+							className={cn(
+								"[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
+								"absolute inset-y-[-30%] h-[200%] skew-y-12",
+							)}
+						/>
 						<span className="text-muted-foreground w-fit text-sm order-2 lg:order-1 text-center">
 							Join the conversation about Britain's future on the{" "}
 							<span className="font-semibold">Anglofuturism Podcast</span>
