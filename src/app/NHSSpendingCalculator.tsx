@@ -32,23 +32,25 @@ const spendingOptions: SpendingOption[] = [
 	{
 		name: "Hinkley Point C-style nuclear plant",
 		pluralName: "Hinkley Point C-style nuclear plants",
-		cost: 32000000000,
+		cost: 32000000000, // £32 billion
 		emoji: "☢️",
 		quantity: 1,
 		categories: ["Top", "Energy"],
+		citation: "https://ukfoundations.co/",
 	},
 	{
 		name: "South Korean-style nuclear plant",
 		pluralName: "South Korean-style nuclear plants",
-		cost: 5300000000,
+		cost: 5300000000, // £5.3 billion
 		emoji: "⚡",
 		quantity: 1,
 		categories: ["Energy"],
+		citation: "https://ukfoundations.co/",
 	},
 	{
 		name: "mile of HS2",
 		pluralName: "miles of HS2",
-		cost: 396000000,
+		cost: 396000000, // £396 million
 		emoji: "🚅",
 		quantity: 10,
 		categories: ["Top", "Transport"],
@@ -62,11 +64,13 @@ const spendingOptions: SpendingOption[] = [
 		emoji: "🚊",
 		quantity: 50,
 		categories: ["Top", "Transport"],
+		citation:
+			"https://www.samdumitriu.com/p/britains-infrastructure-is-too-expensive",
 	},
 	{
 		name: "new home",
 		pluralName: "new homes",
-		cost: 250000,
+		cost: 250000, // £250,000
 		emoji: "🏠",
 		quantity: 10000,
 		categories: ["Top", "Housing"],
@@ -74,7 +78,7 @@ const spendingOptions: SpendingOption[] = [
 	{
 		name: "year of world-class research",
 		pluralName: "years of world-class research",
-		cost: 1000000,
+		cost: 1000000, // $1 million
 		emoji: "🔬",
 		quantity: 100,
 		categories: ["Top", "Research"],
@@ -82,7 +86,7 @@ const spendingOptions: SpendingOption[] = [
 	{
 		name: "CRISPR gene-editing experiment",
 		pluralName: "CRISPR gene-editing experiments",
-		cost: 100000,
+		cost: 100000, // $100,000
 		emoji: "🧬",
 		quantity: 1000,
 		categories: ["Top", "Research"],
@@ -90,7 +94,7 @@ const spendingOptions: SpendingOption[] = [
 	{
 		name: "advanced AI training run",
 		pluralName: "advanced AI training runs",
-		cost: 1000000,
+		cost: 1000000, // $1 million
 		emoji: "🤖",
 		quantity: 100,
 		categories: ["Top", "AI"],
@@ -98,7 +102,7 @@ const spendingOptions: SpendingOption[] = [
 	{
 		name: "coronation of King Charles III",
 		pluralName: "coronations of King Charles III",
-		cost: 72000000,
+		cost: 72000000, // £72 million
 		emoji: "🤴",
 		quantity: 1,
 		categories: ["Politics"],
@@ -107,7 +111,7 @@ const spendingOptions: SpendingOption[] = [
 	{
 		name: "year of profit for the Coca-Cola Company",
 		pluralName: "years of profit for the Coca-Cola Company",
-		cost: 28021000000,
+		cost: 28021000000, // $28.021 billion
 		emoji: "🥤",
 		quantity: 1,
 		categories: ["Business"],
@@ -117,10 +121,30 @@ const spendingOptions: SpendingOption[] = [
 	{
 		name: "average annual full-time salary for a UK employee",
 		pluralName: "average annual full-time salaries for UK employees",
-		cost: 37430,
+		cost: 37430, // £37,430
 		emoji: "💼",
 		quantity: 1,
 		categories: ["Top", "Politics", "Business"],
+	},
+	{
+		name: "year of tax revenue for the UK government",
+		pluralName: "years of tax revenue for the UK government",
+		cost: 829100000000, // £829.1 billion
+		emoji: "💷",
+		quantity: 1,
+		categories: ["Politics"],
+		citation:
+			"https://www.gov.uk/government/statistics/hmrc-tax-and-nics-receipts-for-the-uk/hmrc-tax-receipts-and-national-insurance-contributions-for-the-uk-new-annual-bulletin",
+	},
+	{
+		name: "launch of a SpaceX Starship",
+		pluralName: "launches of a SpaceX Starship",
+		cost: 80000000, // $100 million USD -> £80 million GBP
+		emoji: "🚀",
+		quantity: 1,
+		categories: ["Top", "Space"],
+		citation:
+			"https://payloadspace.com/payload-research-detailing-artemis-vehicle-rd-costs/",
 	},
 ];
 
