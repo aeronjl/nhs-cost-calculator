@@ -125,6 +125,8 @@ const spendingOptions: SpendingOption[] = [
 		emoji: "💼",
 		quantity: 1,
 		categories: ["Top", "Politics", "Business"],
+		citation:
+			"https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/bulletins/annualsurveyofhoursandearnings/2024",
 	},
 	{
 		name: "year of tax revenue for the UK government",
