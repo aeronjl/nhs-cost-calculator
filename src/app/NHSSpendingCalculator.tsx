@@ -115,8 +115,8 @@ const spendingOptions: SpendingOption[] = [
 			"https://www.macrotrends.net/stocks/charts/KO/cocacola/gross-profit",
 	},
 	{
-		name: "year's annual full-time salary for a UK employee",
-		pluralName: "years' annual full-time salaries for UK employees",
+		name: "average annual full-time salary for a UK employee",
+		pluralName: "average annual full-time salaries for UK employees",
 		cost: 37430,
 		emoji: "💼",
 		quantity: 1,
