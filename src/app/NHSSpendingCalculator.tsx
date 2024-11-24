@@ -180,6 +180,14 @@ const spendingOptions: SpendingOption[] = [
 		citation:
 			"https://www.gov.uk/government/news/british-shipyard-awarded-42-billion-to-build-royal-navy-ships",
 	},
+	{
+		name: "reclamation of Dogger Bank from the sea",
+		pluralName: "reclamations of Dogger Bank from the sea",
+		cost: 97500000000, // £97.5 billion
+		emoji: "🧜",
+		quantity: 1,
+		categories: ["Politics", "Housing"],
+	},
 ];
 
 export default function NHSSpendingCalculator() {
