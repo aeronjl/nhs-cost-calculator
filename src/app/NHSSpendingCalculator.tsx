@@ -236,7 +236,7 @@ export default function NHSSpendingCalculator() {
 							]}
 							className={cn(
 								"[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
-								"absolute inset-y-[-30%] h-[200%] skew-y-12",
+								"absolute inset-y-[-30%] h-[200%] skew-y-12 opacity-50 lg:opacity-100",
 							)}
 						/>
 						<span className="text-muted-foreground w-fit text-sm order-2 lg:order-1 text-center">
