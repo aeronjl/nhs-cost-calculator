@@ -84,7 +84,7 @@ const spendingOptions: SpendingOption[] = [
 		cost: 1000000, // $1 million
 		emoji: "🔬",
 		quantity: 100,
-		categories: ["Top", "Research"],
+		categories: ["Research"],
 	},
 	{
 		name: "CRISPR gene-editing experiment",
@@ -187,6 +187,7 @@ const spendingOptions: SpendingOption[] = [
 		emoji: "🧜",
 		quantity: 1,
 		categories: ["Politics", "Housing"],
+		citation: "https://model-thinking.com/p/a-new-atlantis",
 	},
 ];
 
