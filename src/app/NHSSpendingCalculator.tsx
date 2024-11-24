@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/accordion";
 import GridPattern from "@/components/ui/grid-pattern";
 import { cn } from "@/lib/utils";
+import { motion, AnimatePresence } from "framer-motion";
 const ANNUAL_NHS_SPENDING = 192000000000; // £192 billion
 const MINUTES_PER_YEAR = 525600;
 
@@ -388,32 +389,40 @@ export default function NHSSpendingCalculator() {
 							What else could {formatMoney(amount)} fund?
 						</h2>
 						<ul className="space-y-3">
-							{spendingOptions.map((option, index) => {
-								const quantity = Math.floor(amount / option.cost);
-								if (quantity < 1) return null;
-								return (
-									<li key={option.name} className="flex items-center">
-										<span className="text-2xl mr-3" aria-hidden="true">
-											{option.emoji}
-										</span>
-										<span className="text-sm">
-											{formatMoney(amount)} could fund{" "}
-											{quantity.toLocaleString()}{" "}
-											{quantity !== 1 ? option.pluralName : option.name}
-											{option.citation && (
-												<a
-													href={option.citation}
-													className="ml-1 text-blue-500 hover:underline"
-													target="_blank"
-													rel="noopener noreferrer"
-												>
-													[source]
-												</a>
-											)}
-										</span>
-									</li>
-								);
-							})}
+							<AnimatePresence mode="popLayout">
+								{spendingOptions.map((option, index) => {
+									const quantity = Math.floor(amount / option.cost);
+									if (quantity < 1) return null;
+									return (
+										<motion.li
+											key={option.name}
+											className="flex items-center"
+											initial={{ opacity: 0, height: 0 }}
+											animate={{ opacity: 1, height: "auto" }}
+											transition={{ duration: 0.2 }}
+										>
+											<span className="text-2xl mr-3" aria-hidden="true">
+												{option.emoji}
+											</span>
+											<span className="text-sm">
+												{formatMoney(amount)} could fund{" "}
+												{quantity.toLocaleString()}{" "}
+												{quantity !== 1 ? option.pluralName : option.name}
+												{option.citation && (
+													<a
+														href={option.citation}
+														className="ml-1 text-blue-500 hover:underline"
+														target="_blank"
+														rel="noopener noreferrer"
+													>
+														[source]
+													</a>
+												)}
+											</span>
+										</motion.li>
+									);
+								})}
+							</AnimatePresence>
 						</ul>
 					</div>
 				</div>
