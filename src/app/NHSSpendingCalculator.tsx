@@ -159,6 +159,26 @@ const spendingOptions: SpendingOption[] = [
 		citation:
 			"https://payloadspace.com/payload-research-detailing-artemis-vehicle-rd-costs/",
 	},
+	{
+		name: "year of UK defence spending",
+		pluralName: "years of UK defence spending",
+		cost: 54000000000, // £54 billion
+		emoji: "🛡️",
+		quantity: 1,
+		categories: ["Defence"],
+		citation:
+			"https://commonslibrary.parliament.uk/research-briefings/cbp-8175",
+	},
+	{
+		name: "Type 26 frigate",
+		pluralName: "Type 26 frigates",
+		cost: 525000000, // £525 million
+		emoji: "🛳️",
+		quantity: 1,
+		categories: ["Defence"],
+		citation:
+			"https://www.gov.uk/government/news/british-shipyard-awarded-42-billion-to-build-royal-navy-ships",
+	},
 ];
 
 export default function NHSSpendingCalculator() {
