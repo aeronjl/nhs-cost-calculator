@@ -132,6 +132,15 @@ const spendingOptions: SpendingOption[] = [
 			"https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/bulletins/annualsurveyofhoursandearnings/2024",
 	},
 	{
+		name: "bat-protective tunnel",
+		pluralName: "bat-protective tunnels",
+		cost: 100000000, // £100 million
+		emoji: "🦇",
+		quantity: 1,
+		categories: ["Politics"],
+		citation: "https://www.bbc.com/news/articles/c9wryxyljglo",
+	},
+	{
 		name: "average annual full-time salary for a US employee",
 		pluralName: "average annual full-time salaries for US employees",
 		cost: 61963, // $61,963
