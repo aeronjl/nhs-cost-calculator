@@ -132,12 +132,12 @@ const spendingOptions: SpendingOption[] = [
 			"https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/bulletins/annualsurveyofhoursandearnings/2024",
 	},
 	{
-		name: "bat-protective tunnel",
-		pluralName: "bat-protective tunnels",
+		name: "bat-protective tunnel for HS2",
+		pluralName: "bat-protective tunnels for HS2",
 		cost: 100000000, // £100 million
 		emoji: "🦇",
 		quantity: 1,
-		categories: ["Politics"],
+		categories: ["Transport"],
 		citation: "https://www.bbc.com/news/articles/c9wryxyljglo",
 	},
 	{
