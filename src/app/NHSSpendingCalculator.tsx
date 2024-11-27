@@ -346,6 +346,9 @@ export default function NHSSpendingCalculator() {
 								>
 									Enter an amount or use the quick input buttons below
 								</p>
+								<p className="text-xs text-muted-foreground mt-2">
+									NHSCostCalculator.com is not affiliated with the NHS.
+								</p>
 							</div>
 						</CardContent>
 						<Accordion type="single" collapsible className="px-6 pb-6 hidden">
