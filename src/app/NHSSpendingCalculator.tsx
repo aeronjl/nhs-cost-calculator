@@ -20,6 +20,9 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 const ANNUAL_NHS_SPENDING = 192000000000; // £192 billion
 const MINUTES_PER_YEAR = 525600;
+const CURRENCY_API_URL = "https://api.exchangerate-api.com/v4/latest/GBP";
+
+type Currency = "GBP" | "USD";
 
 interface SpendingOption {
 	name: string;
@@ -208,10 +211,29 @@ export default function NHSSpendingCalculator() {
 	);
 	const [selectedCategory, setSelectedCategory] = useState("Top");
 	const [selectedQuantity, setSelectedQuantity] = useState<number>(1);
+	const [currency, setCurrency] = useState<Currency>("GBP");
+	const [conversionRate, setConversionRate] = useState(1);
 
 	useEffect(() => {
 		setInputValue(amount.toLocaleString());
 	}, [amount]);
+
+	useEffect(() => {
+		const fetchConversionRate = async () => {
+			try {
+				const response = await fetch(CURRENCY_API_URL);
+				const data = await response.json();
+				setConversionRate(data.rates.USD);
+			} catch (error) {
+				console.error("Failed to fetch conversion rate:", error);
+			}
+		};
+		fetchConversionRate();
+	}, []);
+
+	const convertAmount = (amount: number) => {
+		return currency === "USD" ? amount * conversionRate : amount;
+	};
 
 	const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const value = e.target.value.replace(/[^0-9]/g, "");
@@ -312,7 +334,25 @@ export default function NHSSpendingCalculator() {
 							</Link>
 						</div>
 					</div>
-					<Card className="mb-6 w-full">
+					<Card className="mb-6 w-full relative">
+						<div className="absolute top-2 right-2 flex gap-1">
+							<Button
+								variant={currency === "GBP" ? "default" : "outline"}
+								size="sm"
+								onClick={() => setCurrency("GBP")}
+								className="text-xs"
+							>
+								£
+							</Button>
+							<Button
+								variant={currency === "USD" ? "default" : "outline"}
+								size="sm"
+								onClick={() => setCurrency("USD")}
+								className="text-xs"
+							>
+								$
+							</Button>
+						</div>
 						<CardHeader>
 							<CardTitle className="text-3xl font-light text-center">
 								{selectedOption ? (
@@ -321,10 +361,10 @@ export default function NHSSpendingCalculator() {
 										{selectedQuantity > 1
 											? selectedOption.pluralName
 											: selectedOption.name}{" "}
-										({formatMoney(amount)}) is
+										({formatMoney(convertAmount(amount), currency)}) is
 									</>
 								) : (
-									<>{formatMoney(amount)} is</>
+									<>{formatMoney(convertAmount(amount), currency)} is</>
 								)}
 							</CardTitle>
 						</CardHeader>
@@ -450,7 +490,8 @@ export default function NHSSpendingCalculator() {
 				<div className="max-w-[1024px] w-screen mx-auto px-4">
 					<div className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
 						<h2 className="text-xl font-light mb-2">
-							What else could {formatMoney(amount)} fund?
+							What else could {formatMoney(convertAmount(amount), currency)}{" "}
+							fund?
 						</h2>
 						<ul className="space-y-3">
 							<AnimatePresence mode="popLayout">
@@ -469,8 +510,8 @@ export default function NHSSpendingCalculator() {
 												{option.emoji}
 											</span>
 											<span className="text-sm">
-												{formatMoney(amount)} could fund{" "}
-												{quantity.toLocaleString()}{" "}
+												{formatMoney(convertAmount(amount), currency)} could
+												fund {quantity.toLocaleString()}{" "}
 												{quantity !== 1 ? option.pluralName : option.name}
 												{option.citation && (
 													<a

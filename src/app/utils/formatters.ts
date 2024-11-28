@@ -1,11 +1,10 @@
-export function formatMoney(amount: number): string {
-	return new Intl.NumberFormat("en-GB", {
-		style: "currency",
-		currency: "GBP",
-		minimumFractionDigits: 0,
-		maximumFractionDigits: 0,
-	}).format(amount);
-}
+export const formatMoney = (
+	amount: number,
+	currency: "GBP" | "USD" = "GBP",
+) => {
+	const symbol = currency === "GBP" ? "£" : "$";
+	return `${symbol}${Math.round(amount).toLocaleString()}`;
+};
 
 export function formatTime(totalMinutes: number): string {
 	const totalSeconds = totalMinutes * 60;
