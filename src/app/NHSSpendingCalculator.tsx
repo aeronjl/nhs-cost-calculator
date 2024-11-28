@@ -259,10 +259,11 @@ export default function NHSSpendingCalculator() {
 
 	const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const value = e.target.value;
-		const numericValue = value === "" ? 1 : Math.max(1, Number.parseInt(value));
+		const numericValue =
+			value === "" ? 0 : Math.max(1, Number.parseInt(value) || 0);
 		setSelectedQuantity(numericValue);
 		if (selectedOption) {
-			const newAmount = selectedOption.cost * numericValue;
+			const newAmount = selectedOption.cost * (numericValue || 1);
 			setAmount(newAmount);
 			setInputValue(newAmount.toLocaleString());
 		}
@@ -335,7 +336,25 @@ export default function NHSSpendingCalculator() {
 						</div>
 					</div>
 					<Card className="mb-6 w-full relative">
-						<div className="absolute top-2 right-2 flex gap-1">
+						<div className="absolute right-2 top-2 hidden sm:flex gap-1">
+							<Button
+								variant={currency === "GBP" ? "default" : "outline"}
+								size="sm"
+								onClick={() => setCurrency("GBP")}
+								className="text-xs"
+							>
+								£
+							</Button>
+							<Button
+								variant={currency === "USD" ? "default" : "outline"}
+								size="sm"
+								onClick={() => setCurrency("USD")}
+								className="text-xs"
+							>
+								$
+							</Button>
+						</div>
+						<div className="flex justify-center gap-1 sm:hidden pt-4">
 							<Button
 								variant={currency === "GBP" ? "default" : "outline"}
 								size="sm"
