@@ -236,10 +236,11 @@ export default function NHSSpendingCalculator() {
 	};
 
 	const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const value = Number.parseInt(e.target.value) || 1;
-		setSelectedQuantity(value);
+		const value = e.target.value;
+		const numericValue = value === "" ? 1 : Math.max(1, Number.parseInt(value));
+		setSelectedQuantity(numericValue);
 		if (selectedOption) {
-			const newAmount = selectedOption.cost * value;
+			const newAmount = selectedOption.cost * numericValue;
 			setAmount(newAmount);
 			setInputValue(newAmount.toLocaleString());
 		}
@@ -426,12 +427,19 @@ export default function NHSSpendingCalculator() {
 										Number of {selectedOption.pluralName}:
 									</label>
 									<Input
-										type="number"
+										type="text"
 										id="quantity"
-										min="1"
-										value={selectedQuantity}
+										value={
+											selectedQuantity === 1 &&
+											document.activeElement ===
+												document.getElementById("quantity")
+												? ""
+												: selectedQuantity
+										}
 										onChange={handleQuantityChange}
 										className="w-full"
+										inputMode="numeric"
+										pattern="[0-9]*"
 									/>
 								</div>
 							</div>
