@@ -354,7 +354,7 @@ export default function NHSSpendingCalculator() {
 							</Button>
 						</div>
 						<CardHeader>
-							<CardTitle className="text-3xl font-light text-center">
+							<CardTitle className="text-3xl font-light text-center max-w-[80%] mx-auto">
 								{selectedOption ? (
 									<>
 										{selectedQuantity}{" "}
