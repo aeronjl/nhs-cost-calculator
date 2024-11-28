@@ -207,6 +207,7 @@ export default function NHSSpendingCalculator() {
 		null,
 	);
 	const [selectedCategory, setSelectedCategory] = useState("Top");
+	const [selectedQuantity, setSelectedQuantity] = useState<number>(1);
 
 	useEffect(() => {
 		setInputValue(amount.toLocaleString());
@@ -231,6 +232,17 @@ export default function NHSSpendingCalculator() {
 		setAmount(newAmount);
 		setInputValue(newAmount.toLocaleString());
 		setSelectedOption(option);
+		setSelectedQuantity(quantity);
+	};
+
+	const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const value = Number.parseInt(e.target.value) || 1;
+		setSelectedQuantity(value);
+		if (selectedOption) {
+			const newAmount = selectedOption.cost * value;
+			setAmount(newAmount);
+			setInputValue(newAmount.toLocaleString());
+		}
 	};
 
 	const timeInMinutes = (amount / ANNUAL_NHS_SPENDING) * MINUTES_PER_YEAR;
@@ -402,6 +414,29 @@ export default function NHSSpendingCalculator() {
 							</Button>
 						))}
 					</div>
+
+					{selectedOption && (
+						<div className="max-w-[1024px] mx-auto px-4 mb-8">
+							<div className="flex items-center gap-4">
+								<div className="flex-1">
+									<label
+										htmlFor="quantity"
+										className="block text-sm font-medium text-gray-700 mb-2"
+									>
+										Number of {selectedOption.pluralName}:
+									</label>
+									<Input
+										type="number"
+										id="quantity"
+										min="1"
+										value={selectedQuantity}
+										onChange={handleQuantityChange}
+										className="w-full"
+									/>
+								</div>
+							</div>
+						</div>
+					)}
 				</div>
 
 				<div className="max-w-[1024px] w-screen mx-auto px-4">
