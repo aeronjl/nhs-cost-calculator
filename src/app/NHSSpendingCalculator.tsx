@@ -316,8 +316,8 @@ export default function NHSSpendingCalculator() {
 							<CardTitle className="text-3xl font-light text-center">
 								{selectedOption ? (
 									<>
-										{selectedOption.quantity}{" "}
-										{selectedOption.quantity > 1
+										{selectedQuantity}{" "}
+										{selectedQuantity > 1
 											? selectedOption.pluralName
 											: selectedOption.name}{" "}
 										({formatMoney(amount)}) is
