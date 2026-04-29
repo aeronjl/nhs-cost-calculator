@@ -1,0 +1,72 @@
+{
+  "asOf": "2025-03",
+  "source": {
+    "url": "https://obr.uk/efo/economic-and-fiscal-outlook-march-2025/",
+    "label": "OBR EFO March 2025"
+  },
+  "years": [
+    {
+      "fiscalYear": "2024-25",
+      "psnb": 128000000000,
+      "psnbPctGdp": 5.0,
+      "psnd": 2700000000000,
+      "psndPctGdp": 95.0,
+      "totalRevenue": 1115000000000,
+      "totalSpending": 1243000000000,
+      "gdp": 2550000000000
+    },
+    {
+      "fiscalYear": "2025-26",
+      "psnb": 104000000000,
+      "psnbPctGdp": 3.9,
+      "psnd": 2800000000000,
+      "psndPctGdp": 95.5,
+      "totalRevenue": 1175000000000,
+      "totalSpending": 1279000000000,
+      "gdp": 2650000000000
+    },
+    {
+      "fiscalYear": "2026-27",
+      "psnb": 83000000000,
+      "psnbPctGdp": 3.0,
+      "psnd": 2900000000000,
+      "psndPctGdp": 95.8,
+      "totalRevenue": 1230000000000,
+      "totalSpending": 1313000000000,
+      "gdp": 2750000000000
+    },
+    {
+      "fiscalYear": "2027-28",
+      "psnb": 73000000000,
+      "psnbPctGdp": 2.6,
+      "psnd": 2950000000000,
+      "psndPctGdp": 95.5,
+      "totalRevenue": 1290000000000,
+      "totalSpending": 1363000000000,
+      "gdp": 2850000000000
+    },
+    {
+      "fiscalYear": "2028-29",
+      "psnb": 61000000000,
+      "psnbPctGdp": 2.1,
+      "psnd": 3000000000000,
+      "psndPctGdp": 95.0,
+      "totalRevenue": 1350000000000,
+      "totalSpending": 1411000000000,
+      "gdp": 2950000000000
+    },
+    {
+      "fiscalYear": "2029-30",
+      "psnb": 55000000000,
+      "psnbPctGdp": 1.9,
+      "psnd": 3050000000000,
+      "psndPctGdp": 94.0,
+      "totalRevenue": 1410000000000,
+      "totalSpending": 1465000000000,
+      "gdp": 3050000000000
+    }
+  ],
+  "stabilityRuleHeadroom": 9900000000,
+  "stabilityRuleAt": "2029-30",
+  "investmentRuleHeadroom": 15700000000
+}

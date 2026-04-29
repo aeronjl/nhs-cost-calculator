@@ -1,0 +1,145 @@
+"use client";
+
+import { cn } from "@/lib/utils";
+import type { MacroState } from "@/lib/scenario";
+
+// Renders the year-by-year macro state of the scenario: CPI deviation, GDP
+// deviation, debt:GDP shift, gilt yield response. This is the Scope B macro
+// model output — moves the calculator from "single multiplier" to "endogenous
+// macro state" framing.
+//
+// All deviations are vs OBR baseline (Scope A: just static + dynamic). For
+// Scope C (general equilibrium) we'll feed this state back into per-line
+// yields. For now Scope B exposes the macro state for transparency without
+// closing the GE loop.
+
+interface Props {
+	path: readonly MacroState[];
+}
+
+const formatPp = (n: number, digits = 2): string => {
+	const abs = Math.abs(n);
+	const sign = n > 0 ? "+" : n < 0 ? "−" : "";
+	if (abs < 0.005) return "0pp";
+	return `${sign}${abs.toFixed(digits)}pp`;
+};
+
+const formatPct = (n: number, digits = 2): string => {
+	const abs = Math.abs(n);
+	const sign = n > 0 ? "+" : n < 0 ? "−" : "";
+	if (abs < 0.005) return "0%";
+	return `${sign}${abs.toFixed(digits)}%`;
+};
+
+const significantState = (s: MacroState): boolean =>
+	Math.abs(s.cpiDeviationPp) > 0.005 ||
+	Math.abs(s.gdpDeviationPct) > 0.005 ||
+	Math.abs(s.debtGdpDeviationPp) > 0.005 ||
+	Math.abs(s.giltYieldDeviationPp) > 0.0005;
+
+export function MacroStatePanel({ path }: Props) {
+	if (path.length === 0) return null;
+	if (!path.some(significantState)) return null;
+
+	const lastYear = path[path.length - 1]!;
+
+	return (
+		<div className="space-y-2">
+			<div className="flex items-baseline justify-between">
+				<h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+					Macro state path
+				</h3>
+				<span className="text-[10px] text-muted-foreground">
+					Scope B · reduced-form
+				</span>
+			</div>
+
+			<div className="rounded-md border bg-background/60 overflow-hidden">
+				<table className="w-full tabular-nums text-[10px]">
+					<thead>
+						<tr className="bg-muted/30 text-muted-foreground">
+							<th className="text-left px-2 py-1">Year</th>
+							<th className="text-right px-2 py-1">CPI</th>
+							<th className="text-right px-2 py-1">GDP</th>
+							<th className="text-right px-2 py-1">Debt:GDP</th>
+							<th className="text-right px-2 py-1 pr-2">Gilt</th>
+						</tr>
+					</thead>
+					<tbody>
+						{path.map((s) => (
+							<tr key={s.year} className="border-t">
+								<td className="px-2 py-1 text-muted-foreground">
+									{s.year}
+								</td>
+								<td
+									className={cn(
+										"text-right px-2 py-1",
+										s.cpiDeviationPp > 0.01
+											? "text-amber-700"
+											: s.cpiDeviationPp < -0.01
+												? "text-blue-700"
+												: "",
+									)}
+								>
+									{formatPp(s.cpiDeviationPp)}
+								</td>
+								<td
+									className={cn(
+										"text-right px-2 py-1",
+										s.gdpDeviationPct > 0.01
+											? "text-blue-700"
+											: s.gdpDeviationPct < -0.01
+												? "text-amber-700"
+												: "",
+									)}
+								>
+									{formatPct(s.gdpDeviationPct)}
+								</td>
+								<td
+									className={cn(
+										"text-right px-2 py-1",
+										s.debtGdpDeviationPp > 0.01
+											? "text-amber-700"
+											: s.debtGdpDeviationPp < -0.01
+												? "text-blue-700"
+												: "",
+									)}
+								>
+									{formatPp(s.debtGdpDeviationPp, 2)}
+								</td>
+								<td
+									className={cn(
+										"text-right px-2 py-1 pr-2",
+										s.giltYieldDeviationPp > 0.001
+											? "text-amber-700"
+											: s.giltYieldDeviationPp < -0.001
+												? "text-blue-700"
+												: "",
+									)}
+								>
+									{formatPp(s.giltYieldDeviationPp, 3)}
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+
+			<p className="text-[10px] text-muted-foreground leading-snug">
+				Reduced-form Scope B macro path: GDP deviation from per-lever multiplier
+				path, CPI deviation from VAT/fuel duty pass-through, debt:GDP shift from
+				cumulative scenario PSNB impact, gilt yield response at ~5bp per 1pp
+				debt:GDP. <strong>Year {lastYear.year}</strong>: GDP{" "}
+				{formatPct(lastYear.gdpDeviationPct, 2)} vs baseline; CPI{" "}
+				{formatPp(lastYear.cpiDeviationPp)}; debt:GDP{" "}
+				{formatPp(lastYear.debtGdpDeviationPp)}.
+			</p>
+			<p className="text-[10px] text-muted-foreground leading-snug">
+				Scope B is reduced-form (each channel computed independently). Scope C
+				would close the loop — feedback from CPI / GDP / yield deviations back
+				into per-line yields and projections — and is the next research-grade
+				addition.
+			</p>
+		</div>
+	);
+}

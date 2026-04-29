@@ -10,15 +10,15 @@ const geistSans = localFont({
 	variable: "--font-geist-sans",
 	weight: "100 900",
 });
-const geistMono = localFont({
-	src: "./fonts/GeistMonoVF.woff",
-	variable: "--font-geist-mono",
-	weight: "100 900",
-});
 
 export const metadata: Metadata = {
-	title: "NHS Cost Calculator",
-	description: "Calculate the cost of NHS services",
+	metadataBase: new URL("https://nhscostcalculator.com"),
+	title: {
+		default: "NHS Cost Calculator",
+		template: "%s · NHSCostCalculator.com",
+	},
+	description:
+		"Compare any cost to a fraction of the NHS's annual budget. Type a number, pick a comparison, share the link.",
 };
 
 export default function RootLayout({
@@ -28,9 +28,7 @@ export default function RootLayout({
 }>) {
 	return (
 		<html lang="en">
-			<body
-				className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-			>
+			<body className={`${geistSans.variable} antialiased`}>
 				{children}
 				<footer>
 					<div className="text-xs text-neutral-400 px-4 py-2 flex justify-center">

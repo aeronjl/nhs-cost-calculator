@@ -1,0 +1,16 @@
+{
+	"totalValue": 165000000000,
+	"sliceValues": {
+		"acute": 87000000000,
+		"specialised": 25000000000,
+		"primary-care": 17000000000,
+		"mental-health": 15000000000,
+		"community": 10000000000,
+		"prescribing": 10000000000
+	},
+	"asOf": "2023-04",
+	"source": {
+		"url": "https://www.england.nhs.uk/publication/nhs-england-annual-report-and-accounts-2023-24/",
+		"label": "NHS England Annual Report 2023/24"
+	}
+}

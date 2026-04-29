@@ -1,11 +1,9 @@
-@import url('https://fonts.cdnfonts.com/css/frutiger');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
-  font-family: 'Frutiger', sans-serif;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
 }
 
 @layer base {

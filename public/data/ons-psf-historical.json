@@ -1,0 +1,127 @@
+{
+	"2010": {
+		"asOf": "2025-09",
+		"source": {
+			"url": "https://www.ons.gov.uk/economy/governmentpublicsectorandtaxes/publicsectorfinance",
+			"label": "ONS PSF · sample override (Sep 2025)"
+		},
+		"years": [
+			{
+				"fiscalYear": "2010-11",
+				"psnb": 137000000000,
+				"psnbPctGdp": 8.7,
+				"psnd": 1100000000000,
+				"psndPctGdp": 70,
+				"totalRevenue": 555000000000,
+				"totalSpending": 692000000000,
+				"gdp": 1580000000000
+			},
+			{
+				"fiscalYear": "2011-12",
+				"psnb": 121000000000,
+				"psnbPctGdp": 7.4,
+				"psnd": 1230000000000,
+				"psndPctGdp": 73,
+				"totalRevenue": 595000000000,
+				"totalSpending": 716000000000,
+				"gdp": 1650000000000
+			},
+			{
+				"fiscalYear": "2012-13",
+				"psnb": 114000000000,
+				"psnbPctGdp": 6.6,
+				"psnd": 1360000000000,
+				"psndPctGdp": 78,
+				"totalRevenue": 625000000000,
+				"totalSpending": 739000000000,
+				"gdp": 1740000000000
+			},
+			{
+				"fiscalYear": "2013-14",
+				"psnb": 100000000000,
+				"psnbPctGdp": 5.5,
+				"psnd": 1480000000000,
+				"psndPctGdp": 81,
+				"totalRevenue": 660000000000,
+				"totalSpending": 760000000000,
+				"gdp": 1810000000000
+			},
+			{
+				"fiscalYear": "2014-15",
+				"psnb": 92000000000,
+				"psnbPctGdp": 4.8,
+				"psnd": 1570000000000,
+				"psndPctGdp": 82,
+				"totalRevenue": 700000000000,
+				"totalSpending": 792000000000,
+				"gdp": 1920000000000
+			},
+			{
+				"fiscalYear": "2015-16",
+				"psnb": 71000000000,
+				"psnbPctGdp": 3.6,
+				"psnd": 1640000000000,
+				"psndPctGdp": 82,
+				"totalRevenue": 740000000000,
+				"totalSpending": 811000000000,
+				"gdp": 2000000000000
+			}
+		],
+		"stabilityRuleHeadroom": -25000000000,
+		"stabilityRuleAt": "2015-16",
+		"investmentRuleHeadroom": -10000000000
+	},
+
+	"2021": {
+		"asOf": "2025-09",
+		"source": {
+			"url": "https://www.ons.gov.uk/economy/governmentpublicsectorandtaxes/publicsectorfinance",
+			"label": "ONS PSF · sample override (Sep 2025)"
+		},
+		"years": [
+			{
+				"fiscalYear": "2021-22",
+				"psnb": 124000000000,
+				"psnbPctGdp": 5.4,
+				"psnd": 2160000000000,
+				"psndPctGdp": 95,
+				"totalRevenue": 820000000000,
+				"totalSpending": 944000000000,
+				"gdp": 2270000000000
+			},
+			{
+				"fiscalYear": "2022-23",
+				"psnb": 132000000000,
+				"psnbPctGdp": 5.5,
+				"psnd": 2290000000000,
+				"psndPctGdp": 96,
+				"totalRevenue": 880000000000,
+				"totalSpending": 1012000000000,
+				"gdp": 2400000000000
+			},
+			{
+				"fiscalYear": "2023-24",
+				"psnb": 121000000000,
+				"psnbPctGdp": 4.8,
+				"psnd": 2410000000000,
+				"psndPctGdp": 96,
+				"totalRevenue": 940000000000,
+				"totalSpending": 1061000000000,
+				"gdp": 2500000000000
+			},
+			{
+				"fiscalYear": "2024-25",
+				"psnb": 128000000000,
+				"psnbPctGdp": 5.0,
+				"psnd": 2550000000000,
+				"psndPctGdp": 95,
+				"totalRevenue": 1115000000000,
+				"totalSpending": 1243000000000,
+				"gdp": 2550000000000
+			}
+		],
+		"stabilityRuleHeadroom": 0,
+		"stabilityRuleAt": "2024-25",
+		"investmentRuleHeadroom": 0
+	}
+}

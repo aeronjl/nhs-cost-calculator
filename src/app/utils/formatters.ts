@@ -1,9 +1,18 @@
-export const formatMoney = (
-	amount: number,
-	currency: "GBP" | "USD" = "GBP",
-) => {
+import type { Currency } from "@/lib/currency";
+
+export const formatMoney = (amount: number, currency: Currency = "GBP") => {
 	const symbol = currency === "GBP" ? "£" : "$";
 	return `${symbol}${Math.round(amount).toLocaleString()}`;
+};
+
+// Compact count formatter for "N comparison units" lists.
+// 1.5m / 12,000 / 850 / 12 / 1.2 — collapses big numbers, keeps small ones precise.
+export const formatCount = (n: number): string => {
+	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}m`;
+	if (n >= 10_000) return `${Math.round(n / 1_000).toLocaleString()},000`;
+	if (n >= 100) return Math.round(n).toLocaleString();
+	if (n >= 10) return Math.round(n).toString();
+	return n.toFixed(1);
 };
 
 export function formatTime(totalMinutes: number): string {
@@ -47,5 +56,5 @@ export function formatTime(totalMinutes: number): string {
 			return `${minutes} minute${minutes > 1 ? "s" : ""} and ${seconds} second${seconds > 1 ? "s" : ""}`;
 		return `${minutes} minute${minutes > 1 ? "s" : ""}`;
 	}
-	return `${seconds} second${seconds > 1 ? "s" : ""}`;
+	return `${seconds} second${seconds === 1 ? "" : "s"}`;
 }

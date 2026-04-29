@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { formatMoney, formatTime } from "./utils/formatters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,295 +9,188 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import { FaSpotify } from "react-icons/fa";
 import { SiApplepodcasts } from "react-icons/si";
-import { Badge } from "@/components/ui/badge";
-import {
-	Accordion,
-	AccordionContent,
-	AccordionItem,
-	AccordionTrigger,
-} from "@/components/ui/accordion";
+import { badgeVariants } from "@/components/ui/badge";
+import { CurrencyToggle } from "@/components/ui/currency-toggle";
+import { AnimatedNumber } from "@/components/ui/animated-number";
+import { ProvenanceBadge } from "@/components/ui/provenance-badge";
+import { MethodologyPopover } from "@/components/ui/methodology-popover";
+import { UK_POPULATION_METHODOLOGY } from "@/data/methodologies";
 import GridPattern from "@/components/ui/grid-pattern";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-const ANNUAL_NHS_SPENDING = 192000000000; // £192 billion
-const MINUTES_PER_YEAR = 525600;
-const CURRENCY_API_URL = "https://api.exchangerate-api.com/v4/latest/GBP";
+import { type Currency, fromGBP, toGBP } from "@/lib/currency";
+import type { ResolvedComparison } from "@/data/comparisons";
+import {
+	type BudgetSlice,
+	MINUTES_PER_YEAR,
+	UK_POPULATION,
+	getSlice,
+} from "@/data/nhs-budget";
 
-type Currency = "GBP" | "USD";
-
-interface SpendingOption {
-	name: string;
-	pluralName: string;
-	cost: number;
-	emoji: string;
-	quantity: number;
-	categories: string[];
-	citation?: string;
+interface Props {
+	initialAmount: number;
+	initialOptionId: string | null;
+	initialQuantity: number;
+	initialSliceId: string;
+	initialUsdPerGbp: number;
+	slices: readonly BudgetSlice[];
+	comparisons: readonly ResolvedComparison[];
 }
 
-const spendingOptions: SpendingOption[] = [
-	{
-		name: "Hinkley Point C-style nuclear plant",
-		pluralName: "Hinkley Point C-style nuclear plants",
-		cost: 32000000000, // £32 billion
-		emoji: "☢️",
-		quantity: 1,
-		categories: ["Top", "Energy"],
-		citation: "https://ukfoundations.co/",
-	},
-	{
-		name: "South Korean-style nuclear plant",
-		pluralName: "South Korean-style nuclear plants",
-		cost: 5300000000, // £5.3 billion
-		emoji: "⚡",
-		quantity: 1,
-		categories: ["Energy"],
-		citation: "https://ukfoundations.co/",
-	},
-	{
-		name: "mile of HS2",
-		pluralName: "miles of HS2",
-		cost: 396000000, // £396 million
-		emoji: "🚅",
-		quantity: 10,
-		categories: ["Top", "Transport"],
-		citation:
-			"https://www.samdumitriu.com/p/britains-infrastructure-is-too-expensive",
-	},
-	{
-		name: "km of French-style tram system",
-		pluralName: "km of French-style tram systems",
-		cost: 20000000,
-		emoji: "🚊",
-		quantity: 50,
-		categories: ["Top", "Transport"],
-		citation:
-			"https://www.samdumitriu.com/p/britains-infrastructure-is-too-expensive",
-	},
-	{
-		name: "new home",
-		pluralName: "new homes",
-		cost: 250000, // £250,000
-		emoji: "🏠",
-		quantity: 10000,
-		categories: ["Top", "Housing"],
-	},
-	{
-		name: "year of world-class research",
-		pluralName: "years of world-class research",
-		cost: 1000000, // $1 million
-		emoji: "🔬",
-		quantity: 100,
-		categories: ["Research"],
-	},
-	{
-		name: "CRISPR gene-editing experiment",
-		pluralName: "CRISPR gene-editing experiments",
-		cost: 100000, // $100,000
-		emoji: "🧬",
-		quantity: 1000,
-		categories: ["Top", "Research"],
-	},
-	{
-		name: "advanced AI training run",
-		pluralName: "advanced AI training runs",
-		cost: 1000000, // $1 million
-		emoji: "🤖",
-		quantity: 100,
-		categories: ["Top", "AI"],
-	},
-	{
-		name: "coronation of King Charles III",
-		pluralName: "coronations of King Charles III",
-		cost: 72000000, // £72 million
-		emoji: "🤴",
-		quantity: 1,
-		categories: ["Politics"],
-		citation: "https://www.bbc.co.uk/news/articles/c04lyddv2p5o",
-	},
-	{
-		name: "year of profit for the Coca-Cola Company",
-		pluralName: "years of profit for the Coca-Cola Company",
-		cost: 28021000000, // $28.021 billion
-		emoji: "🥤",
-		quantity: 1,
-		categories: ["Business"],
-		citation:
-			"https://www.macrotrends.net/stocks/charts/KO/cocacola/gross-profit",
-	},
-	{
-		name: "average annual full-time salary for a UK employee",
-		pluralName: "average annual full-time salaries for UK employees",
-		cost: 37430, // £37,430
-		emoji: "💼",
-		quantity: 1,
-		categories: ["Top", "Politics", "Business"],
-		citation:
-			"https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/bulletins/annualsurveyofhoursandearnings/2024",
-	},
-	{
-		name: "bat-protective tunnel for HS2",
-		pluralName: "bat-protective tunnels for HS2",
-		cost: 100000000, // £100 million
-		emoji: "🦇",
-		quantity: 1,
-		categories: ["Transport"],
-		citation: "https://www.bbc.com/news/articles/c9wryxyljglo",
-	},
-	{
-		name: "average annual full-time salary for a US employee",
-		pluralName: "average annual full-time salaries for US employees",
-		cost: 61963, // $61,963
-		emoji: "💵",
-		quantity: 1,
-		categories: ["Politics", "Business"],
-		citation: "https://www.statista.com/topics/789/wages-and-salary/",
-	},
-	{
-		name: "year of tax revenue for the UK government",
-		pluralName: "years of tax revenue for the UK government",
-		cost: 829100000000, // £829.1 billion
-		emoji: "🇬🇧",
-		quantity: 1,
-		categories: ["Politics"],
-		citation:
-			"https://www.gov.uk/government/statistics/hmrc-tax-and-nics-receipts-for-the-uk/hmrc-tax-receipts-and-national-insurance-contributions-for-the-uk-new-annual-bulletin",
-	},
-	{
-		name: "launch of a SpaceX Starship",
-		pluralName: "launches of a SpaceX Starship",
-		cost: 80000000, // $100 million USD -> £80 million GBP
-		emoji: "🚀",
-		quantity: 1,
-		categories: ["Top", "Space"],
-		citation:
-			"https://payloadspace.com/payload-research-detailing-artemis-vehicle-rd-costs/",
-	},
-	{
-		name: "year of UK defence spending",
-		pluralName: "years of UK defence spending",
-		cost: 54000000000, // £54 billion
-		emoji: "🛡️",
-		quantity: 1,
-		categories: ["Defence"],
-		citation:
-			"https://commonslibrary.parliament.uk/research-briefings/cbp-8175",
-	},
-	{
-		name: "Type 26 frigate",
-		pluralName: "Type 26 frigates",
-		cost: 525000000, // £525 million
-		emoji: "🛳️",
-		quantity: 1,
-		categories: ["Defence"],
-		citation:
-			"https://www.gov.uk/government/news/british-shipyard-awarded-42-billion-to-build-royal-navy-ships",
-	},
-	{
-		name: "reclamation of Dogger Bank from the sea",
-		pluralName: "reclamations of Dogger Bank from the sea",
-		cost: 97500000000, // £97.5 billion
-		emoji: "🧜",
-		quantity: 1,
-		categories: ["Politics", "Housing"],
-		citation: "https://model-thinking.com/p/a-new-atlantis",
-	},
-];
+export default function NHSSpendingCalculator({
+	initialAmount,
+	initialOptionId,
+	initialQuantity,
+	initialSliceId,
+	initialUsdPerGbp,
+	slices,
+	comparisons,
+}: Props) {
+	const router = useRouter();
+	const initialOption = useMemo(
+		() =>
+			initialOptionId
+				? (comparisons.find((c) => c.id === initialOptionId) ?? null)
+				: null,
+		[initialOptionId, comparisons],
+	);
+	const initialSlice = useMemo(
+		() => getSlice(initialSliceId, slices),
+		[initialSliceId, slices],
+	);
 
-export default function NHSSpendingCalculator() {
-	const [amount, setAmount] = useState(ANNUAL_NHS_SPENDING);
-	const [inputValue, setInputValue] = useState(ANNUAL_NHS_SPENDING.toString());
-	const [selectedOption, setSelectedOption] = useState<SpendingOption | null>(
-		null,
+	// `amount` is canonical and always in GBP. Display-currency conversion
+	// happens at render time via fromGBP(); option costs declared in USD are
+	// converted to GBP via toGBP() before being multiplied/compared.
+	const [amount, setAmount] = useState(initialAmount);
+	// While the amount input is focused, `editingAmount` holds whatever digits
+	// the user has typed verbatim — the field is not reformatted on every
+	// keystroke, which prevents the caret from jumping. While blurred this is
+	// `null` and the field shows `amount.toLocaleString()` instead.
+	const [editingAmount, setEditingAmount] = useState<string | null>(null);
+	const [selectedOption, setSelectedOption] = useState<ResolvedComparison | null>(
+		initialOption,
 	);
 	const [selectedCategory, setSelectedCategory] = useState("Top");
-	const [selectedQuantity, setSelectedQuantity] = useState<number>(1);
+	const [selectedQuantity, setSelectedQuantity] =
+		useState<number>(initialQuantity);
+	const [selectedSlice, setSelectedSlice] =
+		useState<BudgetSlice>(initialSlice);
 	const [currency, setCurrency] = useState<Currency>("GBP");
-	const [conversionRate, setConversionRate] = useState(1);
+	// FX rate is fetched server-side and passed in as a prop; the client
+	// doesn't re-fetch. The rate is cached upstream for an hour, which is
+	// fresh enough for a session.
+	const usdPerGbp = initialUsdPerGbp;
 
+	// Reflect state in the URL so links are shareable. Debounced so typing
+	// doesn't thrash history; preserves unrelated query params (utm_*, etc.).
+	// The calculator lives at /reference (Phase 2); URL writes target that path.
 	useEffect(() => {
-		setInputValue(amount.toLocaleString());
-	}, [amount]);
-
-	useEffect(() => {
-		const fetchConversionRate = async () => {
-			try {
-				const response = await fetch(CURRENCY_API_URL);
-				const data = await response.json();
-				setConversionRate(data.rates.USD);
-			} catch (error) {
-				console.error("Failed to fetch conversion rate:", error);
+		const handle = setTimeout(() => {
+			const params = new URLSearchParams(window.location.search);
+			params.delete("id");
+			params.delete("q");
+			params.delete("a");
+			params.delete("slice");
+			if (selectedOption) {
+				params.set("id", selectedOption.id);
+				if (selectedQuantity !== selectedOption.quantity) {
+					params.set("q", String(selectedQuantity));
+				}
+			} else if (Math.round(amount) !== selectedSlice.value) {
+				params.set("a", String(Math.round(amount)));
 			}
-		};
-		fetchConversionRate();
-	}, []);
+			if (selectedSlice.id !== "total") {
+				params.set("slice", selectedSlice.id);
+			}
+			const qs = params.toString();
+			router.replace(qs ? `/reference?${qs}` : "/reference", {
+				scroll: false,
+			});
+		}, 250);
+		return () => clearTimeout(handle);
+	}, [amount, selectedOption, selectedQuantity, selectedSlice, router]);
 
-	const convertAmount = (amount: number) => {
-		return currency === "USD" ? amount * conversionRate : amount;
+	const optionCostInGBP = (option: ResolvedComparison) =>
+		toGBP(option.cost, option.nativeCurrency, usdPerGbp);
+
+	const amountInputDisplay = editingAmount ?? amount.toLocaleString();
+
+	const handleAmountFocus = () => {
+		setEditingAmount(String(amount));
 	};
 
-	const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const value = e.target.value.replace(/[^0-9]/g, "");
-		setInputValue(value);
-		const numericValue = Number.parseFloat(value);
-		if (!Number.isNaN(numericValue)) {
-			setAmount(numericValue);
-			setSelectedOption(null);
-		}
+	const handleAmountBlur = () => {
+		setEditingAmount(null);
 	};
 
-	const handleQuickInput = (
-		cost: number,
-		quantity: number,
-		option: SpendingOption,
-	) => {
-		const newAmount = cost * quantity;
+	const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const cleaned = e.target.value.replace(/\D/g, "");
+		setEditingAmount(cleaned);
+		setAmount(cleaned === "" ? 0 : Number.parseInt(cleaned, 10));
+		setSelectedOption(null);
+	};
+
+	const handleQuickInput = (option: ResolvedComparison, quantity: number) => {
+		const newAmount = optionCostInGBP(option) * quantity;
 		setAmount(newAmount);
-		setInputValue(newAmount.toLocaleString());
+		setEditingAmount(null);
 		setSelectedOption(option);
 		setSelectedQuantity(quantity);
 	};
 
 	const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const value = e.target.value;
+		const cleaned = e.target.value.replace(/\D/g, "");
 		const numericValue =
-			value === "" ? 0 : Math.max(1, Number.parseInt(value) || 0);
+			cleaned === "" ? 1 : Math.max(1, Number.parseInt(cleaned, 10));
 		setSelectedQuantity(numericValue);
 		if (selectedOption) {
-			const newAmount = selectedOption.cost * (numericValue || 1);
+			const newAmount = optionCostInGBP(selectedOption) * numericValue;
 			setAmount(newAmount);
-			setInputValue(newAmount.toLocaleString());
+			setEditingAmount(null);
 		}
 	};
 
-	const timeInMinutes = (amount / ANNUAL_NHS_SPENDING) * MINUTES_PER_YEAR;
+	const handleSliceChange = (slice: BudgetSlice) => {
+		setSelectedSlice(slice);
+		// When the user picks a denominator they're framing the budget; auto-fill
+		// the amount with that slice's value so the headline lands on
+		// "1 year of <slice>" — but only if they haven't typed a custom amount or
+		// picked a comparison. This keeps prior input intact.
+		if (
+			!selectedOption &&
+			Math.round(amount) === Math.round(selectedSlice.value)
+		) {
+			setAmount(slice.value);
+			setEditingAmount(null);
+		}
+	};
+
+	const timeInMinutes = (amount / selectedSlice.value) * MINUTES_PER_YEAR;
 	const formattedTime = formatTime(timeInMinutes);
 
 	const categories = [
 		"Top",
 		...new Set(
-			spendingOptions
-				.flatMap((option) => option.categories)
-				.filter((category) => category !== "Top"),
+			comparisons.flatMap((option) => option.categories).filter(
+				(category) => category !== "Top",
+			),
 		),
 	];
 	const filteredOptions =
 		selectedCategory === "Top"
-			? spendingOptions.filter((option) => option.categories.includes("Top"))
-			: spendingOptions.filter((option) =>
+			? comparisons.filter((option) => option.categories.includes("Top"))
+			: comparisons.filter((option) =>
 					option.categories.includes(selectedCategory),
 				);
 
+	const displayAmount = fromGBP(amount, currency, usdPerGbp);
+	const currencySymbol = currency === "GBP" ? "£" : "$";
+
 	return (
 		<>
-			<div className="min-h-screen pb-24">
-				<div className="bg-blue-500 text-white drop-shadow-sm flex flex-row items-center justify-between w-screen py-1 px-4 font-semibold">
-					<span>💰 NHSCostCalculator.com</span>
-					<Link href="/about" className="hover:underline hidden">
-						About
-					</Link>
-				</div>
-				<div className="max-w-[1024px] mx-auto px-4 mt-6">
+			<div className="pb-24">
+				<div className="max-w-[1024px] mx-auto px-4">
 					<div className="relative overflow-clip flex flex-col items-center lg:items-end justify-end gap-3 mb-4 bg-gradient-to-r from-neutral-100 to-neutral-50 shadow-sm border p-4 rounded-lg">
 						<GridPattern
 							squares={[
@@ -336,42 +230,16 @@ export default function NHSSpendingCalculator() {
 						</div>
 					</div>
 					<Card className="mb-6 w-full relative">
-						<div className="absolute right-2 top-2 hidden sm:flex gap-1">
-							<Button
-								variant={currency === "GBP" ? "default" : "outline"}
-								size="sm"
-								onClick={() => setCurrency("GBP")}
-								className="text-xs"
-							>
-								£
-							</Button>
-							<Button
-								variant={currency === "USD" ? "default" : "outline"}
-								size="sm"
-								onClick={() => setCurrency("USD")}
-								className="text-xs"
-							>
-								$
-							</Button>
-						</div>
-						<div className="flex justify-center gap-1 sm:hidden pt-4">
-							<Button
-								variant={currency === "GBP" ? "default" : "outline"}
-								size="sm"
-								onClick={() => setCurrency("GBP")}
-								className="text-xs"
-							>
-								£
-							</Button>
-							<Button
-								variant={currency === "USD" ? "default" : "outline"}
-								size="sm"
-								onClick={() => setCurrency("USD")}
-								className="text-xs"
-							>
-								$
-							</Button>
-						</div>
+						<CurrencyToggle
+							value={currency}
+							onChange={setCurrency}
+							className="absolute right-2 top-2 hidden sm:flex"
+						/>
+						<CurrencyToggle
+							value={currency}
+							onChange={setCurrency}
+							className="justify-center sm:hidden pt-4"
+						/>
 						<CardHeader>
 							<CardTitle className="text-3xl font-light text-center max-w-[80%] mx-auto">
 								{selectedOption ? (
@@ -380,10 +248,14 @@ export default function NHSSpendingCalculator() {
 										{selectedQuantity > 1
 											? selectedOption.pluralName
 											: selectedOption.name}{" "}
-										({formatMoney(convertAmount(amount), currency)}) is
+										({currencySymbol}
+										<AnimatedNumber value={Math.round(displayAmount)} />) is
 									</>
 								) : (
-									<>{formatMoney(convertAmount(amount), currency)} is</>
+									<>
+										{currencySymbol}
+										<AnimatedNumber value={Math.round(displayAmount)} /> is
+									</>
 								)}
 							</CardTitle>
 						</CardHeader>
@@ -393,8 +265,72 @@ export default function NHSSpendingCalculator() {
 									className="text-4xl text-center font-semibold"
 									aria-live="polite"
 								>
-									<span className="text-blue-500">{formattedTime}</span> of NHS
-									spending
+									<span className="text-blue-500">{formattedTime}</span> of{" "}
+									{selectedSlice.shortLabel}
+								</p>
+								<p className="mt-1 text-center text-sm text-muted-foreground inline-flex items-center justify-center gap-1 w-full">
+									= {currencySymbol}
+									<AnimatedNumber
+										value={Math.round(displayAmount / UK_POPULATION.value)}
+									/>{" "}
+									per UK person
+									<MethodologyPopover
+										methodology={UK_POPULATION_METHODOLOGY}
+									/>
+								</p>
+								<div
+									role="group"
+									aria-label="Choose which NHS England budget to compare against"
+									className="flex flex-wrap gap-2 justify-center mt-4"
+								>
+									{slices.map((slice) => {
+										const active = selectedSlice.id === slice.id;
+										return (
+											<button
+												key={slice.id}
+												type="button"
+												aria-pressed={active}
+												onClick={() => handleSliceChange(slice)}
+												className={cn(
+													badgeVariants({
+														variant: active ? "default" : "outline",
+													}),
+													"cursor-pointer",
+												)}
+											>
+												{slice.label}
+											</button>
+										);
+									})}
+								</div>
+								<p className="mt-2 text-center text-xs text-muted-foreground">
+									{selectedSlice.label}:{" "}
+									{currencySymbol}
+									{Math.round(
+										fromGBP(selectedSlice.value, currency, usdPerGbp),
+									).toLocaleString()}
+									/yr · {currencySymbol}
+									{Math.round(
+										fromGBP(
+											selectedSlice.value / UK_POPULATION.value,
+											currency,
+											usdPerGbp,
+										),
+									).toLocaleString()}
+									/person ·{" "}
+									<a
+										href={selectedSlice.source.url}
+										target="_blank"
+										rel="noopener noreferrer"
+										className="hover:underline"
+									>
+										{selectedSlice.source.label}
+									</a>
+									<ProvenanceBadge isLive={selectedSlice.isLive ?? false} />
+									<MethodologyPopover
+										methodology={selectedSlice.methodology}
+										className="ml-1"
+									/>
 								</p>
 							</div>
 							<div className="mb-6">
@@ -402,13 +338,16 @@ export default function NHSSpendingCalculator() {
 									htmlFor="amount"
 									className="block text-sm font-medium text-gray-700 mb-2"
 								>
-									Enter amount (£):
+									Enter amount ({currency === "GBP" ? "£" : "$"}):
 								</label>
 								<Input
 									type="text"
 									id="amount"
-									value={inputValue}
-									onChange={handleInputChange}
+									inputMode="numeric"
+									value={amountInputDisplay}
+									onChange={handleAmountChange}
+									onFocus={handleAmountFocus}
+									onBlur={handleAmountBlur}
 									className="w-full rounded-full"
 									aria-describedby="amount-description"
 								/>
@@ -423,47 +362,42 @@ export default function NHSSpendingCalculator() {
 								</p>
 							</div>
 						</CardContent>
-						<Accordion type="single" collapsible className="px-6 pb-6 hidden">
-							<AccordionItem value="spending-breakdown">
-								<AccordionTrigger>Where does the money go?</AccordionTrigger>
-								<AccordionContent>
-									<ul className="space-y-2 text-sm text-muted-foreground">
-										<li>• Staff costs (£56.8bn)</li>
-										<li>• Hospital drugs (£20.7bn)</li>
-										<li>• Primary care (£14.2bn)</li>
-										<li>• Community health services (£11.5bn)</li>
-										<li>• Mental health (£14.3bn)</li>
-										<li>• Specialist care (£19.6bn)</li>
-										<li>• Other costs (£54.9bn)</li>
-									</ul>
-								</AccordionContent>
-							</AccordionItem>
-						</Accordion>
 					</Card>
 
-					<div className="flex flex-wrap gap-2 mb-4">
-						{categories.map((category) => (
-							<Badge
-								key={category}
-								variant={selectedCategory === category ? "default" : "outline"}
-								className="cursor-pointer"
-								onClick={() => setSelectedCategory(category)}
-							>
-								{category}
-							</Badge>
-						))}
+					<div
+						role="group"
+						aria-label="Filter comparisons by category"
+						className="flex flex-wrap gap-2 mb-4"
+					>
+						{categories.map((category) => {
+							const active = selectedCategory === category;
+							return (
+								<button
+									key={category}
+									type="button"
+									aria-pressed={active}
+									onClick={() => setSelectedCategory(category)}
+									className={cn(
+										badgeVariants({
+											variant: active ? "default" : "outline",
+										}),
+										"cursor-pointer",
+									)}
+								>
+									{category}
+								</button>
+							);
+						})}
 					</div>
 
 					<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 mb-8">
 						{filteredOptions.map((option) => (
 							<Button
-								key={option.name}
-								onClick={() =>
-									handleQuickInput(option.cost, option.quantity, option)
-								}
+								key={option.id}
+								onClick={() => handleQuickInput(option, option.quantity)}
 								className="text-sm h-auto py-2 px-3 whitespace-normal"
 								variant={
-									selectedOption?.name === option.name ? "default" : "outline"
+									selectedOption?.id === option.id ? "default" : "outline"
 								}
 							>
 								<span className="mr-1">{option.emoji}</span>
@@ -488,14 +422,9 @@ export default function NHSSpendingCalculator() {
 									<Input
 										type="text"
 										id="quantity"
-										value={
-											selectedQuantity === 1 &&
-											document.activeElement ===
-												document.getElementById("quantity")
-												? ""
-												: selectedQuantity
-										}
+										value={selectedQuantity}
 										onChange={handleQuantityChange}
+										onFocus={(e) => e.currentTarget.select()}
 										className="w-full"
 										inputMode="numeric"
 										pattern="[0-9]*"
@@ -509,17 +438,17 @@ export default function NHSSpendingCalculator() {
 				<div className="max-w-[1024px] w-screen mx-auto px-4">
 					<div className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
 						<h2 className="text-xl font-light mb-2">
-							What else could {formatMoney(convertAmount(amount), currency)}{" "}
-							fund?
+							What else could {currencySymbol}
+							<AnimatedNumber value={Math.round(displayAmount)} /> fund?
 						</h2>
 						<ul className="space-y-3">
 							<AnimatePresence mode="popLayout">
-								{spendingOptions.map((option, index) => {
-									const quantity = Math.floor(amount / option.cost);
+								{comparisons.map((option) => {
+									const quantity = Math.floor(amount / optionCostInGBP(option));
 									if (quantity < 1) return null;
 									return (
 										<motion.li
-											key={option.name}
+											key={option.id}
 											className="flex items-center"
 											initial={{ opacity: 0, height: 0 }}
 											animate={{ opacity: 1, height: "auto" }}
@@ -529,18 +458,21 @@ export default function NHSSpendingCalculator() {
 												{option.emoji}
 											</span>
 											<span className="text-sm">
-												{formatMoney(convertAmount(amount), currency)} could
-												fund {quantity.toLocaleString()}{" "}
+												{formatMoney(displayAmount, currency)} could fund{" "}
+												{quantity.toLocaleString()}{" "}
 												{quantity !== 1 ? option.pluralName : option.name}
-												{option.citation && (
+												{option.source && (
 													<a
-														href={option.citation}
+														href={option.source.url}
 														className="ml-1 text-blue-500 hover:underline"
 														target="_blank"
 														rel="noopener noreferrer"
 													>
 														[source]
 													</a>
+												)}
+												{option.dynamic && (
+													<ProvenanceBadge isLive={option.isLive} />
 												)}
 											</span>
 										</motion.li>
