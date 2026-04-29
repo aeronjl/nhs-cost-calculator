@@ -13,8 +13,8 @@ import {
 	projectBorrowingStressCases,
 } from "@/lib/borrowing";
 import {
+	decomposeBorrowingFan,
 	estimateBorrowingStressRegime,
-	projectBorrowingRegimeFan,
 } from "@/lib/borrowing-regime";
 import {
 	type BehaviouralModelSummary,
@@ -100,15 +100,16 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 			: null;
 	const borrowingOptimisation =
 		line.type === "borrow" ? optimiseBorrowingStrategy(line.magnitude, 5) : null;
-	const borrowingFan =
+	const borrowingFanDecomposition =
 		line.type === "borrow"
-			? projectBorrowingRegimeFan(
+			? decomposeBorrowingFan(
 					line.magnitude,
 					5,
 					{ strategyId: line.borrowingStrategyId },
 					500,
 				)
 			: null;
+	const borrowingFan = borrowingFanDecomposition?.regimeFan ?? null;
 	const borrowingMarketReaction =
 		line.type === "borrow"
 			? projectBorrowingMarketReactionPath(line.magnitude, 5, {
@@ -198,6 +199,7 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 						strategyFrontier={borrowingFrontier}
 						strategyOptimisation={borrowingOptimisation}
 						fan={borrowingFan}
+						fanDecomposition={borrowingFanDecomposition}
 						marketReaction={borrowingMarketReaction}
 						regime={borrowingRegime}
 					/>
@@ -253,6 +255,7 @@ function BorrowingModelBlock({
 	strategyFrontier,
 	strategyOptimisation,
 	fan,
+	fanDecomposition,
 	marketReaction,
 	regime,
 }: {
@@ -262,7 +265,8 @@ function BorrowingModelBlock({
 	strategyCases: ReturnType<typeof projectBorrowingStrategyCases> | null;
 	strategyFrontier: ReturnType<typeof projectBorrowingStrategyFrontier> | null;
 	strategyOptimisation: ReturnType<typeof optimiseBorrowingStrategy> | null;
-	fan: ReturnType<typeof projectBorrowingRegimeFan> | null;
+	fan: ReturnType<typeof decomposeBorrowingFan>["regimeFan"] | null;
+	fanDecomposition: ReturnType<typeof decomposeBorrowingFan> | null;
 	marketReaction: ReturnType<typeof projectBorrowingMarketReactionPath> | null;
 	regime: ReturnType<typeof estimateBorrowingStressRegime> | null;
 }) {
@@ -275,6 +279,7 @@ function BorrowingModelBlock({
 			(instrument) => instrument.id === yearN.absorptionBottleneck,
 		) ?? null;
 	const fanYearN = fan?.at(-1);
+	const fanFinalDecomposition = fanDecomposition?.finalYear ?? null;
 	const marketYearN = marketReaction?.at(-1);
 	const monetaryExposure = estimateMonetaryFiscalExposure(0.01);
 	const selectedFrontierCase = strategyFrontier?.cases.find(
@@ -504,6 +509,41 @@ function BorrowingModelBlock({
 							{formatSignedBn(-fanYearN.interestCostBand.p5)}
 						</span>
 					</div>
+				</div>
+			)}
+			{fanFinalDecomposition && (
+				<div className="mt-2 border-t pt-2">
+					<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
+						Fan decomposition, year {fanFinalDecomposition.year}
+					</div>
+					<dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs">
+						<div className="contents">
+							<dt className="text-muted-foreground">Continuous rate tail</dt>
+							<dd className="tabular-nums text-right font-medium">
+								£{formatBn(fanFinalDecomposition.continuousInterestTailGbp)}
+							</dd>
+						</div>
+						<div className="contents">
+							<dt className="text-muted-foreground">Regime tail add-on</dt>
+							<dd className="tabular-nums text-right font-medium">
+								{formatSignedBn(fanFinalDecomposition.regimeInterestTailGbp)}
+							</dd>
+						</div>
+						<div className="contents">
+							<dt className="text-muted-foreground">Regime share of tail</dt>
+							<dd className="tabular-nums text-right font-medium">
+								{formatProbability(
+									fanFinalDecomposition.regimeShareOfInterestTail,
+								)}
+							</dd>
+						</div>
+						<div className="contents">
+							<dt className="text-muted-foreground">PSNB downside add-on</dt>
+							<dd className="tabular-nums text-right font-medium">
+								£{formatBn(fanFinalDecomposition.regimePsnbDownsideGbp)}
+							</dd>
+						</div>
+					</dl>
 				</div>
 			)}
 			{marketYearN && marketYearN.marketReactionPremium > 0.0001 && (

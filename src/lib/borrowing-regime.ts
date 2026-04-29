@@ -4,6 +4,7 @@ import {
 	type BorrowingFanYear,
 	type BorrowingMarketReactionYear,
 	type BorrowingPathAssumptions,
+	projectBorrowingFan,
 	projectBorrowingPath,
 	projectBorrowingMarketReactionPath,
 } from "@/lib/borrowing";
@@ -50,6 +51,29 @@ export interface BorrowingRegimeDraw {
 	label: string;
 	overlayBp: number;
 	probability: number;
+}
+
+export interface BorrowingFanDecompositionYear {
+	year: number;
+	centralInterestCostGbp: number;
+	continuousInterestP95Gbp: number;
+	regimeInterestP95Gbp: number;
+	continuousInterestTailGbp: number;
+	regimeInterestTailGbp: number;
+	regimeShareOfInterestTail: number;
+	continuousDebtP95Gbp: number;
+	regimeDebtP95Gbp: number;
+	regimeDebtTailGbp: number;
+	continuousPsnbP5Gbp: number;
+	regimePsnbP5Gbp: number;
+	regimePsnbDownsideGbp: number;
+}
+
+export interface BorrowingFanDecomposition {
+	continuousFan: BorrowingFanYear[];
+	regimeFan: BorrowingFanYear[];
+	years: BorrowingFanDecompositionYear[];
+	finalYear: BorrowingFanDecompositionYear;
 }
 
 const REGIME_LABELS: Record<BorrowingStressRegimeId, string> = {
@@ -305,4 +329,69 @@ export const projectBorrowingRegimeFan = (
 		centralPsnbShiftGbp: row.psnbShiftGbp,
 		psnbShiftBand: computeBand(psnbByYear[index]!),
 	}));
+};
+
+export const decomposeBorrowingFan = (
+	amount: number,
+	years: number,
+	assumptions: Partial<BorrowingPathAssumptions> = {},
+	samples = 1000,
+	seed = 73,
+): BorrowingFanDecomposition => {
+	const continuousFan = projectBorrowingFan(
+		amount,
+		years,
+		assumptions,
+		samples,
+		seed,
+	);
+	const regimeFan = projectBorrowingRegimeFan(
+		amount,
+		years,
+		assumptions,
+		samples,
+		seed,
+	);
+	const rows = regimeFan.map<BorrowingFanDecompositionYear>((regimeYear, index) => {
+		const continuousYear = continuousFan[index]!;
+		const continuousInterestTailGbp = Math.max(
+			0,
+			continuousYear.interestCostBand.p95 -
+				continuousYear.centralInterestCostGbp,
+		);
+		const regimeInterestTailGbp =
+			regimeYear.interestCostBand.p95 -
+			continuousYear.interestCostBand.p95;
+		const totalInterestTailGbp =
+			continuousInterestTailGbp + Math.max(0, regimeInterestTailGbp);
+		return {
+			year: regimeYear.year,
+			centralInterestCostGbp: regimeYear.centralInterestCostGbp,
+			continuousInterestP95Gbp: continuousYear.interestCostBand.p95,
+			regimeInterestP95Gbp: regimeYear.interestCostBand.p95,
+			continuousInterestTailGbp,
+			regimeInterestTailGbp,
+			regimeShareOfInterestTail:
+				totalInterestTailGbp > 0
+					? Math.max(0, regimeInterestTailGbp) / totalInterestTailGbp
+					: 0,
+			continuousDebtP95Gbp: continuousYear.debtStockBand.p95,
+			regimeDebtP95Gbp: regimeYear.debtStockBand.p95,
+			regimeDebtTailGbp:
+				regimeYear.debtStockBand.p95 - continuousYear.debtStockBand.p95,
+			continuousPsnbP5Gbp: continuousYear.psnbShiftBand.p5,
+			regimePsnbP5Gbp: regimeYear.psnbShiftBand.p5,
+			regimePsnbDownsideGbp: Math.max(
+				0,
+				continuousYear.psnbShiftBand.p5 - regimeYear.psnbShiftBand.p5,
+			),
+		};
+	});
+
+	return {
+		continuousFan,
+		regimeFan,
+		years: rows,
+		finalYear: rows.at(-1)!,
+	};
 };

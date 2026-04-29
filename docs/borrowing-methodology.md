@@ -159,6 +159,8 @@ The stochastic fan samples Bank Rate, inflation, and gilt-premium shocks with a 
 
 The fan now uses correlated macro-fiscal shocks rather than independent draws. A common stress factor pushes Bank Rate, inflation, and gilt premia in the same direction while reducing nominal-growth assumptions at the margin. This is still a reduced-form covariance structure, but it avoids the unrealistic case where adverse rate, inflation, and credibility shocks are sampled as unrelated events.
 
+The borrowing popover also decomposes the year-horizon fan. The continuous component is the gap between the central debt-interest path and the 95th percentile under continuous Bank Rate, inflation, gilt-premium, and growth shocks. The regime component is the additional 95th-percentile movement after sampling credibility/backstop regimes. For backstop-like regimes this contribution can be negative, showing that QE or safe-asset demand offsets part of the continuous issuance stress.
+
 ## Fiscal-Rule Fan
 
 The OBR baseline comparison also runs a joint macro-fiscal fan. Each draw samples a common adverse shock, nominal-growth shock, inflation shock, Bank Rate shock, gilt-premium shock, and a persistent PSNB forecast error. The same draw is applied to scenario projections and the baseline headroom calculation, producing:

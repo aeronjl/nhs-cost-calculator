@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { projectBorrowingFan } from "./borrowing";
 import {
+	decomposeBorrowingFan,
 	estimateBorrowingStressRegime,
 	projectBorrowingRegimeFan,
 } from "./borrowing-regime";
@@ -63,5 +64,37 @@ describe("borrowing stress regime model", () => {
 		expect(switched.at(-1)!.debtStockBand.p95).toBeGreaterThan(
 			base.at(-1)!.debtStockBand.p95,
 		);
+	});
+
+	it("decomposes continuous and regime contributions to fan tails", () => {
+		const decomposition = decomposeBorrowingFan(
+			43_500_000_000,
+			5,
+			{},
+			400,
+			12,
+		);
+		expect(decomposition).toEqual(
+			decomposeBorrowingFan(43_500_000_000, 5, {}, 400, 12),
+		);
+		expect(decomposition.years).toHaveLength(5);
+		expect(decomposition.finalYear.continuousInterestTailGbp).toBeGreaterThan(0);
+		expect(decomposition.finalYear.regimeInterestTailGbp).toBeGreaterThan(0);
+		expect(decomposition.finalYear.regimeShareOfInterestTail).toBeGreaterThan(
+			0,
+		);
+		expect(decomposition.finalYear.regimeShareOfInterestTail).toBeLessThan(1);
+	});
+
+	it("shows monetary-backstop regimes can offset continuous tails", () => {
+		const decomposition = decomposeBorrowingFan(
+			300_000_000_000,
+			5,
+			{},
+			400,
+			12,
+		);
+		expect(decomposition.finalYear.regimeInterestTailGbp).toBeLessThan(0);
+		expect(decomposition.finalYear.regimeShareOfInterestTail).toBe(0);
 	});
 });
