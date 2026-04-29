@@ -53,6 +53,22 @@ apf_cashflow_proxy = apf_gilt_stock * bank_rate_shock * APF_beta
 
 This overlay is not added to every borrowing line's central PSNB path, because it is mostly a whole-balance-sheet sensitivity rather than the direct consequence of one marginal gilt issue. It is exposed beside borrowing scenarios because it materially changes fiscal risk in high-rate states.
 
+## Monetary Policy Reaction
+
+The scenario macro path now includes a reduced-form Bank Rate reaction. CPI and GDP deviations create a Taylor-rule-style target for the policy rate, and the model smooths the response through time:
+
+```text
+bank_rate_target_pp =
+  CPI_deviation_pp * CPI_response
+  + GDP_deviation_pct * output_response
+
+bank_rate_deviation_t =
+  smoothing * bank_rate_deviation_(t-1)
+  + (1 - smoothing) * bank_rate_target_pp
+```
+
+The resulting Bank Rate deviation feeds back into borrowing costs through each instrument's Bank Rate pass-through. This matters most for Treasury bills and short gilts; long gilts remain driven mainly by the term yield and debt-risk channels.
+
 ## Rate And Risk Channels
 
 Each instrument has a base nominal yield, or a real yield plus inflation for index-linked gilts. Bank Rate shocks pass through most strongly to bills and short gilts. A parallel yield-curve shock can be supplied by macro feedback or stress tests. The instrument rate combines base yield, debt-risk premium, market-absorption concession, macro yield shift, and Bank Rate pass-through.
@@ -142,4 +158,4 @@ The update script validates source domains, required instruments, share totals, 
 
 ## Known Limitations
 
-The model does not yet estimate demand curves for gilt auctions, endogenous monetary-policy reaction functions, or a full joint macro-fiscal covariance matrix. It also treats the financing strategy as chosen ex ante rather than optimised dynamically as market conditions evolve.
+The model does not yet estimate full demand curves for gilt auctions, a structural MPC forecast, or a complete joint macro-fiscal covariance matrix. It also treats the financing strategy as chosen ex ante rather than optimised dynamically as market conditions evolve.

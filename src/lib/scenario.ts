@@ -17,6 +17,11 @@ import {
 } from "@/lib/distribution";
 import { evaluateBehaviouralResponse } from "@/lib/elasticity";
 import {
+	BANK_RATE_DEVIATION_CEILING_PP,
+	BANK_RATE_DEVIATION_FLOOR_PP,
+	BANK_RATE_RESPONSE_SMOOTHING,
+	BANK_RATE_RESPONSE_TO_CPI_PP,
+	BANK_RATE_RESPONSE_TO_GDP_PCT,
 	type FiscalMultiplier,
 	FREEZE_DRAG_AMPLIFICATION_PER_CPI_PP,
 	GILT_YIELD_PER_DEBT_GDP_PP,
@@ -847,7 +852,7 @@ export interface ScenarioMacro {
 
 // ---------------------------------------------------------------------------
 // Scope B macro path: per-year MacroState aggregating GDP, CPI, debt:GDP,
-// and gilt-yield deviations from baseline.
+// Bank Rate, and gilt-yield deviations from baseline.
 //
 // Channels:
 //   1. GDP: sum of (line's £ × year-N multiplier) across all lines.
@@ -855,7 +860,8 @@ export interface ScenarioMacro {
 //   2. CPI: VAT and similar levers push CPI directly via passthrough; sum of
 //      (line's £ × cpiPassthrough) / (UK GDP × VAT base ratio).
 //   3. Debt:GDP: cumulative scenario impact on PSNB / GDP.
-//   4. Gilt yield: change in debt:GDP × per-pp sensitivity.
+//   4. Bank Rate: smoothed reduced-form response to CPI and GDP deviations.
+//   5. Gilt yield: change in debt:GDP × per-pp sensitivity.
 //
 // All deviations are vs OBR baseline. This is reduced-form — no full
 // general-equilibrium feedback yet (that's Scope C).
@@ -866,6 +872,7 @@ export interface MacroState {
 	cpiDeviationPp: number; // percentage points off baseline CPI level
 	gdpDeviationPct: number; // % of GDP impact
 	debtGdpDeviationPp: number; // percentage points off baseline debt:GDP
+	bankRateDeviationPp: number; // percentage points off baseline Bank Rate
 	giltYieldDeviationPp: number; // percentage points off baseline 10-year gilt
 }
 
@@ -882,6 +889,7 @@ export const evaluateScenarioMacroPath = (
 	const states: MacroState[] = [];
 	const psnbProjection = projectScenarioOverYears(result, years);
 	let cumulativePsnb = 0; // cumulative scenario PSNB shift (positive = scenario reduces borrowing)
+	let previousBankRateDeviationPp = 0;
 
 	for (let y = 1; y <= years; y++) {
 		// GDP deviation: sum of (dynamic delta × year-N multiplier) across lines.
@@ -949,6 +957,20 @@ export const evaluateScenarioMacroPath = (
 		// Cumulative PSNB shift accumulates each year (scenario-adjusted PSNB)
 		cumulativePsnb += yearPsnb;
 		const debtGdpDeviationPp = -(cumulativePsnb / UK_GDP_BASE) * 100;
+		const gdpDeviationPct = (gdpImpactGbp / UK_GDP_BASE) * 100;
+		const targetBankRateDeviationPp =
+			cpiImpactGbpScale * BANK_RATE_RESPONSE_TO_CPI_PP +
+			gdpDeviationPct * BANK_RATE_RESPONSE_TO_GDP_PCT;
+		const bankRateDeviationPp = Math.max(
+			BANK_RATE_DEVIATION_FLOOR_PP,
+			Math.min(
+				BANK_RATE_DEVIATION_CEILING_PP,
+				BANK_RATE_RESPONSE_SMOOTHING * previousBankRateDeviationPp +
+					(1 - BANK_RATE_RESPONSE_SMOOTHING) *
+						targetBankRateDeviationPp,
+			),
+		);
+		previousBankRateDeviationPp = bankRateDeviationPp;
 		// Gilt yield response: sensitivity × debt:GDP shift
 		const giltYieldDeviationPp =
 			debtGdpDeviationPp * GILT_YIELD_PER_DEBT_GDP_PP * 100;
@@ -956,8 +978,9 @@ export const evaluateScenarioMacroPath = (
 		states.push({
 			year: y,
 			cpiDeviationPp: cpiImpactGbpScale,
-			gdpDeviationPct: (gdpImpactGbp / UK_GDP_BASE) * 100,
+			gdpDeviationPct,
 			debtGdpDeviationPp,
+			bankRateDeviationPp,
 			giltYieldDeviationPp,
 		});
 	}
@@ -1053,6 +1076,9 @@ export const evaluateScenarioBand = (
 //      (baseline + scenario-deviation) gilt yield, not the fixed 4.5%.
 //      Higher debt → higher yields → higher servicing cost compounds.
 //
+//   4. Bank Rate → short debt servicing: the endogenous monetary-policy
+//      reaction feeds through instrument-specific Bank Rate pass-through.
+//
 // Convention is single-pass: compute the no-feedback projection (Scope A+B),
 // derive MacroPath from it, then project once more with feedback. We do NOT
 // iterate to convergence — the feedback effects are typically small enough
@@ -1132,7 +1158,10 @@ export const projectScenarioWithGEFeedback = (
 			if (ev.line.type === "borrow") {
 				const borrowPath = projectBorrowingPath(ev.line.magnitude, years, {
 					nominalGrowth: a.nominalGrowth,
-					bankRate: a.bankRate,
+					bankRate: Math.max(
+						-0.005,
+						a.bankRate + macroState.bankRateDeviationPp / 100,
+					),
 					inflation: a.inflation,
 					strategyId: ev.line.borrowingStrategyId,
 					yieldCurveShift: macroState.giltYieldDeviationPp / 100,

@@ -4,9 +4,9 @@ import { cn } from "@/lib/utils";
 import type { MacroState } from "@/lib/scenario";
 
 // Renders the year-by-year macro state of the scenario: CPI deviation, GDP
-// deviation, debt:GDP shift, gilt yield response. This is the Scope B macro
-// model output — moves the calculator from "single multiplier" to "endogenous
-// macro state" framing.
+// deviation, debt:GDP shift, Bank Rate response, and gilt yield response.
+// This is the Scope B macro model output — moves the calculator from
+// "single multiplier" to "endogenous macro state" framing.
 //
 // All deviations are vs OBR baseline. Scope C feeds this state back into
 // per-line yields; Scope B exposes the macro state for transparency.
@@ -33,6 +33,7 @@ const significantState = (s: MacroState): boolean =>
 	Math.abs(s.cpiDeviationPp) > 0.005 ||
 	Math.abs(s.gdpDeviationPct) > 0.005 ||
 	Math.abs(s.debtGdpDeviationPp) > 0.005 ||
+	Math.abs(s.bankRateDeviationPp) > 0.0005 ||
 	Math.abs(s.giltYieldDeviationPp) > 0.0005;
 
 export function MacroStatePanel({ path }: Props) {
@@ -60,6 +61,7 @@ export function MacroStatePanel({ path }: Props) {
 							<th className="text-right px-2 py-1">CPI</th>
 							<th className="text-right px-2 py-1">GDP</th>
 							<th className="text-right px-2 py-1">Debt:GDP</th>
+							<th className="text-right px-2 py-1">Bank</th>
 							<th className="text-right px-2 py-1 pr-2">Gilt</th>
 						</tr>
 					</thead>
@@ -108,6 +110,18 @@ export function MacroStatePanel({ path }: Props) {
 								<td
 									className={cn(
 										"text-right px-2 py-1 pr-2",
+										s.bankRateDeviationPp > 0.001
+											? "text-amber-700"
+											: s.bankRateDeviationPp < -0.001
+												? "text-blue-700"
+												: "",
+									)}
+								>
+									{formatPp(s.bankRateDeviationPp, 3)}
+								</td>
+								<td
+									className={cn(
+										"text-right px-2 py-1 pr-2",
 										s.giltYieldDeviationPp > 0.001
 											? "text-amber-700"
 											: s.giltYieldDeviationPp < -0.001
@@ -130,13 +144,13 @@ export function MacroStatePanel({ path }: Props) {
 				debt:GDP. <strong>Year {lastYear.year}</strong>: GDP{" "}
 				{formatPct(lastYear.gdpDeviationPct, 2)} vs baseline; CPI{" "}
 				{formatPp(lastYear.cpiDeviationPp)}; debt:GDP{" "}
-				{formatPp(lastYear.debtGdpDeviationPp)}.
+				{formatPp(lastYear.debtGdpDeviationPp)}; Bank Rate{" "}
+				{formatPp(lastYear.bankRateDeviationPp, 3)}.
 			</p>
 			<p className="text-[10px] text-muted-foreground leading-snug">
-				Scope B is reduced-form (each channel computed independently). Scope C
-				would close the loop — feedback from CPI / GDP / yield deviations back
-				into per-line yields and projections — and is the next research-grade
-				addition.
+				Scope C feeds CPI, Bank Rate, and gilt-yield deviations back into
+				per-line yields and borrowing costs once, without iterating to a full
+				general-equilibrium solution.
 			</p>
 		</div>
 	);

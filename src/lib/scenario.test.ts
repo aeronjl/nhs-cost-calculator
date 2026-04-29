@@ -957,11 +957,23 @@ describe("evaluateScenarioMacroPath (Scope B)", () => {
 		expect(path[0]!.cpiDeviationPp).toBeGreaterThan(0);
 	});
 
+	it("VAT inflation pressure raises the endogenous Bank Rate path", () => {
+		const result = evaluateScenario([taxLine("vat-standard", 2)]);
+		const path = evaluateScenarioMacroPath(result, 5);
+		expect(path[0]!.bankRateDeviationPp).toBeGreaterThan(0);
+	});
+
 	it("Income tax raise has zero direct CPI passthrough", () => {
 		const result = evaluateScenario([taxLine("basic-rate-income-tax", 5)]);
 		const path = evaluateScenarioMacroPath(result, 5);
 		// Income tax has no cpiPassthrough → year-1 CPI deviation = 0
 		expect(path[0]!.cpiDeviationPp).toBeCloseTo(0, 5);
+	});
+
+	it("demand contraction lowers the endogenous Bank Rate path", () => {
+		const result = evaluateScenario([taxLine("basic-rate-income-tax", 5)]);
+		const path = evaluateScenarioMacroPath(result, 5);
+		expect(path[0]!.bankRateDeviationPp).toBeLessThan(0);
 	});
 
 	it("VAT spike-shape CPI fades quickly across years", () => {
@@ -1003,6 +1015,7 @@ describe("evaluateScenarioMacroPath (Scope B)", () => {
 			expect(s.cpiDeviationPp).toBeCloseTo(0);
 			expect(s.gdpDeviationPct).toBeCloseTo(0);
 			expect(s.debtGdpDeviationPp).toBeCloseTo(0);
+			expect(s.bankRateDeviationPp).toBeCloseTo(0);
 		}
 	});
 });

@@ -141,6 +141,16 @@ export const UK_GDP_BASE = 2_550_000_000_000;
 // global-rate-environment-dependent. Linear approximation for Scope B.
 export const GILT_YIELD_PER_DEBT_GDP_PP = 0.0005; // 5bp per 1pp debt:GDP
 
+// Reduced-form monetary reaction function used by the scenario macro path.
+// Units are percentage-point Bank Rate response per percentage-point CPI or
+// GDP deviation. The response is deliberately partial and smoothed because MPC
+// decisions are forward-looking and do not mechanically offset fiscal shocks.
+export const BANK_RATE_RESPONSE_TO_CPI_PP = 0.45;
+export const BANK_RATE_RESPONSE_TO_GDP_PCT = 0.25;
+export const BANK_RATE_RESPONSE_SMOOTHING = 0.55;
+export const BANK_RATE_DEVIATION_FLOOR_PP = -1.5;
+export const BANK_RATE_DEVIATION_CEILING_PP = 2.5;
+
 // CPI amplification factor on frozen-threshold revenue. A 1pp CPI uplift
 // pulls more earners across nominal-frozen thresholds, raising revenue by
 // roughly this fraction of base yield per pp of CPI. Calibrated to the
