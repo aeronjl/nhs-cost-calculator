@@ -884,12 +884,12 @@ const cpiPassthroughForLine = (line: ScenarioLine): number => {
 	return m?.cpiPassthrough ?? 0;
 };
 
-export const evaluateScenarioMacroPath = (
+const evaluateScenarioMacroPathFromProjection = (
 	result: ScenarioResult,
 	years: number,
+	psnbProjection: readonly YearProjection[],
 ): MacroState[] => {
 	const states: MacroState[] = [];
-	const psnbProjection = projectScenarioOverYears(result, years);
 	let cumulativePsnb = 0; // cumulative scenario PSNB shift (positive = scenario reduces borrowing)
 	let previousBankRateDeviationPp = 0;
 
@@ -989,6 +989,16 @@ export const evaluateScenarioMacroPath = (
 	return states;
 };
 
+export const evaluateScenarioMacroPath = (
+	result: ScenarioResult,
+	years: number,
+): MacroState[] =>
+	evaluateScenarioMacroPathFromProjection(
+		result,
+		years,
+		projectScenarioOverYears(result, years),
+	);
+
 export const evaluateScenarioMacro = (
 	result: ScenarioResult,
 ): ScenarioMacro => {
@@ -1081,14 +1091,16 @@ export const evaluateScenarioBand = (
 //   4. Bank Rate → short debt servicing: the endogenous monetary-policy
 //      reaction feeds through instrument-specific Bank Rate pass-through.
 //
-// Convention is single-pass: compute the no-feedback projection (Scope A+B),
-// derive MacroPath from it, then project once more with feedback. We do NOT
-// iterate to convergence — the feedback effects are typically small enough
-// that a single pass captures most of the GE story without the complexity
-// of iterative solvers. Documented as Scope C "single-pass GE."
+// Convention is iterative but bounded: compute the no-feedback projection,
+// derive MacroPath from it, re-project with feedback, then recompute the macro
+// state from the updated PSNB/debt path until the projection stabilises. This
+// closes the borrowing loop where debt service worsens PSNB, lifts debt:GDP,
+// nudges gilt yields, and feeds back into subsequent debt service.
 // ---------------------------------------------------------------------------
 
 const TRIPLE_LOCK_AMPLIFICATION_PER_CPI_PP = 0.01; // 1% extra cost per pp CPI
+const GE_FEEDBACK_TOLERANCE_GBP = 1_000_000;
+const GE_FEEDBACK_MAX_ITERATIONS = 6;
 
 const applyGEFeedback = (
 	line: ScenarioLine,
@@ -1129,20 +1141,39 @@ const applyGEFeedback = (
 	return baseDelta;
 };
 
-export const projectScenarioWithGEFeedback = (
-	result: ScenarioResult,
-	years: number,
-	assumptions: Partial<ProjectionAssumptions> = {},
-): {
+export interface GeneralEquilibriumProjection {
 	noFeedback: YearProjection[];
 	withFeedback: YearProjection[];
 	macroPath: MacroState[];
-} => {
-	const a = { ...DEFAULT_ASSUMPTIONS, ...assumptions };
-	const noFeedback = projectScenarioOverYears(result, years, a);
-	const macroPath = evaluateScenarioMacroPath(result, years);
+	iterations: number;
+	converged: boolean;
+	maxChangeGbp: number;
+}
 
-	// Re-project with GE feedback applied per year.
+const maxProjectionChangeGbp = (
+	previous: readonly YearProjection[],
+	next: readonly YearProjection[],
+): number =>
+	Math.max(
+		0,
+		...next.map((row, index) => {
+			const old = previous[index];
+			if (!old) return Math.abs(row.net);
+			return Math.max(
+				Math.abs(row.net - old.net),
+				Math.abs(row.psnbShift - old.psnbShift),
+				Math.abs(row.debtInterestGbp - old.debtInterestGbp),
+				Math.abs(row.debtStockDeltaGbp - old.debtStockDeltaGbp),
+			);
+		}),
+	);
+
+const projectScenarioWithMacroPath = (
+	result: ScenarioResult,
+	years: number,
+	a: ProjectionAssumptions,
+	macroPath: readonly MacroState[],
+): YearProjection[] => {
 	const withFeedback: YearProjection[] = [];
 	for (let y = 1; y <= years; y++) {
 		const macroState = macroPath[y - 1]!;
@@ -1225,7 +1256,50 @@ export const projectScenarioWithGEFeedback = (
 		});
 	}
 
-	return { noFeedback, withFeedback, macroPath };
+	return withFeedback;
+};
+
+export const projectScenarioWithGEFeedback = (
+	result: ScenarioResult,
+	years: number,
+	assumptions: Partial<ProjectionAssumptions> = {},
+): GeneralEquilibriumProjection => {
+	const a = { ...DEFAULT_ASSUMPTIONS, ...assumptions };
+	const noFeedback = projectScenarioOverYears(result, years, a);
+	let withFeedback = noFeedback;
+	let macroPath = evaluateScenarioMacroPathFromProjection(
+		result,
+		years,
+		withFeedback,
+	);
+	let maxChangeGbp = Number.POSITIVE_INFINITY;
+	let iterations = 0;
+	let converged = false;
+
+	for (let i = 1; i <= GE_FEEDBACK_MAX_ITERATIONS; i++) {
+		const next = projectScenarioWithMacroPath(result, years, a, macroPath);
+		maxChangeGbp = maxProjectionChangeGbp(withFeedback, next);
+		withFeedback = next;
+		iterations = i;
+		macroPath = evaluateScenarioMacroPathFromProjection(
+			result,
+			years,
+			withFeedback,
+		);
+		if (maxChangeGbp <= GE_FEEDBACK_TOLERANCE_GBP) {
+			converged = true;
+			break;
+		}
+	}
+
+	return {
+		noFeedback,
+		withFeedback,
+		macroPath,
+		iterations,
+		converged,
+		maxChangeGbp,
+	};
 };
 
 export const projectScenarioBandsByYear = (

@@ -275,7 +275,14 @@ export function OutputRail({
 						</div>
 					</div>
 				)}
-				<MacroStatePanel path={macroPath} />
+				<MacroStatePanel
+					path={macroPath}
+					convergence={{
+						iterations: ge.iterations,
+						converged: ge.converged,
+						maxChangeGbp: ge.maxChangeGbp,
+					}}
+				/>
 			</CollapsibleSection>
 
 			<CollapsibleSection

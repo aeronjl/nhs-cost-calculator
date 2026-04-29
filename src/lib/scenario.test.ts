@@ -1034,6 +1034,8 @@ describe("projectScenarioWithGEFeedback (Scope C)", () => {
 		expect(r.noFeedback).toHaveLength(5);
 		expect(r.withFeedback).toHaveLength(5);
 		expect(r.macroPath).toHaveLength(5);
+		expect(r.iterations).toBeGreaterThan(0);
+		expect(Number.isFinite(r.maxChangeGbp)).toBe(true);
 	});
 
 	it("VAT raise → CPI up → freeze drag amplifies (CPI feedback channel)", () => {
@@ -1102,5 +1104,27 @@ describe("projectScenarioWithGEFeedback (Scope C)", () => {
 		// (this is hard to isolate at the year-net level, but checking that
 		// at least the with-feedback path doesn't equal no-feedback)
 		expect(r.withFeedback[4]!.net).not.toBe(r.noFeedback[4]!.net);
+	});
+
+	it("iterates debt-service feedback until the macro path settles", () => {
+		const result = evaluateScenario([
+			{
+				id: "b",
+				type: "borrow",
+				leverId: "",
+				magnitude: 150_000_000_000,
+			},
+		]);
+		const singlePassMacro = evaluateScenarioMacroPath(result, 5);
+		const r = projectScenarioWithGEFeedback(result, 5);
+		expect(r.iterations).toBeGreaterThan(1);
+		expect(r.converged).toBe(true);
+		expect(r.maxChangeGbp).toBeLessThanOrEqual(1_000_000);
+		expect(r.withFeedback[4]!.debtInterestGbp).toBeGreaterThan(
+			r.noFeedback[4]!.debtInterestGbp,
+		);
+		expect(r.macroPath[4]!.debtGdpDeviationPp).toBeGreaterThan(
+			singlePassMacro[4]!.debtGdpDeviationPp,
+		);
 	});
 });

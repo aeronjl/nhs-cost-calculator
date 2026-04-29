@@ -13,6 +13,11 @@ import type { MacroState } from "@/lib/scenario";
 
 interface Props {
 	path: readonly MacroState[];
+	convergence?: {
+		iterations: number;
+		converged: boolean;
+		maxChangeGbp: number;
+	};
 }
 
 const formatPp = (n: number, digits = 2): string => {
@@ -29,6 +34,13 @@ const formatPct = (n: number, digits = 2): string => {
 	return `${sign}${abs.toFixed(digits)}%`;
 };
 
+const formatGbp = (n: number): string => {
+	const abs = Math.abs(n);
+	if (abs >= 1_000_000_000) return `£${(abs / 1_000_000_000).toFixed(1)}bn`;
+	if (abs >= 1_000_000) return `£${Math.round(abs / 1_000_000)}m`;
+	return `£${Math.round(abs).toLocaleString()}`;
+};
+
 const significantState = (s: MacroState): boolean =>
 	Math.abs(s.cpiDeviationPp) > 0.005 ||
 	Math.abs(s.gdpDeviationPct) > 0.005 ||
@@ -36,11 +48,18 @@ const significantState = (s: MacroState): boolean =>
 	Math.abs(s.bankRateDeviationPp) > 0.0005 ||
 	Math.abs(s.giltYieldDeviationPp) > 0.0005;
 
-export function MacroStatePanel({ path }: Props) {
+export function MacroStatePanel({ path, convergence }: Props) {
 	if (path.length === 0) return null;
 	if (!path.some(significantState)) return null;
 
 	const lastYear = path[path.length - 1]!;
+	const convergenceText = convergence
+		? ` over ${convergence.iterations} iteration${
+				convergence.iterations === 1 ? "" : "s"
+			}; ${convergence.converged ? "converged" : "bounded stop"} with ${formatGbp(
+				convergence.maxChangeGbp,
+			)} residual change.`
+		: " once.";
 
 	return (
 		<div className="space-y-2">
@@ -49,7 +68,7 @@ export function MacroStatePanel({ path }: Props) {
 					Macro state path
 				</h3>
 				<span className="text-[10px] text-muted-foreground">
-					Scope B · reduced-form
+					{convergence ? "Scope C · iterated" : "Scope B · reduced-form"}
 				</span>
 			</div>
 
@@ -149,8 +168,8 @@ export function MacroStatePanel({ path }: Props) {
 			</p>
 			<p className="text-[10px] text-muted-foreground leading-snug">
 				Scope C feeds CPI, Bank Rate, and gilt-yield deviations back into
-				per-line yields and borrowing costs once, without iterating to a full
-				general-equilibrium solution.
+				per-line yields and borrowing costs
+				{convergenceText}
 			</p>
 		</div>
 	);

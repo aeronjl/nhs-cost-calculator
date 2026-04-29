@@ -103,6 +103,19 @@ bank_rate_deviation_t =
 
 The resulting Bank Rate deviation feeds back into borrowing costs through each instrument's Bank Rate pass-through. This matters most for Treasury bills and short gilts; long gilts remain driven mainly by the term yield and debt-risk channels.
 
+## Iterative Macro-Fiscal Loop
+
+Borrowing costs now feed back into the scenario projection iteratively. The model first builds the no-feedback PSNB/debt path, derives debt/GDP, Bank Rate, and gilt-yield deviations, then reprojects borrowing costs with those deviations. The updated debt-service path is fed back into the macro state until the largest annual change in net revenue, PSNB, debt interest, or debt stock is below £1m, capped at six iterations:
+
+```text
+projection_0 = no_feedback_path
+macro_t = f(projection_t)
+projection_(t+1) = borrowing_costs(macro_t)
+stop when max_abs_change <= GBP1m
+```
+
+This closes the realistic debt-service loop where higher interest worsens PSNB, pushes debt/GDP up, lifts gilt yields, and raises later debt service. It remains reduced-form rather than a full general-equilibrium model, but it avoids treating borrowing feedback as a one-shot adjustment.
+
 ## Rate And Risk Channels
 
 Each instrument has a base nominal yield, or a real yield plus inflation for index-linked gilts. Bank Rate shocks pass through most strongly to bills and short gilts. A parallel yield-curve shock can be supplied by macro feedback or stress tests. The instrument rate combines base yield, debt-risk premium, market-absorption concession, macro yield shift, and Bank Rate pass-through.
