@@ -1,7 +1,10 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { BaselineComparison } from "@/lib/baseline-projection";
+import type {
+	BaselineComparison,
+	FiscalRuleFan,
+} from "@/lib/baseline-projection";
 
 // Renders the scenario's impact against OBR's "do-nothing" baseline.
 //
@@ -18,6 +21,7 @@ import type { BaselineComparison } from "@/lib/baseline-projection";
 
 interface Props {
 	comparison: BaselineComparison;
+	fiscalRuleFan?: FiscalRuleFan;
 }
 
 const formatBn = (n: number): string => {
@@ -36,7 +40,9 @@ const formatSignedPp = (n: number): string => {
 	return `${sign}${Math.abs(n).toFixed(2)}pp`;
 };
 
-export function BaselineComparisonPanel({ comparison }: Props) {
+const formatProbability = (n: number): string => `${Math.round(n * 100)}%`;
+
+export function BaselineComparisonPanel({ comparison, fiscalRuleFan }: Props) {
 	const {
 		years,
 		ruleYear,
@@ -125,6 +131,32 @@ export function BaselineComparisonPanel({ comparison }: Props) {
 								"Current expenditure must balance by year 5 + leave a buffer."
 							)}
 						</div>
+						{fiscalRuleFan && (
+							<div className="mt-1.5 rounded-sm bg-muted/40 px-2 py-1 text-[10px] text-muted-foreground">
+								Stochastic fan ({fiscalRuleFan.samples} draws):{" "}
+								<span
+									className={cn(
+										"font-medium",
+										fiscalRuleFan.breachProbability > 0.25
+											? "text-red-700"
+											: fiscalRuleFan.breachProbability > 0.1
+												? "text-amber-700"
+												: "text-foreground",
+									)}
+								>
+									{formatProbability(fiscalRuleFan.breachProbability)}
+								</span>{" "}
+								breach risk; 90% headroom band{" "}
+								<span className="font-medium text-foreground">
+									{formatBn(fiscalRuleFan.headroomBand.p5)}
+								</span>{" "}
+								to{" "}
+								<span className="font-medium text-foreground">
+									{formatBn(fiscalRuleFan.headroomBand.p95)}
+								</span>
+								.
+							</div>
+						)}
 					</div>
 				)}
 

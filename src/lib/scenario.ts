@@ -732,6 +732,7 @@ export interface ProjectionAssumptions {
 	giltYield: number; // annual borrow servicing rate (default 0.045)
 	bankRate: number;
 	inflation: number;
+	yieldCurveShift: number;
 	// Era multiplier adjust: per-era regime factor on macro coefficients
 	// (1979 stagflation 0.7, 2010 ZLB 1.3, etc.). Default 1.0 (current).
 	era?: EraId;
@@ -742,6 +743,7 @@ const DEFAULT_ASSUMPTIONS: ProjectionAssumptions = {
 	giltYield: 0.045,
 	bankRate: BORROWING.bankRate,
 	inflation: BORROWING.inflation,
+	yieldCurveShift: 0,
 };
 
 // Apply the era's macro adjust to a multiplier. Three-tier resolution:
@@ -1164,7 +1166,8 @@ export const projectScenarioWithGEFeedback = (
 					),
 					inflation: a.inflation,
 					strategyId: ev.line.borrowingStrategyId,
-					yieldCurveShift: macroState.giltYieldDeviationPp / 100,
+					yieldCurveShift:
+						a.yieldCurveShift + macroState.giltYieldDeviationPp / 100,
 					cpiDeviationPp: macroState.cpiDeviationPp,
 				});
 				const row = borrowPath[y - 1]!;
@@ -1267,6 +1270,7 @@ export const projectScenarioBandsByYear = (
 						nominalGrowth: a.nominalGrowth,
 						bankRate: a.bankRate,
 						inflation: a.inflation,
+						yieldCurveShift: a.yieldCurveShift,
 						strategyId: line.borrowingStrategyId,
 					})[y - 1]!.netFundingGbp;
 				} else if (line.type === "tax") {
@@ -1328,6 +1332,7 @@ export const projectScenarioOverYears = (
 					nominalGrowth: a.nominalGrowth,
 					bankRate: a.bankRate,
 					inflation: a.inflation,
+					yieldCurveShift: a.yieldCurveShift,
 					strategyId: ev.line.borrowingStrategyId,
 				})[y - 1]!;
 				delta = borrowing.netFundingGbp;

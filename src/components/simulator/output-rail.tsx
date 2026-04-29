@@ -16,7 +16,10 @@ import {
 } from "@/lib/scenario";
 import type { OBRBaseline } from "@/data/baseline/obr-baseline";
 import { OBR_BASELINE } from "@/data/baseline/obr-baseline";
-import { projectAgainstBaseline } from "@/lib/baseline-projection";
+import {
+	projectAgainstBaseline,
+	projectFiscalRuleFan,
+} from "@/lib/baseline-projection";
 import {
 	evaluateMicrosim,
 	type MicrosimAggregate,
@@ -131,6 +134,8 @@ export function OutputRail({
 	);
 	const macroPath = ge.macroPath;
 	const baselineComparison = projectAgainstBaseline(projection, baseline);
+	const fiscalRuleFan =
+		scenario.length > 0 ? projectFiscalRuleFan(result, baseline, 500) : undefined;
 	const geYear1 = ge.withFeedback[0]?.net ?? 0;
 	const macroYear1 = ge.noFeedback[0]?.net ?? 0;
 	const geGap = geYear1 - macroYear1;
@@ -205,7 +210,10 @@ export function OutputRail({
 					projection={projection}
 					bands={projectionBands}
 				/>
-				<BaselineComparisonPanel comparison={baselineComparison} />
+				<BaselineComparisonPanel
+					comparison={baselineComparison}
+					fiscalRuleFan={fiscalRuleFan}
+				/>
 			</CollapsibleSection>
 
 			<CollapsibleSection

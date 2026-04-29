@@ -22,7 +22,18 @@ import type {
 	OBRBaseline,
 } from "@/data/baseline/obr-baseline";
 import { OBR_BASELINE } from "@/data/baseline/obr-baseline";
-import type { YearProjection } from "./scenario";
+import {
+	type ProjectionAssumptions,
+	type ScenarioResult,
+	type YearProjection,
+	projectScenarioWithGEFeedback,
+} from "./scenario";
+import {
+	type PercentileBand,
+	computeBand,
+	sampleNormal,
+	seededRng,
+} from "./uncertainty";
 
 export interface BaselineRelativeYear {
 	year: number; // 1-indexed; year 1 = baseline.years[0]
@@ -72,6 +83,19 @@ export interface PolicyReactionYear {
 	correctionGbp: number;
 	correctedPsnb: number;
 	correctedDebtGdp: number;
+}
+
+export interface FiscalRuleFan {
+	samples: number;
+	breachProbability: number;
+	tightOrBreachProbability: number;
+	debtRisingProbability: number;
+	headroomBand: PercentileBand;
+	ruleYearPsnbBand: PercentileBand;
+	ruleYearDebtGdpBand: PercentileBand;
+	policyReactionBand: PercentileBand;
+	centralHeadroomGbp: number;
+	centralRiskRating: FiscalRiskRating;
 }
 
 export const evaluateFiscalRuleDiagnostics = (
@@ -211,5 +235,131 @@ export const projectAgainstBaseline = (
 		diagnostics,
 		policyReactionPath,
 		baseline,
+	};
+};
+
+const sampledBaseline = (
+	baseline: OBRBaseline,
+	growthShock: number,
+	psnbErrorsGbp: readonly number[],
+): OBRBaseline => {
+	const years = baseline.years.map((year, index) => {
+		const gdpShock = Math.pow(1 + growthShock, index + 1);
+		const gdp = Math.max(1, year.gdp * gdpShock);
+		const psnb = year.psnb + (psnbErrorsGbp[index] ?? 0);
+		const psnd =
+			year.psnd +
+			psnbErrorsGbp
+				.slice(0, index + 1)
+				.reduce((sum, value) => sum + value, 0);
+		return {
+			...year,
+			gdp,
+			psnb,
+			psnd,
+			psnbPctGdp: (psnb / gdp) * 100,
+			psndPctGdp: (psnd / gdp) * 100,
+		};
+	});
+	const foundRuleIndex = years.findIndex(
+		(year) => year.fiscalYear === baseline.stabilityRuleAt,
+	);
+	const ruleIndex = foundRuleIndex >= 0 ? foundRuleIndex : years.length - 1;
+	return {
+		...baseline,
+		years,
+		stabilityRuleHeadroom:
+			baseline.stabilityRuleHeadroom - (psnbErrorsGbp[ruleIndex] ?? 0),
+	};
+};
+
+export const projectFiscalRuleFan = (
+	result: ScenarioResult,
+	baseline: OBRBaseline = OBR_BASELINE,
+	samples = 1000,
+	seed = 137,
+	assumptions: Partial<ProjectionAssumptions> = {},
+): FiscalRuleFan => {
+	const centralProjection = projectScenarioWithGEFeedback(
+		result,
+		baseline.years.length,
+		assumptions,
+	).withFeedback;
+	const central = projectAgainstBaseline(centralProjection, baseline);
+	const rng = seededRng(seed);
+	const headroomSamples: number[] = [];
+	const ruleYearPsnbSamples: number[] = [];
+	const ruleYearDebtGdpSamples: number[] = [];
+	const policyReactionSamples: number[] = [];
+	let breachCount = 0;
+	let tightOrBreachCount = 0;
+	let debtRisingCount = 0;
+
+	for (let sample = 0; sample < samples; sample++) {
+		const commonShock = sampleNormal(rng, { mean: 0, sd: 1 });
+		const growthShock =
+			commonShock * -0.0045 + sampleNormal(rng, { mean: 0, sd: 0.005 });
+		const inflationShock =
+			commonShock * 0.008 + sampleNormal(rng, { mean: 0, sd: 0.005 });
+		const bankRateShock =
+			commonShock * 0.0055 + sampleNormal(rng, { mean: 0, sd: 0.004 });
+		const giltShock =
+			commonShock * 0.0075 + sampleNormal(rng, { mean: 0, sd: 0.005 });
+		let persistentPsnbErrorPctGdp = 0;
+		const psnbErrorsGbp = baseline.years.map((year) => {
+			const innovation =
+				commonShock * 0.0018 + sampleNormal(rng, { mean: 0, sd: 0.0025 });
+			persistentPsnbErrorPctGdp =
+				0.6 * persistentPsnbErrorPctGdp + innovation;
+			return year.gdp * persistentPsnbErrorPctGdp;
+		});
+		const sampled = sampledBaseline(baseline, growthShock, psnbErrorsGbp);
+		const projection = projectScenarioWithGEFeedback(
+			result,
+			sampled.years.length,
+			{
+				...assumptions,
+				nominalGrowth: Math.max(
+					0,
+					(assumptions.nominalGrowth ?? 0.04) + growthShock,
+				),
+				inflation: Math.max(
+					-0.01,
+					(assumptions.inflation ?? 0.03) + inflationShock,
+				),
+				bankRate: Math.max(
+					-0.005,
+					(assumptions.bankRate ?? 0.0375) + bankRateShock,
+				),
+				yieldCurveShift: (assumptions.yieldCurveShift ?? 0) + giltShock,
+			},
+		).withFeedback;
+		const comparison = projectAgainstBaseline(projection, sampled);
+		const ruleYear = comparison.ruleYear ?? comparison.years.at(-1);
+		headroomSamples.push(comparison.adjustedStabilityHeadroom);
+		ruleYearPsnbSamples.push(ruleYear?.adjustedPsnb ?? 0);
+		ruleYearDebtGdpSamples.push(ruleYear?.adjustedDebtGdp ?? 0);
+		policyReactionSamples.push(comparison.diagnostics.policyReactionGbp);
+		if (comparison.diagnostics.stabilityRuleBreached) breachCount++;
+		if (
+			comparison.diagnostics.riskRating === "tight" ||
+			comparison.diagnostics.riskRating === "breach"
+		) {
+			tightOrBreachCount++;
+		}
+		if (comparison.diagnostics.debtProxyRisingAtHorizon) debtRisingCount++;
+	}
+
+	return {
+		samples,
+		breachProbability: breachCount / samples,
+		tightOrBreachProbability: tightOrBreachCount / samples,
+		debtRisingProbability: debtRisingCount / samples,
+		headroomBand: computeBand(headroomSamples),
+		ruleYearPsnbBand: computeBand(ruleYearPsnbSamples),
+		ruleYearDebtGdpBand: computeBand(ruleYearDebtGdpSamples),
+		policyReactionBand: computeBand(policyReactionSamples),
+		centralHeadroomGbp: central.adjustedStabilityHeadroom,
+		centralRiskRating: central.diagnostics.riskRating,
 	};
 };

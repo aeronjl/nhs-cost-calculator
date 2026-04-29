@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { OBRBaseline } from "@/data/baseline/obr-baseline";
-import { projectAgainstBaseline } from "./baseline-projection";
-import type { YearProjection } from "./scenario";
+import {
+	projectAgainstBaseline,
+	projectFiscalRuleFan,
+} from "./baseline-projection";
+import {
+	evaluateScenario,
+	type ScenarioLine,
+	type YearProjection,
+} from "./scenario";
 
 const TEST_BASELINE: OBRBaseline = {
 	asOf: "2025-03",
@@ -145,5 +152,52 @@ describe("projectAgainstBaseline", () => {
 		const proj = [yp(1, 10_000_000_000), yp(2, 10_000_000_000), yp(3, 10_000_000_000), yp(4, 10_000_000_000), yp(5, 10_000_000_000)];
 		const cmp = projectAgainstBaseline(proj, TEST_BASELINE);
 		expect(cmp.years).toHaveLength(3); // truncated to baseline length
+	});
+});
+
+describe("projectFiscalRuleFan", () => {
+	const taxLine = (id: string, magnitude: number): ScenarioLine => ({
+		id: `tax-${id}`,
+		type: "tax",
+		leverId: id,
+		magnitude,
+	});
+
+	it("produces deterministic fiscal-rule probability bands", () => {
+		const result = evaluateScenario([taxLine("basic-rate-income-tax", 1)]);
+		const a = projectFiscalRuleFan(result, TEST_BASELINE, 200, 99);
+		const b = projectFiscalRuleFan(result, TEST_BASELINE, 200, 99);
+		expect(a).toEqual(b);
+		expect(a.samples).toBe(200);
+		expect(a.headroomBand.p5).toBeLessThan(a.headroomBand.p95);
+		expect(a.ruleYearPsnbBand.p5).toBeLessThan(a.ruleYearPsnbBand.p95);
+		expect(a.breachProbability).toBeGreaterThanOrEqual(0);
+		expect(a.breachProbability).toBeLessThanOrEqual(1);
+	});
+
+	it("assigns higher breach probability to large costs than large revenue raisers", () => {
+		const costly = projectFiscalRuleFan(
+			evaluateScenario([
+				{
+					id: "borrow",
+					type: "borrow",
+					leverId: "",
+					magnitude: 50_000_000_000,
+				},
+			]),
+			TEST_BASELINE,
+			300,
+			7,
+		);
+		const revenue = projectFiscalRuleFan(
+			evaluateScenario([taxLine("basic-rate-income-tax", 5)]),
+			TEST_BASELINE,
+			300,
+			7,
+		);
+		expect(costly.breachProbability).toBeGreaterThan(
+			revenue.breachProbability,
+		);
+		expect(costly.headroomBand.p50).toBeLessThan(revenue.headroomBand.p50);
 	});
 });

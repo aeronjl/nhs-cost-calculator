@@ -132,6 +132,17 @@ The stochastic fan samples Bank Rate, inflation, and gilt-premium shocks with a 
 
 The fan now uses correlated macro-fiscal shocks rather than independent draws. A common stress factor pushes Bank Rate, inflation, and gilt premia in the same direction while reducing nominal-growth assumptions at the margin. This is still a reduced-form covariance structure, but it avoids the unrealistic case where adverse rate, inflation, and credibility shocks are sampled as unrelated events.
 
+## Fiscal-Rule Fan
+
+The OBR baseline comparison also runs a joint macro-fiscal fan. Each draw samples a common adverse shock, nominal-growth shock, inflation shock, Bank Rate shock, gilt-premium shock, and a persistent PSNB forecast error. The same draw is applied to scenario projections and the baseline headroom calculation, producing:
+
+- Stability-rule breach probability.
+- Probability of tight-or-breached headroom.
+- 90% headroom band at the rule horizon.
+- PSNB and debt/GDP bands at the rule horizon.
+
+This is still reduced-form rather than a full OBR economy forecast, but it makes fiscal-rule risk probabilistic instead of treating the central headroom estimate as certain.
+
 ## Market Reaction Loop
 
 Large borrowing packages also receive an endogenous market-reaction path. The central path applies the static debt/GDP and issuance risk premium. The market-reaction path then carries forward an additional credibility premium when debt/GDP, refinancing exposure, or the size of the issuance package cross risk thresholds:
