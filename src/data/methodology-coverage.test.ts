@@ -5,6 +5,7 @@ import { TAX_LEVERS } from "./levers/tax-rates";
 import { UK_SPENDING_PROGRAMMES } from "./levers/uk-spending";
 import { BORROWING } from "./levers/borrowing";
 import { NHS_ENGLAND_SLICES } from "./nhs-budget";
+import { evaluateBehaviouralResponse } from "@/lib/elasticity";
 
 // Enforces the product principle: every figure that the trade-off engine
 // surfaces — every tax lever, every cut programme, every NHS slice, the
@@ -88,6 +89,39 @@ describe("methodology coverage", () => {
 		];
 		for (const m of allMethodologies) {
 			expect(m.asOf).toMatch(/^\d{4}-\d{2}$/);
+		}
+	});
+
+	it("tax behavioural models are finite and have sensible output signs", () => {
+		for (const lever of TAX_LEVERS) {
+			if (!lever.behaviour) continue;
+			const oneUnit = evaluateBehaviouralResponse(
+				lever.gbpPerUnit,
+				lever.behaviour,
+				1,
+			);
+			expect(
+				Number.isFinite(oneUnit.dynamicDelta),
+				`${lever.id} dynamic delta must be finite`,
+			).toBe(true);
+			expect(
+				Number.isFinite(oneUnit.outputEffectGbp),
+				`${lever.id} output effect must be finite`,
+			).toBe(true);
+			expect(
+				Math.sign(oneUnit.dynamicDelta),
+				`${lever.id} +1 unit should keep the ready-reckoner sign`,
+			).toBe(Math.sign(lever.gbpPerUnit));
+			if (
+				lever.gbpPerUnit > 0 &&
+				"outputShare" in lever.behaviour &&
+				lever.behaviour.outputShare > 0
+			) {
+				expect(
+					oneUnit.outputEffectGbp,
+					`${lever.id} tax rise should not increase output`,
+				).toBeLessThanOrEqual(0);
+			}
 		}
 	});
 });

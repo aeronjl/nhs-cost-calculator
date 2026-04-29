@@ -1,6 +1,11 @@
 "use client";
 
 import { MethodologyPopover } from "@/components/ui/methodology-popover";
+import { getTaxLever } from "@/data/levers/tax-rates";
+import {
+	type BehaviouralModelSummary,
+	describeBehaviouralModel,
+} from "@/lib/elasticity";
 import { cn } from "@/lib/utils";
 import {
 	type LineEvaluation,
@@ -42,8 +47,8 @@ export function ScenarioAssumptions({ lines }: Props) {
 
 			<p className="text-[10px] text-muted-foreground pt-1 border-t leading-snug">
 				Tap ⓘ on any line for alternatives, plausible range, and source. Every
-				calibration is HMRC ready-reckoner / IFS / OBR; figures are first-order
-				static estimates.
+				calibration is HMRC ready-reckoner / IFS / OBR; tax levers with a
+				behavioural model are re-scored from their marginal tax wedge.
 			</p>
 		</div>
 	);
@@ -52,8 +57,17 @@ export function ScenarioAssumptions({ lines }: Props) {
 function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 	const { line, deltaGbp, description, methodology } = evaluation;
 	const dynamic = evaluateLineDynamic(evaluation);
-	const haircutPct = Math.round(dynamic.haircutFraction * 100);
-	const haircutSignificant = dynamic.haircutFraction > 0.05;
+	const modelSummary =
+		line.type === "tax"
+			? describeBehaviouralModel(
+					getTaxLever(line.leverId).behaviour,
+					line.magnitude,
+				)
+			: null;
+	const adjustmentPct = Math.round(dynamic.behaviouralAdjustmentFraction * 100);
+	const adjustmentSignificant = dynamic.behaviouralAdjustmentFraction > 0.05;
+	const outputSignificant = Math.abs(dynamic.outputEffectGbp) > 1_000_000;
+	const cevSignificant = Math.abs(dynamic.workerCevGbp) > 1_000_000;
 
 	const sign = deltaGbp >= 0 ? "+" : "−";
 	const formatted = formatBn(Math.abs(deltaGbp));
@@ -84,11 +98,26 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 							{sign}£{formatted}
 						</span>
 					</div>
-					{haircutSignificant && (
+					{adjustmentSignificant && (
 						<div className="text-[10px] text-amber-700 leading-snug mt-0.5">
 							Dynamic: {sign}£
-							{formatBn(Math.abs(dynamic.dynamicDelta))} ({haircutPct}%
-							behavioural haircut at this magnitude)
+							{formatBn(Math.abs(dynamic.dynamicDelta))} ({adjustmentPct}%
+							behavioural adjustment at this magnitude)
+						</div>
+					)}
+					{(outputSignificant || cevSignificant) && (
+						<div className="text-[10px] text-muted-foreground leading-snug mt-0.5">
+							{outputSignificant && (
+								<>
+									Output: {formatSignedBn(dynamic.outputEffectGbp)}
+								</>
+							)}
+							{outputSignificant && cevSignificant ? "; " : ""}
+							{cevSignificant && (
+								<>
+									worker CEV: {formatSignedBn(dynamic.workerCevGbp)}
+								</>
+							)}
 						</div>
 					)}
 				</div>
@@ -102,9 +131,49 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 			)}
 
 			<div className="pl-6">
-				<MethodologyPopover methodology={methodology} label="full methodology" />
+				<MethodologyPopover methodology={methodology} label="full methodology">
+					<BehaviouralModelBlock summary={modelSummary} />
+				</MethodologyPopover>
 			</div>
 		</li>
+	);
+}
+
+function BehaviouralModelBlock({
+	summary,
+}: {
+	summary: BehaviouralModelSummary | null;
+}) {
+	if (!summary) return null;
+	return (
+		<div>
+			<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
+				{summary.title}
+			</div>
+			<dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs">
+				{summary.rows.map((row) => (
+					<div key={row.label} className="contents">
+						<dt className="text-muted-foreground">{row.label}</dt>
+						<dd className="tabular-nums text-right font-medium">{row.value}</dd>
+					</div>
+				))}
+			</dl>
+			{summary.note && (
+				<p className="text-xs text-muted-foreground italic mt-2 leading-snug">
+					{summary.note}
+				</p>
+			)}
+			{summary.source && (
+				<a
+					href={summary.source.url}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="mt-1 inline-block text-xs text-muted-foreground hover:underline"
+				>
+					{summary.source.label}
+				</a>
+			)}
+		</div>
 	);
 }
 
@@ -112,4 +181,9 @@ const formatBn = (n: number): string => {
 	if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}bn`;
 	if (n >= 1_000_000) return `${Math.round(n / 1_000_000)}m`;
 	return Math.round(n).toLocaleString();
+};
+
+const formatSignedBn = (n: number): string => {
+	const sign = n >= 0 ? "+" : "−";
+	return `${sign}£${formatBn(Math.abs(n))}`;
 };

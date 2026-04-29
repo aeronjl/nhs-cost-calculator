@@ -289,7 +289,7 @@ export function ChancellorHUD({
 				</div>
 				{/* Always render so layout doesn't shift when the dynamic gap
 				    crosses the threshold mid-hover. Hide visually when the
-				    behavioural haircut is too small to be meaningful. */}
+				    behavioural adjustment is too small to be meaningful. */}
 				<div
 					className={cn(
 						"text-[10px] text-muted-foreground",
@@ -297,7 +297,7 @@ export function ChancellorHUD({
 							"invisible",
 					)}
 				>
-					after behavioural: {formatBn(dynamic.dynamicNet)}
+					after behavioural response: {formatBn(dynamic.dynamicNet)}
 				</div>
 			</div>
 

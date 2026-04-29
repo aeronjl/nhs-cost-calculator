@@ -10,8 +10,8 @@ import type { YearProjection } from "@/lib/scenario";
 // announcement-year scoring and steady-state impact, plus the parameter-
 // uncertainty range that a single-line presentation hides.
 //
-// Year-1 figures already carry the dynamic-adjustment haircut (set in
-// projectScenarioOverYears).
+// Year-1 figures already carry behavioural and macro feedback adjustments
+// set in projectScenarioOverYears.
 
 interface Props {
 	projection: readonly YearProjection[];

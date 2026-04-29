@@ -1,6 +1,7 @@
 "use client";
 
 import { Info } from "lucide-react";
+import type { ReactNode } from "react";
 import {
 	Popover,
 	PopoverContent,
@@ -14,6 +15,7 @@ interface Props {
 	methodology: Methodology;
 	className?: string;
 	label?: string; // Visible text after the icon (optional)
+	children?: ReactNode;
 }
 
 const formatValue = (n: number): string => {
@@ -23,7 +25,12 @@ const formatValue = (n: number): string => {
 	return n.toLocaleString("en-GB");
 };
 
-export function MethodologyPopover({ methodology, className, label }: Props) {
+export function MethodologyPopover({
+	methodology,
+	className,
+	label,
+	children,
+}: Props) {
 	return (
 		<Popover>
 			<PopoverTrigger
@@ -84,6 +91,8 @@ export function MethodologyPopover({ methodology, className, label }: Props) {
 							</ul>
 						</div>
 					)}
+
+					{children}
 
 					{methodology.caveat && (
 						<div className="text-xs text-muted-foreground italic border-l-2 border-amber-300 pl-2">

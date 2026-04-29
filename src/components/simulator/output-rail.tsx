@@ -41,7 +41,7 @@ import { TopZone } from "./top-zone";
 //   • 4 collapsible sections (closed by default; state persisted):
 //     - Trajectory: multi-year + vs OBR baseline
 //     - Who pays: distributional + microsim + household archetypes
-//     - Macro feedback: tier breakdown (static→dynamic→macro→GE) + macro state
+//     - Macro feedback: tier breakdown (reckoner→dynamic→macro→GE) + macro state
 //     - Assumptions: per-line caveats with full methodology
 //
 //   • "Expand all" toggle in rail header for power users.

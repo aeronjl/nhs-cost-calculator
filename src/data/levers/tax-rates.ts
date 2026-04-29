@@ -1,15 +1,17 @@
 // HMRC's "Direct effects of illustrative tax changes" — the ready reckoner
 // that quantifies how much extra revenue comes from a 1 percentage-point
 // change in a given rate (or its equivalent unit). Figures are first-year
-// effects; behavioural responses dampen larger changes (a 5pp rise yields
-// less than 5× a 1pp rise) but are roughly linear at small changes.
+// direct effects: for many taxes HMRC already includes the standard
+// behavioural response for the illustrative change, but not wider macro
+// feedback. Larger changes are re-scored in src/lib/elasticity.ts from the
+// affected marginal tax wedge and the lever's taxable-base elasticity.
 //
 // Update annually: HMRC publishes a new edition each January. URL:
 // https://www.gov.uk/government/statistics/direct-effects-of-illustrative-tax-changes
 
 import type { Methodology } from "@/lib/methodology";
 import type { IncidenceMeta } from "@/lib/distribution";
-import type { Elasticity } from "@/lib/elasticity";
+import type { BehaviouralModel } from "@/lib/elasticity";
 
 // Tax levers come in five shapes (discriminated by `unit`):
 //   - "pp"          rate change: raise/cut a percentage rate by N percentage points.
@@ -42,11 +44,10 @@ export interface TaxLever {
 	// (employer NICs falls on workers, VAT on consumers, etc.) per OBR/IFS.
 	// When omitted, the line is excluded from distributional scoring.
 	incidence?: IncidenceMeta;
-	// Behavioural elasticity: how much the static yield is reduced by
-	// behavioural responses (avoidance, profit-shifting, hours adjustments).
-	// At small magnitudes the haircut is small; at large magnitudes it bites.
-	// When omitted, dynamic yield = static yield (no behavioural model).
-	elasticity?: Elasticity;
+	// Behavioural model: explicit marginal tax wedge + taxable-base response.
+	// Most HMRC ready-reckoner entries are calibrated as already behavioural
+	// at +1 unit, then re-scored nonlinearly for larger/opposite moves.
+	behaviour?: BehaviouralModel;
 }
 
 const HMRC = {
@@ -68,7 +69,7 @@ export const TAX_LEVERS: readonly TaxLever[] = [
 			source: HMRC,
 			asOf: "2024-01",
 			measure:
-				"First-year revenue effect of a 1pp rise in the basic rate of income tax, holding behaviour constant ('static' estimate).",
+				"First-year direct revenue effect of a 1pp rise in the basic rate of income tax. Scenario scoring calibrates this ready-reckoner value to a marginal-rate behavioural model.",
 			alternatives: [
 				{
 					label: "Dynamic estimate",
@@ -98,9 +99,16 @@ export const TAX_LEVERS: readonly TaxLever[] = [
 			note: "Most basic-rate taxpayers are in deciles 4–8 (earning between the personal allowance and £50,270). Bottom deciles are below the PA threshold; top deciles' marginal £ falls under higher-rate IT.",
 			source: HMRC,
 		},
-		elasticity: {
-			coefficient: 0.02,
-			note: "Low behavioural elasticity — basic-rate earners have limited room to adjust hours, restructure income, or relocate. HMRC's TIE for the basic rate is ~0.1. At this coefficient: +5pp = ~10% haircut, +10pp = ~20% haircut.",
+		behaviour: {
+			kind: "marginal-rate",
+			taxType: "labour-income",
+			calibration: "post-behavioural-ready-reckoner",
+			currentMarginalRate: 0.2,
+			taxableBaseElasticity: 0.1,
+			response: "net-of-tax",
+			workerIncidenceShare: 1,
+			outputShare: 0.8,
+			note: "Low taxable-income elasticity — basic-rate earners have limited room to adjust hours, restructure income, or relocate. Calibrated to reproduce HMRC's +1pp ready-reckoner effect, then scales from the net-of-tax rate for larger moves.",
 			source: HMRC,
 		},
 	},
@@ -139,16 +147,23 @@ export const TAX_LEVERS: readonly TaxLever[] = [
 				note: "Range driven by elasticity-of-taxable-income assumptions; HMRC uses central elasticity of ~0.45 here.",
 			},
 			caveat:
-				"The 'static' figure assumes no behavioural response. Some economists put the static-revenue-maximising point already near the current 40% rate — meaning a rise could yield very little once dynamic effects bite.",
+				"The ready-reckoner value is a small-change estimate. Some economists put the revenue-maximising point near the current 40% rate once taxable-income response is included, so large rises can underperform linear scoring.",
 		},
 		incidence: {
 			vector: [0, 0, 0, 0, 0.02, 0.05, 0.10, 0.18, 0.30, 0.35],
 			note: "Higher-rate IT applies above £50,270. Bottom 4 deciles untouched; impact concentrated in top 4 deciles where higher-rate earnings are most common.",
 			source: HMRC,
 		},
-		elasticity: {
-			coefficient: 0.05,
-			note: "Moderate behavioural elasticity — higher-rate earners can pension, incorporate, defer bonuses, and shift between income types. HMRC's TIE for higher rate is ~0.45. At this coefficient: +1pp = 5% haircut, +5pp = 25%.",
+		behaviour: {
+			kind: "marginal-rate",
+			taxType: "labour-income",
+			calibration: "post-behavioural-ready-reckoner",
+			currentMarginalRate: 0.42,
+			taxableBaseElasticity: 0.45,
+			response: "net-of-tax",
+			workerIncidenceShare: 1,
+			outputShare: 0.65,
+			note: "Moderate taxable-income elasticity — higher-rate earners can pension, incorporate, defer bonuses, and shift between income types. Uses the income-tax plus employee-NIC wedge as the behavioural margin.",
 			source: HMRC,
 		},
 	},
@@ -186,16 +201,23 @@ export const TAX_LEVERS: readonly TaxLever[] = [
 				note: "Genuinely uncertain. Dynamic estimates straddle zero.",
 			},
 			caveat:
-				"This is the most behaviour-sensitive lever on the page. Treat the static £200m as a generous ceiling — the realised revenue from a 1pp rise might be much lower, zero, or negative once profit-shifting and avoidance kick in.",
+				"This is the most behaviour-sensitive lever on the page. Treat the £200m ready-reckoner value as a small-change estimate — larger rises can yield much less once profit-shifting and avoidance kick in.",
 		},
 		incidence: {
 			vector: [0, 0, 0, 0, 0, 0, 0, 0.02, 0.08, 0.90],
 			note: "Additional-rate IT applies above £125,140 — roughly the top 1–3% of earners. Almost the entire incidence falls on the top decile.",
 			source: HMRC,
 		},
-		elasticity: {
-			coefficient: 0.20,
-			note: "Very high behavioural elasticity — top earners aggressively manage income timing and form. HMRC's TIE for additional rate is ~0.45–0.65 but real-world responses (post-2010 50p experience, bonus deferrals) suggest larger. At this coefficient: +1pp = 20% haircut, +5pp = 95% (capped); a 50p rate could yield far below static.",
+		behaviour: {
+			kind: "marginal-rate",
+			taxType: "labour-income",
+			calibration: "post-behavioural-ready-reckoner",
+			currentMarginalRate: 0.47,
+			taxableBaseElasticity: 0.8,
+			response: "net-of-tax",
+			workerIncidenceShare: 1,
+			outputShare: 0.45,
+			note: "High taxable-income elasticity — top earners can change timing, legal form, pension contributions, and location. Calibrated to HMRC's +1pp effect but allowed to approach the revenue peak at larger rises.",
 			source: HMRC,
 		},
 	},
@@ -222,7 +244,7 @@ export const TAX_LEVERS: readonly TaxLever[] = [
 				{
 					label: "Equalise with income tax",
 					value: 4_000_000_000,
-					note: "Aligning dividend rates with marginal IT (20/40/45%) would raise ~£4bn/yr static — closes the gap that incentivises owner-managed companies to extract profits as dividends rather than salary. Long-standing IFS recommendation.",
+					note: "Aligning dividend rates with marginal IT (20/40/45%) would raise ~£4bn/yr before larger behavioural responses — closes the gap that incentivises owner-managed companies to extract profits as dividends rather than salary. Long-standing IFS recommendation.",
 				},
 				{
 					label: "Per recipient (higher rate)",
@@ -238,9 +260,16 @@ export const TAX_LEVERS: readonly TaxLever[] = [
 			note: "Dividend income is heavily concentrated at the top of the distribution: the top decile holds the majority of UK dividend-receiving households.",
 			source: HMRC,
 		},
-		elasticity: {
-			coefficient: 0.05,
-			note: "Owner-managers respond to dividend tax by retaining earnings, taking salary instead, or timing distributions. OBR scores recent dividend tax rises with ~10–15% behavioural haircuts at +2pp.",
+		behaviour: {
+			kind: "marginal-rate",
+			taxType: "dividends",
+			calibration: "post-behavioural-ready-reckoner",
+			currentMarginalRate: 0.3375,
+			taxableBaseElasticity: 0.35,
+			response: "net-of-tax",
+			workerIncidenceShare: 0.25,
+			outputShare: 0.15,
+			note: "Owner-managers respond to dividend tax by retaining earnings, taking salary instead, or timing distributions. Modelled as a net-of-tax dividend-base response rather than a linear haircut.",
 			source: HMRC,
 		},
 	},
@@ -316,9 +345,16 @@ export const TAX_LEVERS: readonly TaxLever[] = [
 			note: "VAT in £ terms is roughly flat across deciles (each decile spends a similar £ on VAT-able goods). As a share of income it's strongly regressive — bottom decile pays ~6× more as % of disposable income than top decile.",
 			source: HMRC,
 		},
-		elasticity: {
-			coefficient: 0.01,
-			note: "Very low behavioural elasticity — UK consumption is sticky in the short run. Some shift toward zero-rated goods + cross-border shopping, but tiny relative to the base. HMRC scores VAT changes near static.",
+		behaviour: {
+			kind: "marginal-rate",
+			taxType: "consumption",
+			calibration: "post-behavioural-ready-reckoner",
+			currentMarginalRate: 0.2,
+			taxableBaseElasticity: 0.2,
+			response: "gross-price",
+			workerIncidenceShare: 0.55,
+			outputShare: 0.35,
+			note: "Low short-run consumption-price elasticity — households shift some spending toward zero-rated goods or defer purchases, but the base is broad. Uses the gross VAT-inclusive price wedge.",
 			source: HMRC,
 		},
 	},
@@ -354,9 +390,16 @@ export const TAX_LEVERS: readonly TaxLever[] = [
 			note: "Hits employees earning between the primary threshold (£12,570) and the upper earnings limit (£50,270). Concentrated in middle deciles; bottom 2 deciles below threshold; top decile's marginal £ falls outside the band.",
 			source: HMRC,
 		},
-		elasticity: {
-			coefficient: 0.02,
-			note: "Low behavioural response — most employees can't easily reduce hours or shift compensation form. Same elasticity profile as basic-rate IT.",
+		behaviour: {
+			kind: "marginal-rate",
+			taxType: "labour-income",
+			calibration: "post-behavioural-ready-reckoner",
+			currentMarginalRate: 0.28,
+			taxableBaseElasticity: 0.12,
+			response: "net-of-tax",
+			workerIncidenceShare: 1,
+			outputShare: 0.8,
+			note: "Low labour-supply/taxable-income response — most employees cannot easily reduce hours or shift compensation form. Uses the combined basic-rate IT plus employee-NIC wedge.",
 			source: HMRC,
 		},
 	},
@@ -398,9 +441,16 @@ export const TAX_LEVERS: readonly TaxLever[] = [
 			note: "Economic incidence falls on workers via reduced wages (OBR/IFS consensus). Pattern is similar to employee NICs but slightly more spread because the no-upper-earnings-limit means top decile takes more of the burden.",
 			source: HMRC,
 		},
-		elasticity: {
-			coefficient: 0.03,
-			note: "Slightly more elastic than employee NICs — employer responses include hiring decisions, shifting to self-employed contractors, and offshoring. Reeves's 2024 +1.2pp move was forecast to cost ~280k jobs by CBI; OBR's central elasticity is more conservative (~0.45 effective TIE).",
+		behaviour: {
+			kind: "marginal-rate",
+			taxType: "payroll",
+			calibration: "post-behavioural-ready-reckoner",
+			currentMarginalRate: 0.15,
+			taxableBaseElasticity: 0.35,
+			response: "net-of-tax",
+			workerIncidenceShare: 0.9,
+			outputShare: 0.75,
+			note: "Employer responses include hiring decisions, wage adjustment, self-employment substitution, and offshoring. Incidence is mostly on workers over time, so worker CEV treats most of the burden as labour income.",
 			source: HMRC,
 		},
 	},
@@ -432,7 +482,7 @@ export const TAX_LEVERS: readonly TaxLever[] = [
 				{
 					label: "Align with personal allowance",
 					value: -22_500_000_000,
-					note: "Lowering the threshold to £0 (full alignment with employee tax base) would raise ~£22bn/yr static — but would strangle marginal employment for low earners. Conceptual ceiling, not a serious proposal.",
+					note: "Lowering the threshold to £0 (full alignment with employee tax base) would raise ~£22bn/yr before larger employment responses — but would strangle marginal employment for low earners. Conceptual ceiling, not a serious proposal.",
 				},
 			],
 			caveat:
@@ -485,9 +535,16 @@ export const TAX_LEVERS: readonly TaxLever[] = [
 			note: "OBR/IFS convention assumes ~50% of corporation tax falls on workers (via wages) and ~50% on capital owners (concentrated top decile). The combined effect is moderately top-heavy.",
 			source: HMRC,
 		},
-		elasticity: {
-			coefficient: 0.04,
-			note: "Profit-shifting is the dominant behavioural channel. UK rises above ~28% would push aggressive shifting; Pillar Two minimum partly defends. HMRC's central scoring applies ~10% haircut at +1pp; this coefficient gives 4% (more conservative).",
+		behaviour: {
+			kind: "marginal-rate",
+			taxType: "corporate-profits",
+			calibration: "post-behavioural-ready-reckoner",
+			currentMarginalRate: 0.25,
+			taxableBaseElasticity: 0.45,
+			response: "net-of-tax",
+			workerIncidenceShare: 0.5,
+			outputShare: 0.55,
+			note: "Profit-shifting and investment timing are the main behavioural channels. Pillar Two defends part of the base, but rate rises above the OECD middle still reduce the UK-taxed profit base.",
 			source: HMRC,
 		},
 	},
@@ -508,7 +565,7 @@ export const TAX_LEVERS: readonly TaxLever[] = [
 			source: HMRC,
 			asOf: "2024-10",
 			measure:
-				"First-year revenue from a 1pp rise in the higher rate of CGT (currently 24% on non-residential gains, 24% on residential after Reeves's October 2024 changes). HMRC ready-reckoner figure for the static estimate.",
+				"First-year revenue from a 1pp rise in the higher rate of CGT (currently 24% on non-residential gains, 24% on residential after Reeves's October 2024 changes). Scenario scoring applies a realisations response for larger moves.",
 			alternatives: [
 				{
 					label: "Lower rate (1pp)",
@@ -523,20 +580,27 @@ export const TAX_LEVERS: readonly TaxLever[] = [
 				{
 					label: "Equalise with income tax",
 					value: 14_000_000_000,
-					note: "Charging CGT at marginal income tax rates would raise ~£14bn/yr static — but realisations would collapse short-term, so OBR-scored revenue is far lower. The biggest CGT proposal in Labour's 2024 leaked options.",
+					note: "Charging CGT at marginal income tax rates would raise ~£14bn/yr before realisations response — but realisations would collapse short-term, so OBR-scored revenue is far lower. The biggest CGT proposal in Labour's 2024 leaked options.",
 				},
 			],
 			caveat:
-				"Highly behavioural — taxpayers time realisations around expected rate changes. Static HMRC figure understates actual elasticity at large moves; OBR's costings of recent CGT changes apply ~30-50% behavioural haircuts. Four actual rates in the system: 18% / 24% (residential) and 18% / 24% (non-residential post-Reeves). 'Higher rate' lever is a proxy for the headline; combined moves need `tax-other` for the residual.",
+				"Highly behavioural — taxpayers time realisations around expected rate changes. Ready-reckoner figures are least reliable for large CGT moves; OBR costings of recent CGT changes show large static-dynamic gaps. Four actual rates in the system: 18% / 24% (residential) and 18% / 24% (non-residential post-Reeves). 'Higher rate' lever is a proxy for the headline; combined moves need `tax-other` for the residual.",
 		},
 		incidence: {
 			vector: [0, 0, 0, 0, 0, 0.01, 0.02, 0.04, 0.08, 0.85],
 			note: "Realised capital gains are extraordinarily concentrated at the top: the top decile reports the vast majority of taxable gains in any given year (HMRC CGT statistics). 85%+ of any rate change falls on top-decile households.",
 			source: HMRC,
 		},
-		elasticity: {
-			coefficient: 0.10,
-			note: "CGT is the most elastic major tax — taxpayers time realisations around expected rate changes (defer when rates are rising; accelerate before announced cuts). OBR scores recent CGT changes with 30–50% behavioural haircuts. At this coefficient: +4pp = 40% haircut, matching OBR's recent treatment.",
+		behaviour: {
+			kind: "marginal-rate",
+			taxType: "capital-gains",
+			calibration: "post-behavioural-ready-reckoner",
+			currentMarginalRate: 0.24,
+			taxableBaseElasticity: 1,
+			response: "net-of-tax",
+			workerIncidenceShare: 0.05,
+			outputShare: 0.1,
+			note: "CGT has a highly elastic realisations base: taxpayers time disposals around expected rate changes and can defer gains. The model treats most of the response as timing/avoidance rather than immediate UK output.",
 			source: HMRC,
 		},
 	},
@@ -579,9 +643,16 @@ export const TAX_LEVERS: readonly TaxLever[] = [
 			note: "Only ~4-5% of estates pay any IHT, and they're overwhelmingly in the top decile of estate wealth (which correlates strongly with top decile of income at end-of-life). 80% of any IHT rate change falls on the top decile.",
 			source: HMRC,
 		},
-		elasticity: {
-			coefficient: 0.05,
-			note: "Avoidance routes are well-developed: gifts (7-year rule), business/agricultural relief, charitable legacies, life insurance into trust. Rate rises accelerate avoidance planning; HMRC scores rate changes with ~10% haircut at small moves.",
+		behaviour: {
+			kind: "marginal-rate",
+			taxType: "inheritance",
+			calibration: "post-behavioural-ready-reckoner",
+			currentMarginalRate: 0.4,
+			taxableBaseElasticity: 0.35,
+			response: "net-of-tax",
+			workerIncidenceShare: 0.05,
+			outputShare: 0.05,
+			note: "Avoidance routes are well-developed: gifts, business/agricultural relief, charitable legacies, and trusts. The base response is mostly planning and timing, not near-term output.",
 			source: HMRC,
 		},
 	},
@@ -802,6 +873,18 @@ export const TAX_LEVERS: readonly TaxLever[] = [
 			note: "Falls on large employers' payrolls above £3m. Economic incidence is on workers via wage suppression — pattern resembles employer NICs but slightly more middle-weighted because the £3m threshold means it spares smaller firms (where lower-paid workers are concentrated).",
 			source: HMRC,
 		},
+		behaviour: {
+			kind: "marginal-rate",
+			taxType: "payroll",
+			calibration: "post-behavioural-ready-reckoner",
+			currentMarginalRate: 0.005,
+			taxableBaseElasticity: 0.25,
+			response: "net-of-tax",
+			workerIncidenceShare: 0.8,
+			outputShare: 0.5,
+			note: "Large employers can rebadge eligible training, adjust pay, or restructure around the payroll threshold. Modelled as a payroll wedge with mostly worker incidence.",
+			source: HMRC,
+		},
 	},
 	{
 		id: "bank-surcharge",
@@ -836,9 +919,16 @@ export const TAX_LEVERS: readonly TaxLever[] = [
 			note: "Falls on bank profits → roughly half on capital owners (concentrated top decile, including pension funds and insurance) and half on bank workers + customers (more spread). Net effect is moderately top-heavy.",
 			source: HMRC,
 		},
-		elasticity: {
-			coefficient: 0.05,
-			note: "Banks have substantial profit-shifting capacity (many UK banks are subsidiaries of internationals). Surcharge rises near the headline corp tax rate trigger relocation/restructuring. Combined with Pillar Two, the realistic ceiling is around 10–12% combined rate before substantial avoidance.",
+		behaviour: {
+			kind: "marginal-rate",
+			taxType: "corporate-profits",
+			calibration: "post-behavioural-ready-reckoner",
+			currentMarginalRate: 0.28,
+			taxableBaseElasticity: 0.5,
+			response: "net-of-tax",
+			workerIncidenceShare: 0.45,
+			outputShare: 0.4,
+			note: "Banks have substantial profit-shifting and restructuring capacity. Uses the combined corporation-tax plus surcharge wedge for the behavioural margin.",
 			source: HMRC,
 		},
 	},
@@ -886,9 +976,16 @@ export const TAX_LEVERS: readonly TaxLever[] = [
 			note: "Falls on oil & gas firms → partly on shareholders (top decile, pension funds) and partly on consumers via energy prices (slightly regressive). Net effect is moderately top-heavy with a regressive tail.",
 			source: HMRC,
 		},
-		elasticity: {
-			coefficient: 0.10,
-			note: "Highly elastic to commodity prices and investment timing. EPL revenues collapsed in 2024 as gas prices fell — proof that windfall taxes are vulnerable to the very prices they're designed to capture. Rate rises accelerate disinvestment in the UKCS basin. OBR's recent EPL costings show large dynamic-static gaps.",
+		behaviour: {
+			kind: "marginal-rate",
+			taxType: "corporate-profits",
+			calibration: "post-behavioural-ready-reckoner",
+			currentMarginalRate: 0.78,
+			taxableBaseElasticity: 0.2,
+			response: "net-of-tax",
+			workerIncidenceShare: 0.35,
+			outputShare: 0.55,
+			note: "EPL sits on top of ring-fence corporation tax, so the combined wedge is already very high. Calibration keeps HMRC's positive +1pp ready-reckoner yield while still allowing larger rises to erode the UKCS profit base.",
 			source: HMRC,
 		},
 	},
@@ -924,6 +1021,18 @@ export const TAX_LEVERS: readonly TaxLever[] = [
 		incidence: {
 			vector: [0.06, 0.08, 0.10, 0.11, 0.12, 0.12, 0.12, 0.11, 0.10, 0.08],
 			note: "Roughly flat in £ across deciles, hence regressive in % of income. Bottom deciles drive less but spend a larger share of income on fuel; top deciles drive more but it's a smaller share. Rural households of any decile bear more.",
+			source: HMRC,
+		},
+		behaviour: {
+			kind: "unit-price",
+			taxType: "commodity-duty",
+			calibration: "post-behavioural-ready-reckoner",
+			currentDutyPerUnit: 0.5295,
+			taxInclusivePricePerUnit: 1.45,
+			demandElasticity: 0.2,
+			workerIncidenceShare: 0.65,
+			outputShare: 0.35,
+			note: "Fuel demand is price-inelastic in the short run but not fixed. The model uses the duty-inclusive pump price, full pass-through of duty changes, and a small volume response.",
 			source: HMRC,
 		},
 	},

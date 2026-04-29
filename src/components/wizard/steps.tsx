@@ -625,7 +625,7 @@ const TAX_CHOICES: { group: string; choices: TaxChoice[] }[] = [
 				leverId: "higher-rate-income-tax",
 				title: "Higher rate +2pp",
 				subtitle: "40% → 42% · ~£3.2bn/yr",
-				context: "Above £50,270. Behavioural haircut starts to bite.",
+				context: "Above £50,270. Marginal-rate response starts to bite.",
 				magnitude: 2,
 				direction: "raise-revenue",
 				burden: "workers",
@@ -633,7 +633,7 @@ const TAX_CHOICES: { group: string; choices: TaxChoice[] }[] = [
 			{
 				leverId: "additional-rate-income-tax",
 				title: "Additional rate +5pp",
-				subtitle: "45% → 50% · ~£1bn/yr (static)",
+				subtitle: "45% → 50% · ~£1bn/yr before response",
 				context:
 					"50p rate experience (2010-13): yielded much less than scored. Top earners adjust aggressively.",
 				magnitude: 5,
@@ -685,7 +685,7 @@ const TAX_CHOICES: { group: string; choices: TaxChoice[] }[] = [
 				title: "CGT higher rate +4pp",
 				subtitle: "24% → 28% · ~£400m/yr",
 				context:
-					"Heavily concentrated top decile. Realisations highly elastic — actual yield typically 30-50% below static.",
+					"Heavily concentrated top decile. Realisations are highly elastic and timing-sensitive.",
 				magnitude: 4,
 				direction: "raise-revenue",
 				burden: "wealth",
@@ -1333,7 +1333,7 @@ export function StepResult({
 					<span className="font-semibold">Era note:</span> figures in the
 					report below use present-day lever calibration scaled by{" "}
 					{era.year}'s nominal-GDP basis — the era multiplier framework
-					applies behavioural elasticity and macro feedback per the
+					applies marginal-rate behavioural response and macro feedback per the
 					regime-specific calibration. Compare the HUD's era-£ summary
 					against the report's detail to see what the same scenario
 					looks like in today's pounds.

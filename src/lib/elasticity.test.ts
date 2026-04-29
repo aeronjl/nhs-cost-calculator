@@ -1,64 +1,109 @@
 import { describe, expect, it } from "vitest";
 import {
-	type Elasticity,
+	type BehaviouralModel,
+	describeBehaviouralModel,
 	dynamicAdjust,
+	evaluateBehaviouralResponse,
 	haircutAmount,
 	haircutFraction,
 } from "./elasticity";
 
-describe("dynamicAdjust", () => {
-	it("returns the static delta unchanged when no elasticity is set", () => {
-		expect(dynamicAdjust(6_000_000_000, undefined, 1)).toBe(6_000_000_000);
+const labourModel: BehaviouralModel = {
+	kind: "marginal-rate",
+	taxType: "labour-income",
+	calibration: "post-behavioural-ready-reckoner",
+	currentMarginalRate: 0.4,
+	taxableBaseElasticity: 0.45,
+	response: "net-of-tax",
+	workerIncidenceShare: 1,
+	outputShare: 0.7,
+	note: "test",
+};
+
+describe("evaluateBehaviouralResponse", () => {
+	it("returns the ready-reckoner delta unchanged when no model is set", () => {
+		const r = evaluateBehaviouralResponse(6_000_000_000, undefined, 1);
+		expect(r.dynamicDelta).toBe(6_000_000_000);
+		expect(r.adjustmentFraction).toBe(0);
 	});
 
-	it("applies a small haircut at small magnitudes", () => {
-		const e: Elasticity = { coefficient: 0.02, note: "test" };
-		// 1pp move: 2% haircut. £6bn → £5.88bn
-		expect(dynamicAdjust(6_000_000_000, e, 1)).toBeCloseTo(5_880_000_000);
+	it("calibrates a +1pp move to the ready-reckoner value", () => {
+		const r = evaluateBehaviouralResponse(1_600_000_000, labourModel, 1);
+		expect(r.dynamicDelta).toBeCloseTo(1_600_000_000);
+		expect(r.adjustmentFraction).toBeCloseTo(0);
 	});
 
-	it("applies a larger haircut at larger magnitudes", () => {
-		const e: Elasticity = { coefficient: 0.02, note: "test" };
-		// 5pp move: 10% haircut. £30bn → £27bn
-		expect(dynamicAdjust(30_000_000_000, e, 5)).toBeCloseTo(27_000_000_000);
+	it("uses the marginal tax wedge for larger rate rises", () => {
+		const r = evaluateBehaviouralResponse(8_000_000_000, labourModel, 5);
+		expect(r.dynamicDelta).toBeLessThan(8_000_000_000);
+		expect(r.adjustmentFraction).toBeGreaterThan(0.03);
+		expect(r.outputEffectGbp).toBeLessThan(0);
+		expect(r.workerCevGbp).toBeLessThan(0);
 	});
 
-	it("applies the same haircut to negative deltas (tax cuts also lose less than static)", () => {
-		const e: Elasticity = { coefficient: 0.02, note: "test" };
-		// -2pp move: 4% haircut on cost. -£12bn → -£11.52bn (cost is less than static)
-		expect(dynamicAdjust(-12_000_000_000, e, -2)).toBeCloseTo(
-			-11_520_000_000,
+	it("tax cuts expand the affected base and improve worker CEV", () => {
+		const r = evaluateBehaviouralResponse(-8_000_000_000, labourModel, -5);
+		expect(r.dynamicDelta).toBeLessThan(0);
+		expect(r.outputEffectGbp).toBeGreaterThan(0);
+		expect(r.workerCevGbp).toBeGreaterThan(0);
+	});
+
+	it("supports unit-price duties such as fuel duty", () => {
+		const fuel: BehaviouralModel = {
+			kind: "unit-price",
+			taxType: "commodity-duty",
+			calibration: "post-behavioural-ready-reckoner",
+			currentDutyPerUnit: 0.5295,
+			taxInclusivePricePerUnit: 1.45,
+			demandElasticity: 0.2,
+			workerIncidenceShare: 0.65,
+			outputShare: 0.35,
+			note: "test",
+		};
+		const r = evaluateBehaviouralResponse(2_500_000_000, fuel, 5);
+		expect(r.dynamicDelta).toBeLessThan(2_500_000_000);
+		expect(r.outputEffectGbp).toBeLessThan(0);
+	});
+
+	it("describes marginal-rate model inputs for UI methodology", () => {
+		const summary = describeBehaviouralModel(labourModel, 2);
+		expect(summary?.rows).toContainEqual({
+			label: "Marginal rate",
+			value: "40.0% → 42.0%",
+		});
+		expect(summary?.rows).toContainEqual({ label: "ETI", value: "0.45" });
+		expect(summary?.rows.some((row) => row.label === "Base response")).toBe(
+			true,
 		);
 	});
 
-	it("caps haircut at 95% to prevent sign flip", () => {
-		const e: Elasticity = { coefficient: 0.5, note: "very elastic" };
-		// 100pp move would mathematically be 50× haircut = 5000% — capped to 95%
-		expect(dynamicAdjust(1_000_000_000, e, 100)).toBeCloseTo(50_000_000);
+	it("describes unit-price model inputs for UI methodology", () => {
+		const fuel: BehaviouralModel = {
+			kind: "unit-price",
+			taxType: "commodity-duty",
+			calibration: "post-behavioural-ready-reckoner",
+			currentDutyPerUnit: 0.5295,
+			taxInclusivePricePerUnit: 1.45,
+			demandElasticity: 0.2,
+			workerIncidenceShare: 0.65,
+			outputShare: 0.35,
+			note: "test",
+		};
+		const summary = describeBehaviouralModel(fuel, 5);
+		expect(summary?.rows).toContainEqual({
+			label: "Duty",
+			value: "52.95p → 57.95p",
+		});
+		expect(summary?.rows).toContainEqual({
+			label: "Demand elasticity",
+			value: "0.20",
+		});
 	});
 
-	it("a highly elastic lever (CGT-like) takes substantial haircuts", () => {
-		const e: Elasticity = { coefficient: 0.10, note: "CGT-like" };
-		// +4pp on CGT: 40% haircut. £400m → £240m
-		expect(dynamicAdjust(400_000_000, e, 4)).toBeCloseTo(240_000_000);
-	});
-});
-
-describe("haircutAmount + haircutFraction", () => {
-	it("haircut amount equals static minus dynamic", () => {
-		const e: Elasticity = { coefficient: 0.05, note: "test" };
-		const amount = haircutAmount(10_000_000_000, e, 2);
-		expect(amount).toBeCloseTo(1_000_000_000); // 10% haircut on £10bn
-	});
-
-	it("haircut fraction is the fractional reduction (0..0.95)", () => {
-		const e: Elasticity = { coefficient: 0.05, note: "test" };
-		expect(haircutFraction(e, 2)).toBeCloseTo(0.10);
-		expect(haircutFraction(e, 100)).toBeCloseTo(0.95); // capped
-	});
-
-	it("returns 0 when no elasticity is provided", () => {
-		expect(haircutFraction(undefined, 5)).toBe(0);
-		expect(haircutAmount(10_000_000_000, undefined, 5)).toBe(0);
+	it("keeps the legacy linear-haircut path for old fixtures", () => {
+		const e: BehaviouralModel = { coefficient: 0.02, note: "test" };
+		expect(dynamicAdjust(30_000_000_000, e, 5)).toBeCloseTo(27_000_000_000);
+		expect(haircutFraction(e, 5)).toBeCloseTo(0.1);
+		expect(haircutAmount(30_000_000_000, e, 5)).toBeCloseTo(3_000_000_000);
 	});
 });

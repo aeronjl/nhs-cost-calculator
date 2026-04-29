@@ -19,8 +19,8 @@
 //   - No capital gains / inheritance modelling at the household level
 //     (these are highly heterogeneous within a decile)
 //   - No regional / housing-tenure adjustments
-//   - No behavioural response at the household level (the elasticity in
-//     elasticity.ts is applied to aggregate yield, not redistributed to
+//   - No behavioural response at the household level (the marginal-rate
+//     behavioural model is applied to aggregate yield, not redistributed to
 //     individual households)
 
 import { getTaxLever } from "@/data/levers/tax-rates";

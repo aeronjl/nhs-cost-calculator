@@ -592,27 +592,31 @@ describe("evaluateLineDynamic", () => {
 		magnitude,
 	});
 
-	it("static = dynamic at small magnitudes for low-elasticity levers", () => {
+	it("calibrates +1pp ready-reckoner tax moves unchanged", () => {
 		const r = evaluateLine(taxLine("basic-rate-income-tax", 1));
 		const d = evaluateLineDynamic(r);
 		expect(d.staticDelta).toBe(6_000_000_000);
-		expect(d.dynamicDelta).toBeCloseTo(5_880_000_000); // 2% haircut
-		expect(d.haircutFraction).toBeCloseTo(0.02);
+		expect(d.dynamicDelta).toBeCloseTo(6_000_000_000);
+		expect(d.haircutFraction).toBeCloseTo(0);
+		expect(d.outputEffectGbp).toBeLessThan(0);
+		expect(d.workerCevGbp).toBeLessThan(0);
 	});
 
-	it("CGT shows substantial haircut at modest magnitudes", () => {
+	it("CGT shows a nonlinear behavioural adjustment at modest magnitudes", () => {
 		const r = evaluateLine(taxLine("capital-gains-tax", 4));
 		const d = evaluateLineDynamic(r);
-		// Static £400m × (1 - 0.10×4) = £400m × 0.6 = £240m
-		expect(d.dynamicDelta).toBeCloseTo(240_000_000);
-		expect(d.haircutFraction).toBeCloseTo(0.40);
+		expect(d.staticDelta).toBeCloseTo(400_000_000);
+		expect(d.dynamicDelta).toBeLessThan(d.staticDelta);
+		expect(d.dynamicDelta).toBeGreaterThan(300_000_000);
+		expect(d.haircutFraction).toBeGreaterThan(0.05);
 	});
 
-	it("additional-rate IT shows extreme haircut at large moves", () => {
+	it("additional-rate IT uses the marginal-rate model at large moves", () => {
 		const r = evaluateLine(taxLine("additional-rate-income-tax", 5));
 		const d = evaluateLineDynamic(r);
-		// 0.20 × 5 = 1.0, capped to 0.95 → 95% haircut
-		expect(d.haircutFraction).toBeCloseTo(0.95);
+		expect(d.dynamicDelta).toBeLessThan(d.staticDelta);
+		expect(d.haircutFraction).toBeGreaterThan(0.2);
+		expect(d.outputEffectGbp).toBeLessThan(0);
 	});
 
 	it("returns static unchanged for programme + borrow lines", () => {
@@ -624,6 +628,7 @@ describe("evaluateLineDynamic", () => {
 		});
 		expect(evaluateLineDynamic(progEv).dynamicDelta).toBe(progEv.deltaGbp);
 		expect(evaluateLineDynamic(progEv).haircutFraction).toBe(0);
+		expect(evaluateLineDynamic(progEv).workerCevGbp).toBe(0);
 
 		const borrowEv = evaluateLine({
 			id: "b",
@@ -651,14 +656,16 @@ describe("evaluateScenarioDynamic", () => {
 		const d = evaluateScenarioDynamic(result);
 		// Static: £30bn + £400m = £30.4bn
 		expect(d.staticNet).toBeCloseTo(30_400_000_000, -3);
-		// Dynamic: £30bn × 0.9 + £400m × 0.6 = £27.24bn
-		expect(d.dynamicNet).toBeCloseTo(27_240_000_000, -3);
+		expect(d.dynamicNet).toBeLessThan(d.staticNet);
+		expect(d.dynamicNet).toBeGreaterThan(30_000_000_000);
+		expect(d.outputEffectGbp).toBeLessThan(0);
+		expect(d.workerCevGbp).toBeLessThan(0);
 	});
 
-	it("flags lines with non-trivial haircuts (>5%)", () => {
+	it("flags lines with non-trivial behavioural adjustments (>5%)", () => {
 		const result = evaluateScenario([
-			taxLine("basic-rate-income-tax", 1), // 2% haircut, not flagged
-			taxLine("capital-gains-tax", 4), // 40% haircut, flagged
+			taxLine("basic-rate-income-tax", 1), // calibrated +1pp, not flagged
+			taxLine("capital-gains-tax", 4), // nonlinear response, flagged
 		]);
 		const d = evaluateScenarioDynamic(result);
 		expect(d.dynamicLines).toHaveLength(1);
@@ -678,12 +685,12 @@ describe("projectScenarioOverYears", () => {
 		const result = evaluateScenario([taxLine("basic-rate-income-tax", 1)]);
 		const proj = projectScenarioOverYears(result, 5);
 		expect(proj).toHaveLength(5);
-		// Year 1: dynamic £5.88bn × (1 - 0.5 × 0.38) = £5.88bn × 0.81 = £4.76bn
-		expect(proj[0]?.net).toBeCloseTo(5_880_000_000 * 0.81, -3);
+		// Year 1: dynamic £6bn × (1 - 0.5 × 0.38) = £6bn × 0.81 = £4.86bn
+		expect(proj[0]?.net).toBeCloseTo(6_000_000_000 * 0.81, -3);
 		// Year 5: fade shape multiplier = 0.5 × 0.15 = 0.075
-		// £5.88bn × (1.04)^4 × (1 - 0.075 × 0.38) = £5.88bn × 1.17 × 0.9715
+		// £6bn × (1.04)^4 × (1 - 0.075 × 0.38) = £6bn × 1.17 × 0.9715
 		expect(proj[4]?.net).toBeCloseTo(
-			5_880_000_000 * 1.04 ** 4 * (1 - 0.075 * 0.38),
+			6_000_000_000 * 1.04 ** 4 * (1 - 0.075 * 0.38),
 			-3,
 		);
 	});

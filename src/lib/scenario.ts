@@ -15,7 +15,7 @@ import {
 	sumDeciles,
 	zeroDeciles,
 } from "@/lib/distribution";
-import { dynamicAdjust, haircutFraction } from "@/lib/elasticity";
+import { evaluateBehaviouralResponse } from "@/lib/elasticity";
 import {
 	type FiscalMultiplier,
 	FREEZE_DRAG_AMPLIFICATION_PER_CPI_PP,
@@ -554,20 +554,25 @@ export const evaluateScenarioDistribution = (
 // ---------------------------------------------------------------------------
 // Dynamic scoring: behavioural-adjusted yield per line and per scenario.
 //
-// The static yield (`evaluation.deltaGbp`) assumes no behavioural response.
-// Dynamic yield applies the per-lever elasticity to discount the static
-// figure: at small magnitudes the haircut is small; at larger magnitudes it
-// bites. Closes the gap to OBR-style scoring.
+// The ready-reckoner yield (`evaluation.deltaGbp`) is linear in the selected
+// magnitude. For tax levers with an explicit behavioural model, the dynamic
+// layer reconstructs the affected marginal tax base, applies the lever's
+// taxable-base elasticity, and reports the nonlinear revenue, output, and
+// worker consumption-equivalent effects.
 //
-// Lines without elasticity (programmes, borrow, threshold-style and bn-style
-// taxes) return their static yield unchanged. Methodology fields name the
-// behavioural risk separately for those.
+// Lines without a behavioural model return their ready-reckoner yield
+// unchanged. Methodology fields name the behavioural risk separately for
+// threshold-style and direct-£ levers.
 // ---------------------------------------------------------------------------
 
 export interface DynamicLineEvaluation {
 	staticDelta: number;
 	dynamicDelta: number;
-	haircutFraction: number; // 0..0.95
+	behaviouralAdjustmentGbp: number;
+	behaviouralAdjustmentFraction: number;
+	haircutFraction: number; // Backward-compatible alias for UI thresholds.
+	outputEffectGbp: number;
+	workerCevGbp: number;
 }
 
 export const evaluateLineDynamic = (
@@ -575,12 +580,31 @@ export const evaluateLineDynamic = (
 ): DynamicLineEvaluation => {
 	const { line, deltaGbp } = evaluation;
 	if (line.type !== "tax") {
-		return { staticDelta: deltaGbp, dynamicDelta: deltaGbp, haircutFraction: 0 };
+		return {
+			staticDelta: deltaGbp,
+			dynamicDelta: deltaGbp,
+			behaviouralAdjustmentGbp: 0,
+			behaviouralAdjustmentFraction: 0,
+			haircutFraction: 0,
+			outputEffectGbp: 0,
+			workerCevGbp: 0,
+		};
 	}
 	const lever = getTaxLever(line.leverId);
-	const dynamicDelta = dynamicAdjust(deltaGbp, lever.elasticity, line.magnitude);
-	const hf = haircutFraction(lever.elasticity, line.magnitude);
-	return { staticDelta: deltaGbp, dynamicDelta, haircutFraction: hf };
+	const response = evaluateBehaviouralResponse(
+		deltaGbp,
+		lever.behaviour,
+		line.magnitude,
+	);
+	return {
+		staticDelta: deltaGbp,
+		dynamicDelta: response.dynamicDelta,
+		behaviouralAdjustmentGbp: response.behaviouralAdjustmentGbp,
+		behaviouralAdjustmentFraction: response.adjustmentFraction,
+		haircutFraction: response.adjustmentFraction,
+		outputEffectGbp: response.outputEffectGbp,
+		workerCevGbp: response.workerCevGbp,
+	};
 };
 
 export interface ScenarioDynamic {
@@ -590,8 +614,10 @@ export interface ScenarioDynamic {
 	dynamicFreed: number;
 	staticRequired: number;
 	dynamicRequired: number;
-	// Lines with non-trivial behavioural haircuts (>5%) — useful for the UI
-	// to flag which lines are driving the static-dynamic gap.
+	outputEffectGbp: number;
+	workerCevGbp: number;
+	// Lines with non-trivial behavioural adjustments (>5%) — useful for the
+	// UI to flag which lines are driving the ready-reckoner/dynamic gap.
 	dynamicLines: { line: ScenarioLine; haircutFraction: number }[];
 }
 
@@ -600,11 +626,15 @@ export const evaluateScenarioDynamic = (
 ): ScenarioDynamic => {
 	let dynamicFreed = 0;
 	let dynamicRequired = 0;
+	let outputEffectGbp = 0;
+	let workerCevGbp = 0;
 	const dynamicLines: { line: ScenarioLine; haircutFraction: number }[] = [];
 	for (const ev of result.lines) {
 		const d = evaluateLineDynamic(ev);
 		if (d.dynamicDelta > 0) dynamicFreed += d.dynamicDelta;
 		if (d.dynamicDelta < 0) dynamicRequired += Math.abs(d.dynamicDelta);
+		outputEffectGbp += d.outputEffectGbp;
+		workerCevGbp += d.workerCevGbp;
 		if (d.haircutFraction > 0.05) {
 			dynamicLines.push({
 				line: ev.line,
@@ -619,6 +649,8 @@ export const evaluateScenarioDynamic = (
 		dynamicFreed,
 		staticRequired: result.required,
 		dynamicRequired,
+		outputEffectGbp,
+		workerCevGbp,
 		dynamicLines,
 	};
 };

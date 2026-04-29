@@ -91,7 +91,7 @@ export function TopZone({
 				</div>
 				{dynamicGapSignificant && (
 					<div className="text-[10px] text-muted-foreground">
-						after behavioural responses: £
+						after marginal-rate response: £
 						{Math.round(dynamic.dynamicNet).toLocaleString()}
 					</div>
 				)}

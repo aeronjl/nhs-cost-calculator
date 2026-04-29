@@ -351,10 +351,11 @@ export default function TradeOffEngine({
 				</div>
 
 				<p className="text-xs text-muted-foreground text-center">
-					Tax figures are HMRC's first-year ready reckoner — behavioural
-					responses dampen larger changes. Borrowing assumes new gilts at the
-					current 30-year yield. Spending lines are PESA approximations; the
-					DEL/AME distinction matters for fiscal mechanics not modelled here.
+					Tax figures are HMRC's first-year ready reckoner, with behavioural
+					response handled by the scenario model for tax levers. Borrowing
+					assumes new gilts at the current 30-year yield. Spending lines are
+					PESA approximations; the DEL/AME distinction matters for fiscal
+					mechanics not modelled here.
 				</p>
 			</CardContent>
 		</Card>

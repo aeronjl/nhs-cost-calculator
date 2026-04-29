@@ -8,10 +8,8 @@ import type { MacroState } from "@/lib/scenario";
 // model output — moves the calculator from "single multiplier" to "endogenous
 // macro state" framing.
 //
-// All deviations are vs OBR baseline (Scope A: just static + dynamic). For
-// Scope C (general equilibrium) we'll feed this state back into per-line
-// yields. For now Scope B exposes the macro state for transparency without
-// closing the GE loop.
+// All deviations are vs OBR baseline. Scope C feeds this state back into
+// per-line yields; Scope B exposes the macro state for transparency.
 
 interface Props {
 	path: readonly MacroState[];
