@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BORROWING_BACKTEST_EPISODES } from "@/data/borrowing-backtests";
 import {
+	auditBorrowingRegimeCalibration,
 	evaluateBorrowingBacktestEpisode,
 	evaluateBorrowingBacktests,
 	summarizeBorrowingBacktests,
@@ -55,5 +56,25 @@ describe("borrowing backtests", () => {
 			summary.meanCentralAbsMissBp,
 		);
 		expect(summary.largestMiss?.episode.id).toBe("pandemic-borrowing-2020");
+	});
+
+	it("audits regime calibration against labelled historical episodes", () => {
+		const audit = auditBorrowingRegimeCalibration();
+		expect(audit.rows).toHaveLength(BORROWING_BACKTEST_EPISODES.length);
+		expect(audit.triggerWindows.map((window) => window.id).sort()).toEqual([
+			"credibility-shock",
+			"monetary-backstop",
+			"normal",
+		]);
+		expect(audit.classifierMatches).toBe(audit.rows.length);
+		expect(audit.meanLabelProbability).toBeGreaterThan(0.8);
+		for (const row of audit.rows) {
+			const probabilityTotal = Object.values(row.regimeProbabilities).reduce(
+				(sum, value) => sum + value,
+				0,
+			);
+			expect(probabilityTotal).toBeCloseTo(1);
+			expect(row.labelledRegimeProbability).toBeGreaterThan(0.7);
+		}
 	});
 });

@@ -209,6 +209,8 @@ The backtest labels also feed a forward-looking regime classifier in `src/lib/bo
 
 Those features are compared with the labelled backtest episodes using a scaled nearest-neighbour softmax. The output is a probability distribution over normal absorption, credibility shock, and monetary-backstop regimes. Each regime carries an expected yield overlay, so the UI can report both the central pressure and the probability-weighted peak pressure. The stochastic borrowing and fiscal-rule fans sample from this distribution on each draw. This is deliberately small-sample and diagnostic: it turns known misses into explicit regime risk rather than pretending the central borrowing model can infer institutional credibility or central-bank backstop states from issuance arithmetic alone.
 
+The reference page now exposes the calibration audit directly. It reports the historical trigger window for each regime, the classifier probabilities assigned to each labelled episode, and the backtest fit before and after applying the documented regime overlay. This makes the regime switch auditable: users can see which historical episode is anchoring the probability, where the central balance-sheet model misses, and whether the overlay is adding credibility stress or subtracting monetary-backstop pressure.
+
 ## Sources
 
 - UK Debt Management Office financing remit: https://www.dmo.gov.uk/responsibilities/financing-remit/

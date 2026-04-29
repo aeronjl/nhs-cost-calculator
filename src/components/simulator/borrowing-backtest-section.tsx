@@ -2,10 +2,14 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+	auditBorrowingRegimeCalibration,
+	type BorrowingCalibrationRange,
 	type BorrowingBacktestResult,
+	type BorrowingRegimeCalibrationRow,
 	observedRangeLabel,
 	summarizeBorrowingBacktests,
 } from "@/lib/borrowing-backtest";
+import type { BorrowingStressRegimeId } from "@/lib/borrowing-regime";
 import { cn } from "@/lib/utils";
 
 const formatBn = (n: number): string => {
@@ -16,6 +20,25 @@ const formatBn = (n: number): string => {
 };
 
 const formatBp = (n: number): string => `${Math.round(n)}bp`;
+
+const formatSignedBp = (n: number): string =>
+	`${n > 0 ? "+" : ""}${Math.round(n)}bp`;
+
+const formatPct = (n: number): string => `${(n * 100).toFixed(0)}%`;
+
+const formatPp = (n: number): string => `${n.toFixed(1)}pp`;
+
+const formatIndex = (n: number): string => n.toFixed(2);
+
+const formatProbability = (n: number): string => `${Math.round(n * 100)}%`;
+
+const formatRange = (
+	range: BorrowingCalibrationRange,
+	formatter: (value: number) => string,
+): string =>
+	Math.abs(range.high - range.low) < 0.0001
+		? formatter(range.low)
+		: `${formatter(range.low)}-${formatter(range.high)}`;
 
 const formatMiss = (n: number | null): string => {
 	if (n === null) return "n/a";
@@ -36,8 +59,22 @@ const statusClass = (result: BorrowingBacktestResult): string =>
 			? "bg-amber-50 text-amber-800 border-amber-200"
 			: "bg-red-50 text-red-800 border-red-200";
 
+const probabilityFor = (
+	row: BorrowingRegimeCalibrationRow,
+	id: BorrowingStressRegimeId,
+): string => formatProbability(row.regimeProbabilities[id]);
+
+const balanceSheetPressureBp = (result: BorrowingBacktestResult): number =>
+	Math.max(
+		0,
+		result.centralPeakPressureBp -
+			result.peakAbsorptionConcessionBp -
+			result.peakMarketReactionBp,
+	);
+
 export function BorrowingBacktestSection() {
 	const summary = summarizeBorrowingBacktests();
+	const calibrationAudit = auditBorrowingRegimeCalibration();
 	const { results } = summary;
 	if (results.length === 0) return null;
 
@@ -80,6 +117,169 @@ export function BorrowingBacktestSection() {
 						alone: credibility loss in 2022, or monetary-policy backstop in
 						2020.
 					</p>
+				</div>
+
+				<div className="space-y-3">
+					<div>
+						<h3 className="text-sm font-semibold">
+							Regime calibration audit
+						</h3>
+						<p className="text-xs text-muted-foreground mt-1">
+							The classifier re-identifies{" "}
+							<strong>
+								{calibrationAudit.classifierMatches}/
+								{calibrationAudit.rows.length}
+							</strong>{" "}
+							labelled episodes; mean probability assigned to the historical
+							label is{" "}
+							<strong>
+								{formatProbability(calibrationAudit.meanLabelProbability)}
+							</strong>
+							.
+						</p>
+					</div>
+
+					<div className="overflow-x-auto rounded-lg border">
+						<table className="w-full min-w-[760px] text-xs">
+							<thead className="bg-muted/50 text-muted-foreground">
+								<tr className="text-left">
+									<th className="px-3 py-2 font-medium">Regime</th>
+									<th className="px-3 py-2 font-medium">Historical window</th>
+									<th className="px-3 py-2 font-medium">Observed move</th>
+									<th className="px-3 py-2 font-medium">Model triggers</th>
+									<th className="px-3 py-2 font-medium">Overlay</th>
+								</tr>
+							</thead>
+							<tbody className="divide-y">
+								{calibrationAudit.triggerWindows.map((window) => (
+									<tr key={window.id} className="align-top">
+										<td className="px-3 py-2">
+											<div className="font-semibold">{window.label}</div>
+											<div className="text-muted-foreground leading-snug">
+												{window.description}
+											</div>
+										</td>
+										<td className="px-3 py-2 tabular-nums">
+											<div>
+												{formatRange(window.amountGbp, formatBn)} borrowing
+											</div>
+											<div className="text-muted-foreground">
+												{formatRange(window.issuanceShareOfGfr, formatPct)} of
+												GFR
+											</div>
+											<div className="text-muted-foreground">
+												{window.sourceEpisodes.join(", ")}
+											</div>
+										</td>
+										<td className="px-3 py-2 tabular-nums">
+											{formatRange(window.observedPeakGiltMoveBp, formatBp)}
+										</td>
+										<td className="px-3 py-2 tabular-nums">
+											<div>
+												{formatRange(window.centralPeakPressureBp, formatBp)}{" "}
+												central
+											</div>
+											<div className="text-muted-foreground">
+												{formatRange(
+													window.absorptionStressIndex,
+													formatIndex,
+												)}{" "}
+												auction stress
+											</div>
+											<div className="text-muted-foreground">
+												{formatRange(window.marketReactionBp, formatBp)} market
+												reaction
+											</div>
+										</td>
+										<td className="px-3 py-2 tabular-nums">
+											{formatSignedBp(window.expectedOverlayBp)}
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+
+					<div className="overflow-x-auto rounded-lg border">
+						<table className="w-full min-w-[900px] text-xs">
+							<thead className="bg-muted/50 text-muted-foreground">
+								<tr className="text-left">
+									<th className="px-3 py-2 font-medium">Episode</th>
+									<th className="px-3 py-2 font-medium">Label / classifier</th>
+									<th className="px-3 py-2 font-medium">
+										Estimated transition probabilities
+									</th>
+									<th className="px-3 py-2 font-medium">Backtest fit</th>
+									<th className="px-3 py-2 font-medium">Pressure attribution</th>
+								</tr>
+							</thead>
+							<tbody className="divide-y">
+								{calibrationAudit.rows.map((row) => {
+									const result = row.result;
+									const episode = result.episode;
+									return (
+										<tr key={episode.id} className="align-top">
+											<td className="px-3 py-2">
+												<div className="font-semibold">{episode.name}</div>
+												<div className="text-muted-foreground tabular-nums">
+													{episode.date.slice(0, 7)} ·{" "}
+													{formatBn(episode.amountGbp)}
+												</div>
+											</td>
+											<td className="px-3 py-2">
+												<div>{row.labelledRegimeLabel}</div>
+												<div className="text-muted-foreground">
+													top: {row.estimate.topRegime.label} (
+													{formatProbability(row.estimate.topRegime.probability)}
+													)
+												</div>
+											</td>
+											<td className="px-3 py-2 tabular-nums">
+												<div>Normal {probabilityFor(row, "normal")}</div>
+												<div>
+													Credibility{" "}
+													{probabilityFor(row, "credibility-shock")}
+												</div>
+												<div>
+													Backstop {probabilityFor(row, "monetary-backstop")}
+												</div>
+											</td>
+											<td className="px-3 py-2 tabular-nums">
+												<div>
+													observed{" "}
+													{observedRangeLabel(episode.observedPeakGiltMoveBp)}
+												</div>
+												<div className="text-muted-foreground">
+													central {formatBp(result.centralPeakPressureBp)} ·{" "}
+													{formatMiss(result.centralMissBp)}
+												</div>
+												<div className="text-muted-foreground">
+													overlay{" "}
+													{result.overlayPeakPressureBp === null
+														? "none"
+														: `${formatBp(result.overlayPeakPressureBp)} · ${formatMiss(
+																result.overlayMissBp,
+															)}`}
+												</div>
+											</td>
+											<td className="px-3 py-2 tabular-nums">
+												<div>
+													{formatBp(balanceSheetPressureBp(result))} debt/risk
+												</div>
+												<div className="text-muted-foreground">
+													{formatBp(result.peakAbsorptionConcessionBp)} auction
+												</div>
+												<div className="text-muted-foreground">
+													{formatBp(result.peakMarketReactionBp)} reaction ·{" "}
+													{formatPp(result.finalDebtGdpDeltaPp)} debt/GDP
+												</div>
+											</td>
+										</tr>
+									);
+								})}
+							</tbody>
+						</table>
+					</div>
 				</div>
 
 				<ul className="space-y-3">

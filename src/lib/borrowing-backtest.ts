@@ -7,6 +7,12 @@ import {
 	type BorrowingMarketReactionYear,
 	projectBorrowingMarketReactionPath,
 } from "@/lib/borrowing";
+import {
+	BORROWING_STRESS_REGIMES,
+	estimateBorrowingStressRegime,
+	type BorrowingRegimeEstimate,
+	type BorrowingStressRegimeId,
+} from "@/lib/borrowing-regime";
 
 export type BorrowingBacktestDiagnosis =
 	| "tracks"
@@ -37,6 +43,44 @@ export interface BorrowingBacktestSummary {
 	meanCentralAbsMissBp: number;
 	meanOverlayAbsMissBp: number;
 	largestMiss: BorrowingBacktestResult | null;
+}
+
+export interface BorrowingRegimeCalibrationRow {
+	result: BorrowingBacktestResult;
+	estimate: BorrowingRegimeEstimate;
+	labelledRegime: BorrowingStressRegimeId;
+	labelledRegimeLabel: string;
+	classifierMatchesLabel: boolean;
+	labelledRegimeProbability: number;
+	regimeProbabilities: Record<BorrowingStressRegimeId, number>;
+}
+
+export interface BorrowingCalibrationRange {
+	low: number;
+	high: number;
+}
+
+export interface BorrowingRegimeTriggerWindow {
+	id: BorrowingStressRegimeId;
+	label: string;
+	description: string;
+	expectedOverlayBp: number;
+	episodeCount: number;
+	sourceEpisodes: string[];
+	amountGbp: BorrowingCalibrationRange;
+	issuanceShareOfGfr: BorrowingCalibrationRange;
+	observedPeakGiltMoveBp: BorrowingCalibrationRange;
+	centralPeakPressureBp: BorrowingCalibrationRange;
+	finalDebtGdpDeltaPp: BorrowingCalibrationRange;
+	absorptionStressIndex: BorrowingCalibrationRange;
+	marketReactionBp: BorrowingCalibrationRange;
+}
+
+export interface BorrowingRegimeCalibrationAudit {
+	rows: BorrowingRegimeCalibrationRow[];
+	triggerWindows: BorrowingRegimeTriggerWindow[];
+	classifierMatches: number;
+	meanLabelProbability: number;
 }
 
 const rangeMidpoint = (range: BorrowingBacktestRange): number =>
@@ -179,6 +223,122 @@ export const summarizeBorrowingBacktests = (
 			overlayMisses.reduce((sum, miss) => sum + miss, 0) /
 			Math.max(1, overlayMisses.length),
 		largestMiss,
+	};
+};
+
+const regimeProbabilityMap = (
+	estimate: BorrowingRegimeEstimate,
+): Record<BorrowingStressRegimeId, number> =>
+	BORROWING_STRESS_REGIMES.reduce<Record<BorrowingStressRegimeId, number>>(
+		(probabilities, regime) => {
+			probabilities[regime.id] =
+				estimate.probabilities.find((item) => item.id === regime.id)
+					?.probability ?? 0;
+			return probabilities;
+		},
+		{} as Record<BorrowingStressRegimeId, number>,
+	);
+
+const rangeFrom = <T>(
+	items: readonly T[],
+	getter: (item: T) => number,
+): BorrowingCalibrationRange => ({
+	low: Math.min(...items.map(getter)),
+	high: Math.max(...items.map(getter)),
+});
+
+export const auditBorrowingRegimeCalibration = (
+	episodes: readonly BorrowingBacktestEpisode[] = BORROWING_BACKTEST_EPISODES,
+): BorrowingRegimeCalibrationAudit => {
+	const rows = evaluateBorrowingBacktests(episodes).map<BorrowingRegimeCalibrationRow>(
+		(result) => {
+			const estimate = estimateBorrowingStressRegime(
+				result.episode.amountGbp,
+				result.episode.years,
+				{ strategyId: result.episode.strategyId ?? "dmo-remit" },
+			);
+			const probabilities = regimeProbabilityMap(estimate);
+			const definition = BORROWING_STRESS_REGIMES.find(
+				(regime) => regime.id === result.episode.regime,
+			)!;
+			return {
+				result,
+				estimate,
+				labelledRegime: result.episode.regime,
+				labelledRegimeLabel: definition.label,
+				classifierMatchesLabel:
+					estimate.topRegime.id === result.episode.regime,
+				labelledRegimeProbability: probabilities[result.episode.regime],
+				regimeProbabilities: probabilities,
+			};
+		},
+	);
+	const triggerWindows =
+		BORROWING_STRESS_REGIMES.map<BorrowingRegimeTriggerWindow | null>(
+			(regime) => {
+				const regimeRows = rows.filter(
+					(row) => row.labelledRegime === regime.id,
+				);
+				if (regimeRows.length === 0) return null;
+				return {
+					id: regime.id,
+					label: regime.label,
+					description: regime.description,
+					expectedOverlayBp: regime.expectedOverlayBp,
+					episodeCount: regimeRows.length,
+					sourceEpisodes: regimeRows.map((row) => row.result.episode.name),
+					amountGbp: rangeFrom(
+						regimeRows,
+						(row) => row.result.episode.amountGbp,
+					),
+					issuanceShareOfGfr: rangeFrom(
+						regimeRows,
+						(row) => row.estimate.features.issuanceShareOfGfr,
+					),
+					observedPeakGiltMoveBp: {
+						low: Math.min(
+							...regimeRows.map(
+								(row) => row.result.episode.observedPeakGiltMoveBp.low,
+							),
+						),
+						high: Math.max(
+							...regimeRows.map(
+								(row) => row.result.episode.observedPeakGiltMoveBp.high,
+							),
+						),
+					},
+					centralPeakPressureBp: rangeFrom(
+						regimeRows,
+						(row) => row.result.centralPeakPressureBp,
+					),
+					finalDebtGdpDeltaPp: rangeFrom(
+						regimeRows,
+						(row) => row.result.finalDebtGdpDeltaPp,
+					),
+					absorptionStressIndex: rangeFrom(
+						regimeRows,
+						(row) => row.estimate.features.peakAbsorptionStressIndex,
+					),
+					marketReactionBp: rangeFrom(
+						regimeRows,
+						(row) => row.result.peakMarketReactionBp,
+					),
+				};
+			},
+		).filter(
+			(window): window is BorrowingRegimeTriggerWindow => window !== null,
+		);
+	const classifierMatches = rows.filter(
+		(row) => row.classifierMatchesLabel,
+	).length;
+
+	return {
+		rows,
+		triggerWindows,
+		classifierMatches,
+		meanLabelProbability:
+			rows.reduce((sum, row) => sum + row.labelledRegimeProbability, 0) /
+			Math.max(1, rows.length),
 	};
 };
 

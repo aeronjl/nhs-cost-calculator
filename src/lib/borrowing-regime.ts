@@ -19,6 +19,13 @@ export type BorrowingStressRegimeId =
 	| "credibility-shock"
 	| "monetary-backstop";
 
+export interface BorrowingStressRegimeDefinition {
+	id: BorrowingStressRegimeId;
+	label: string;
+	expectedOverlayBp: number;
+	description: string;
+}
+
 export interface BorrowingRegimeFeatures {
 	amountGbp: number;
 	issuanceShareOfGfr: number;
@@ -76,17 +83,44 @@ export interface BorrowingFanDecomposition {
 	finalYear: BorrowingFanDecompositionYear;
 }
 
-const REGIME_LABELS: Record<BorrowingStressRegimeId, string> = {
-	normal: "Normal absorption",
-	"credibility-shock": "Credibility shock",
-	"monetary-backstop": "Monetary backstop",
-};
+export const BORROWING_STRESS_REGIMES: readonly BorrowingStressRegimeDefinition[] =
+	[
+		{
+			id: "normal",
+			label: "Normal absorption",
+			expectedOverlayBp: 0,
+			description:
+				"OBR-scored or otherwise credible borrowing absorbed through ordinary gilt-market depth.",
+		},
+		{
+			id: "credibility-shock",
+			label: "Credibility shock",
+			expectedOverlayBp: 110,
+			description:
+				"Unscored or institutionally weak fiscal event where term premia jump beyond issuance arithmetic.",
+		},
+		{
+			id: "monetary-backstop",
+			label: "Monetary backstop",
+			expectedOverlayBp: -260,
+			description:
+				"Emergency or global shock where central-bank purchases and safe-asset demand suppress gilt stress.",
+		},
+	];
 
-const REGIME_OVERLAY_BP: Record<BorrowingStressRegimeId, number> = {
-	normal: 0,
-	"credibility-shock": 110,
-	"monetary-backstop": -260,
-};
+const REGIME_LABELS = BORROWING_STRESS_REGIMES.reduce<
+	Record<BorrowingStressRegimeId, string>
+>((labels, regime) => {
+	labels[regime.id] = regime.label;
+	return labels;
+}, {} as Record<BorrowingStressRegimeId, string>);
+
+const REGIME_OVERLAY_BP = BORROWING_STRESS_REGIMES.reduce<
+	Record<BorrowingStressRegimeId, number>
+>((overlays, regime) => {
+	overlays[regime.id] = regime.expectedOverlayBp;
+	return overlays;
+}, {} as Record<BorrowingStressRegimeId, number>);
 
 const FEATURE_SCALE: Record<keyof BorrowingRegimeFeatures, number> = {
 	amountGbp: 80_000_000_000,
