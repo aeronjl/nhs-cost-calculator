@@ -33,6 +33,11 @@ const formatDelta = (n: number): string => {
 	return `${sign}£${Math.round(abs).toLocaleString()}`;
 };
 
+const formatPp = (n: number): string => {
+	const sign = n >= 0 ? "+" : "−";
+	return `${sign}${Math.abs(n).toFixed(2)}pp`;
+};
+
 export function MultiYearProjection({ projection, bands }: Props) {
 	if (projection.length === 0) return null;
 
@@ -42,6 +47,9 @@ export function MultiYearProjection({ projection, bands }: Props) {
 	const significant = Math.abs(trajectory) > Math.abs(year1.net) * 0.1;
 
 	const yearNBand = bands?.[bands.length - 1]?.band;
+	const hasBorrowingEffects =
+		projection.some((p) => Math.abs(p.debtInterestGbp) > 1_000_000) ||
+		projection.some((p) => Math.abs(p.net - p.psnbShift) > 1_000_000);
 	const bandWidthSignificant =
 		yearNBand &&
 		Math.abs(yearN.net) > 0 &&
@@ -86,6 +94,34 @@ export function MultiYearProjection({ projection, bands }: Props) {
 						<span className="font-medium">{formatBn(yearN.net)}</span>
 					</span>
 				</div>
+				{hasBorrowingEffects && (
+					<div className="grid grid-cols-2 gap-2 text-[10px] tabular-nums text-muted-foreground border-t pt-1.5">
+						<div>
+							<span>Year {projection.length} debt interest: </span>
+							<span className="font-medium text-foreground">
+								{formatDelta(-yearN.debtInterestGbp)}
+							</span>
+						</div>
+						<div className="text-right">
+							<span>PSNB shift: </span>
+							<span className="font-medium text-foreground">
+								{formatDelta(yearN.psnbShift)}
+							</span>
+						</div>
+						<div>
+							<span>Debt/GDP shift: </span>
+							<span className="font-medium text-foreground">
+								{formatPp(yearN.debtGdpDeltaPp)}
+							</span>
+						</div>
+						<div className="text-right">
+							<span>Debt stock: </span>
+							<span className="font-medium text-foreground">
+								{formatDelta(yearN.debtStockDeltaGbp)}
+							</span>
+						</div>
+					</div>
+				)}
 				{bandWidthSignificant && yearNBand && (
 					<div className="text-[10px] tabular-nums text-muted-foreground border-t pt-1.5">
 						Year {projection.length} 90% CI: {formatBn(yearNBand.p5)} —{" "}
@@ -96,8 +132,9 @@ export function MultiYearProjection({ projection, bands }: Props) {
 
 			<p className="text-[10px] text-muted-foreground leading-snug">
 				4% nominal growth assumed; rate-style tax + spend lines scale with the
-				base. Borrow lines lose £450m/yr per £10bn principal in interest costs.
-				Threshold-freeze yield ramps over the freeze window then plateaus.
+				base. Borrow lines are year-1 financing, then debt-interest and
+				refinancing exposure. Threshold-freeze yield ramps over the freeze
+				window then plateaus.
 				{bands &&
 					" Bands sample 1000 draws from per-lever yield distributions (HMRC ranges where stated, ±10% otherwise) — parameter uncertainty only, not stochastic year-to-year shocks."}{" "}
 				Multi-year is a forecast envelope, not a prediction — see Forecast vs

@@ -53,8 +53,8 @@ export function DistributionalImpact({ distribution }: Props) {
 			{!allUnmodelled && unmodelledDelta > 100_000_000 && (
 				<p className="text-[10px] text-amber-700 leading-snug">
 					£{(unmodelledDelta / 1_000_000_000).toFixed(1)}bn of this scenario's
-					£ effect has no distributional incidence modelled — borrow lines and
-					tax-other measures are excluded from this analysis.
+					incidence basis has no distributional model — tax-other measures and
+					other unallocated lines are excluded.
 				</p>
 			)}
 
@@ -62,7 +62,8 @@ export function DistributionalImpact({ distribution }: Props) {
 				Economic incidence per HMRC / OBR / IFS conventions. Bars represent
 				absolute £; the "% of income" column shows the same impact relative to
 				each decile's median disposable income — the better measure for
-				comparing burdens across deciles.
+				comparing burdens across deciles. Borrowing, where present, is shown as
+				year-5 annual debt service rather than year-1 financing.
 			</p>
 		</div>
 	);

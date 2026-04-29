@@ -3,6 +3,10 @@
 import { MethodologyPopover } from "@/components/ui/methodology-popover";
 import { getTaxLever } from "@/data/levers/tax-rates";
 import {
+	projectBorrowingPath,
+	projectBorrowingStressCases,
+} from "@/lib/borrowing";
+import {
 	type BehaviouralModelSummary,
 	describeBehaviouralModel,
 } from "@/lib/elasticity";
@@ -64,6 +68,10 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 					line.magnitude,
 				)
 			: null;
+	const borrowingSummary =
+		line.type === "borrow" ? projectBorrowingPath(line.magnitude, 5) : null;
+	const borrowingStress =
+		line.type === "borrow" ? projectBorrowingStressCases(line.magnitude, 5) : null;
 	const adjustmentPct = Math.round(dynamic.behaviouralAdjustmentFraction * 100);
 	const adjustmentSignificant = dynamic.behaviouralAdjustmentFraction > 0.05;
 	const outputSignificant = Math.abs(dynamic.outputEffectGbp) > 1_000_000;
@@ -133,6 +141,10 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 			<div className="pl-6">
 				<MethodologyPopover methodology={methodology} label="full methodology">
 					<BehaviouralModelBlock summary={modelSummary} />
+					<BorrowingModelBlock
+						path={borrowingSummary}
+						stress={borrowingStress}
+					/>
 				</MethodologyPopover>
 			</div>
 		</li>
@@ -177,6 +189,117 @@ function BehaviouralModelBlock({
 	);
 }
 
+function BorrowingModelBlock({
+	path,
+	stress,
+}: {
+	path: ReturnType<typeof projectBorrowingPath> | null;
+	stress: ReturnType<typeof projectBorrowingStressCases> | null;
+}) {
+	if (!path || path.length === 0) return null;
+	const year1 = path[0]!;
+	const yearN = path[path.length - 1]!;
+	return (
+		<div>
+			<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
+				Debt financing model
+			</div>
+			<dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs">
+				<div className="contents">
+					<dt className="text-muted-foreground">Year-1 cash</dt>
+					<dd className="tabular-nums text-right font-medium">
+						{formatSignedBn(year1.primaryFinancingGbp)}
+					</dd>
+				</div>
+				<div className="contents">
+					<dt className="text-muted-foreground">Effective rate</dt>
+					<dd className="tabular-nums text-right font-medium">
+						{(year1.effectiveRate * 100).toFixed(2)}%
+					</dd>
+				</div>
+				<div className="contents">
+					<dt className="text-muted-foreground">Year-1 interest</dt>
+					<dd className="tabular-nums text-right font-medium">
+						{formatSignedBn(-year1.interestCostGbp)}
+					</dd>
+				</div>
+				<div className="contents">
+					<dt className="text-muted-foreground">Year-{yearN.year} interest</dt>
+					<dd className="tabular-nums text-right font-medium">
+						{formatSignedBn(-yearN.interestCostGbp)}
+					</dd>
+				</div>
+				<div className="contents">
+					<dt className="text-muted-foreground">Debt stock by year {yearN.year}</dt>
+					<dd className="tabular-nums text-right font-medium">
+						{formatSignedBn(yearN.debtStockDeltaGbp)}
+					</dd>
+				</div>
+				<div className="contents">
+					<dt className="text-muted-foreground">Debt/GDP</dt>
+					<dd className="tabular-nums text-right font-medium">
+						{formatSignedPp(yearN.debtGdpDeltaPp)}
+					</dd>
+				</div>
+				<div className="contents">
+					<dt className="text-muted-foreground">Annual refinancing</dt>
+					<dd className="tabular-nums text-right font-medium">
+						£{formatBn(yearN.refinancingGbp)}
+					</dd>
+				</div>
+				<div className="contents">
+					<dt className="text-muted-foreground">Risk premium</dt>
+					<dd className="tabular-nums text-right font-medium">
+						{(yearN.riskPremium * 10_000).toFixed(1)}bp
+					</dd>
+				</div>
+				<div className="contents">
+					<dt className="text-muted-foreground">r - g</dt>
+					<dd className="tabular-nums text-right font-medium">
+						{formatSignedPct(yearN.rMinusG)}
+					</dd>
+				</div>
+				<div className="contents">
+					<dt className="text-muted-foreground">Stabilising primary balance</dt>
+					<dd className="tabular-nums text-right font-medium">
+						{formatSignedBn(yearN.stabilisingPrimaryBalanceGbp)}
+					</dd>
+				</div>
+				<div className="contents">
+					<dt className="text-muted-foreground">Interest/GDP</dt>
+					<dd className="tabular-nums text-right font-medium">
+						{yearN.debtInterestPctGdp.toFixed(3)}%
+					</dd>
+				</div>
+			</dl>
+			{stress && (
+				<div className="mt-2 border-t pt-2">
+					<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
+						Stress cases, year {yearN.year}
+					</div>
+					<dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs">
+						{stress.slice(1).map((item) => {
+							const finalYear = item.path.at(-1)!;
+							return (
+								<div key={item.id} className="contents">
+									<dt className="text-muted-foreground">{item.label}</dt>
+									<dd className="tabular-nums text-right font-medium">
+										{formatSignedBn(-finalYear.interestCostGbp)}
+									</dd>
+								</div>
+							);
+						})}
+					</dl>
+				</div>
+			)}
+			<p className="text-xs text-muted-foreground italic mt-2 leading-snug">
+				Borrowing is modelled as year-1 financing plus debt-service costs; PSNB
+				worsens when gilts are issued and again when interest is financed.
+			</p>
+		</div>
+	);
+}
+
 const formatBn = (n: number): string => {
 	if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}bn`;
 	if (n >= 1_000_000) return `${Math.round(n / 1_000_000)}m`;
@@ -186,4 +309,14 @@ const formatBn = (n: number): string => {
 const formatSignedBn = (n: number): string => {
 	const sign = n >= 0 ? "+" : "−";
 	return `${sign}£${formatBn(Math.abs(n))}`;
+};
+
+const formatSignedPp = (n: number): string => {
+	const sign = n >= 0 ? "+" : "−";
+	return `${sign}${Math.abs(n).toFixed(2)}pp`;
+};
+
+const formatSignedPct = (n: number): string => {
+	const sign = n >= 0 ? "+" : "−";
+	return `${sign}${Math.abs(n * 100).toFixed(2)}%`;
 };

@@ -149,8 +149,9 @@ describe("evaluateHouseholdImpact — full scenario", () => {
 		expect(h.asPercentOfNetIncome).toBeLessThan(0.05); // under 5%
 	});
 
-	it("borrow lines are skipped at the household level", () => {
+	it("borrow lines allocate future debt-service costs by decile", () => {
 		const single = getHousehold("single-basic")!;
+		const top = getHousehold("top-decile")!;
 		const result = evaluateScenario([
 			{
 				id: "b",
@@ -160,8 +161,24 @@ describe("evaluateHouseholdImpact — full scenario", () => {
 			},
 		]);
 		const h = evaluateHouseholdImpact(single, result);
-		expect(h.perLine[0]?.method).toBe("skipped");
-		expect(h.totalImpactGbp).toBe(0);
+		const topImpact = evaluateHouseholdImpact(top, result);
+		expect(h.perLine[0]?.method).toBe("decile");
+		expect(h.totalImpactGbp).toBeGreaterThan(0);
+		expect(topImpact.totalImpactGbp).toBeGreaterThan(h.totalImpactGbp);
+	});
+
+	it("debt repayment shows as a future household gain", () => {
+		const single = getHousehold("single-basic")!;
+		const result = evaluateScenario([
+			{
+				id: "b",
+				type: "borrow",
+				leverId: "",
+				magnitude: -5_000_000_000,
+			},
+		]);
+		const h = evaluateHouseholdImpact(single, result);
+		expect(h.totalImpactGbp).toBeLessThan(0);
 	});
 });
 

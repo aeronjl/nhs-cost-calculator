@@ -79,6 +79,10 @@ import {
 } from "@/data/levers/uk-spending";
 import { BORROWING } from "@/data/levers/borrowing";
 import type { Methodology } from "@/lib/methodology";
+import {
+	FUTURE_DEBT_SERVICE_INCIDENCE,
+	projectBorrowingPath,
+} from "@/lib/borrowing";
 
 // A scenario is a stack of fiscal-lever adjustments. Each line independently
 // produces a £ delta (positive = freed, negative = required). The scenario's
@@ -495,25 +499,37 @@ const lineKey = (l: ScenarioLine): string =>
 //   Negative per-decile value = decile GAINS £ in this scenario
 //     (tax cut → households retain income; programme rise → households gain benefit)
 //
-// Lines without incidence vectors (e.g. borrow, tax-other) are skipped and
-// reported via `modelledDelta` so callers can flag "X% of the scenario £
-// has distributional analysis available."
+// Borrowing is shown on a different basis from year-1 fiscal capacity: it is
+// allocated as year-5 annual debt service, because the household incidence of
+// borrowing lands through future taxes rather than the gilt sale itself.
+// Lines without incidence vectors (e.g. tax-other) are skipped and reported
+// via `modelledDelta` so callers can flag the unmodelled share.
 // ---------------------------------------------------------------------------
 
 export interface ScenarioDistribution {
 	perDecile: number[]; // length 10; signed per the convention above
 	modelledLines: number;
 	totalLines: number;
-	modelledDelta: number; // £ delta of lines we have incidence for
-	totalDelta: number; // net £ delta of the full scenario
+	modelledDelta: number; // £ impact basis of lines we have incidence for
+	totalDelta: number; // £ impact basis of all lines, including unmodelled ones
 }
+
+const distributionDeltaForLine = (evaluation: LineEvaluation): number => {
+	if (evaluation.line.type !== "borrow") return evaluation.deltaGbp;
+	return projectBorrowingPath(evaluation.line.magnitude, 5)[4]?.interestCostGbp ?? 0;
+};
 
 export const evaluateLineDistribution = (
 	evaluation: LineEvaluation,
 	opts?: { era?: EraId },
 ): number[] | null => {
 	const { line, deltaGbp } = evaluation;
-	if (line.type === "borrow") return null;
+	if (line.type === "borrow") {
+		return distributeDelta(
+			distributionDeltaForLine(evaluation),
+			FUTURE_DEBT_SERVICE_INCIDENCE,
+		);
+	}
 	const era = opts?.era ?? "current";
 	const incidence =
 		line.type === "tax"
@@ -534,12 +550,15 @@ export const evaluateScenarioDistribution = (
 	let perDecile = zeroDeciles();
 	let modelledLines = 0;
 	let modelledDelta = 0;
+	let totalDelta = 0;
 	for (const ev of result.lines) {
+		const lineDelta = distributionDeltaForLine(ev);
+		totalDelta += lineDelta;
 		const dist = evaluateLineDistribution(ev, opts);
 		if (dist) {
 			perDecile = sumDeciles(perDecile, dist);
 			modelledLines++;
-			modelledDelta += ev.deltaGbp;
+			modelledDelta += lineDelta;
 		}
 	}
 	return {
@@ -547,7 +566,7 @@ export const evaluateScenarioDistribution = (
 		modelledLines,
 		totalLines: result.lines.length,
 		modelledDelta,
-		totalDelta: result.net,
+		totalDelta,
 	};
 };
 
@@ -670,11 +689,20 @@ export interface YearProjection {
 	net: number;
 	freed: number;
 	required: number;
+	// Signed: positive improves PSNB, negative worsens PSNB. This differs
+	// from `net` for borrow lines because debt issuance provides cash but
+	// increases borrowing and debt stock.
+	psnbShift: number;
+	debtInterestGbp: number;
+	debtStockDeltaGbp: number;
+	debtGdpDeltaPp: number;
 }
 
 export interface ProjectionAssumptions {
 	nominalGrowth: number; // annual nominal GDP growth (default 0.04)
 	giltYield: number; // annual borrow servicing rate (default 0.045)
+	bankRate: number;
+	inflation: number;
 	// Era multiplier adjust: per-era regime factor on macro coefficients
 	// (1979 stagflation 0.7, 2010 ZLB 1.3, etc.). Default 1.0 (current).
 	era?: EraId;
@@ -683,6 +711,8 @@ export interface ProjectionAssumptions {
 const DEFAULT_ASSUMPTIONS: ProjectionAssumptions = {
 	nominalGrowth: 0.04,
 	giltYield: 0.045,
+	bankRate: BORROWING.bankRate,
+	inflation: BORROWING.inflation,
 };
 
 // Apply the era's macro adjust to a multiplier. Three-tier resolution:
@@ -826,6 +856,7 @@ export const evaluateScenarioMacroPath = (
 	years: number,
 ): MacroState[] => {
 	const states: MacroState[] = [];
+	const psnbProjection = projectScenarioOverYears(result, years);
 	let cumulativePsnb = 0; // cumulative scenario PSNB shift (positive = scenario reduces borrowing)
 
 	for (let y = 1; y <= years; y++) {
@@ -837,18 +868,17 @@ export const evaluateScenarioMacroPath = (
 		//   year-1: direct passthrough × year-1 multiplier path entry
 		//   year 2+: linear fade matching the lever's own pathShape
 		let cpiImpactGbpScale = 0;
-		// Year-N PSNB shift (revenue freed minus required) — use the projection
-		// math but with year-N macro feedback.
-		let yearPsnb = 0;
+		// Year-N PSNB shift (positive improves borrowing). Borrow lines use
+		// their dedicated financing model rather than being treated as policy
+		// revenue.
+		const yearPsnb = psnbProjection[y - 1]?.psnbShift ?? 0;
 
 		for (const ev of result.lines) {
 			const dyn = evaluateLineDynamic(ev);
 			let firstRound = dyn.dynamicDelta;
 			// Reproduce the projection's per-year scaling for tax/programme/borrow.
 			if (ev.line.type === "borrow") {
-				const principal = ev.line.magnitude;
-				const interest = principal * 0.045;
-				firstRound = principal - interest * y;
+				firstRound = 0;
 			} else if (ev.line.type === "tax") {
 				const lever = getTaxLever(ev.line.leverId);
 				if (lever.unit === "yr") {
@@ -890,9 +920,6 @@ export const evaluateScenarioMacroPath = (
 						(firstRound / UK_GDP_BASE) * passthrough * shapeFactor * 100;
 				}
 			}
-
-			// Year-N PSNB contribution (with macro feedback applied)
-			yearPsnb += secondRoundDelta(firstRound, multiplier, y);
 		}
 
 		// Cumulative PSNB shift accumulates each year (scenario-adjusted PSNB)
@@ -1047,16 +1074,6 @@ const applyGEFeedback = (
 		return baseDelta;
 	}
 
-	if (line.type === "borrow") {
-		// Channel 3: gilt yield feedback into debt servicing.
-		// baseDelta from projectScenarioOverYears = principal − interestPerYear × y.
-		// Recompute with year-N gilt yield deviation applied.
-		const principal = line.magnitude;
-		const adjustedYield =
-			a.giltYield + macroState.giltYieldDeviationPp / 100;
-		return principal - principal * adjustedYield * year;
-	}
-
 	return baseDelta;
 };
 
@@ -1079,14 +1096,29 @@ export const projectScenarioWithGEFeedback = (
 		const macroState = macroPath[y - 1]!;
 		let freed = 0;
 		let required = 0;
+		let psnbShift = 0;
+		let debtInterestGbp = 0;
+		let debtStockDeltaGbp = 0;
+		let debtGdpDeltaPp = 0;
 		for (const ev of result.lines) {
 			const dyn = evaluateLineDynamic(ev);
 			let baseDelta = dyn.dynamicDelta;
 			// First apply the same Scope A+B per-year scaling that
 			// projectScenarioOverYears uses, then layer Scope C feedback on top.
 			if (ev.line.type === "borrow") {
-				// Borrow handled inside applyGEFeedback (replaces the static yield).
-				baseDelta = ev.line.magnitude;
+				const borrowPath = projectBorrowingPath(ev.line.magnitude, years, {
+					nominalGrowth: a.nominalGrowth,
+					bankRate: a.bankRate,
+					inflation: a.inflation,
+					yieldCurveShift: macroState.giltYieldDeviationPp / 100,
+					cpiDeviationPp: macroState.cpiDeviationPp,
+				});
+				const row = borrowPath[y - 1]!;
+				baseDelta = row.netFundingGbp;
+				psnbShift += row.psnbShiftGbp;
+				debtInterestGbp += row.interestCostGbp;
+				debtStockDeltaGbp += row.debtStockDeltaGbp;
+				debtGdpDeltaPp += row.debtGdpDeltaPp;
 			} else if (ev.line.type === "tax") {
 				const lever = getTaxLever(ev.line.leverId);
 				if (lever.unit === "yr") {
@@ -1116,11 +1148,24 @@ export const projectScenarioWithGEFeedback = (
 				baseDelta = secondRoundDelta(baseDelta, multiplier, y);
 			}
 
-			const geAdjusted = applyGEFeedback(ev.line, baseDelta, macroState, y, a);
+			const geAdjusted =
+				ev.line.type === "borrow"
+					? baseDelta
+					: applyGEFeedback(ev.line, baseDelta, macroState, y, a);
+			if (ev.line.type !== "borrow") psnbShift += geAdjusted;
 			if (geAdjusted > 0) freed += geAdjusted;
 			if (geAdjusted < 0) required += Math.abs(geAdjusted);
 		}
-		withFeedback.push({ year: y, freed, required, net: freed - required });
+		withFeedback.push({
+			year: y,
+			freed,
+			required,
+			net: freed - required,
+			psnbShift,
+			debtInterestGbp,
+			debtStockDeltaGbp,
+			debtGdpDeltaPp,
+		});
 	}
 
 	return { noFeedback, withFeedback, macroPath };
@@ -1164,9 +1209,11 @@ export const projectScenarioBandsByYear = (
 			for (const { line, sampledDelta } of sampled) {
 				let delta = sampledDelta;
 				if (line.type === "borrow") {
-					const principal = line.magnitude;
-					const interestEachYear = principal * a.giltYield;
-					delta = principal - interestEachYear * y;
+					delta = projectBorrowingPath(line.magnitude, years, {
+						nominalGrowth: a.nominalGrowth,
+						bankRate: a.bankRate,
+						inflation: a.inflation,
+					})[y - 1]!.netFundingGbp;
 				} else if (line.type === "tax") {
 					const lever = getTaxLever(line.leverId);
 					if (lever.unit === "yr") {
@@ -1207,6 +1254,10 @@ export const projectScenarioOverYears = (
 	for (let y = 1; y <= years; y++) {
 		let freed = 0;
 		let required = 0;
+		let psnbShift = 0;
+		let debtInterestGbp = 0;
+		let debtStockDeltaGbp = 0;
+		let debtGdpDeltaPp = 0;
 		for (const ev of result.lines) {
 			// Overridden lines have an implementation-lag ramp baked into
 			// applyOverridePenalty. Re-evaluate the line for year y so the
@@ -1218,12 +1269,16 @@ export const projectScenarioOverYears = (
 			const dyn = evaluateLineDynamic(yearEv);
 			let delta = dyn.dynamicDelta;
 			if (ev.line.type === "borrow") {
-				// Borrow line: principal is the same every year; debt-servicing
-				// cost accumulates. Year y net effect = principal − cumulative
-				// interest over y years (interest is a cost, reducing the freed £).
-				const principal = ev.line.magnitude;
-				const interestEachYear = principal * a.giltYield;
-				delta = principal - interestEachYear * y;
+				const borrowing = projectBorrowingPath(ev.line.magnitude, years, {
+					nominalGrowth: a.nominalGrowth,
+					bankRate: a.bankRate,
+					inflation: a.inflation,
+				})[y - 1]!;
+				delta = borrowing.netFundingGbp;
+				psnbShift += borrowing.psnbShiftGbp;
+				debtInterestGbp += borrowing.interestCostGbp;
+				debtStockDeltaGbp += borrowing.debtStockDeltaGbp;
+				debtGdpDeltaPp += borrowing.debtGdpDeltaPp;
 			} else if (ev.line.type === "tax") {
 				const lever = getTaxLever(ev.line.leverId);
 				if (lever.unit === "yr") {
@@ -1252,6 +1307,7 @@ export const projectScenarioOverYears = (
 					ev.line.leverId,
 				);
 				delta = secondRoundDelta(delta, multiplier, y);
+				psnbShift += delta;
 			} else if (ev.line.type === "programme") {
 				// Programme line: scaled with nominal growth (departmental spend
 				// grows with the economy in real-trend terms).
@@ -1264,11 +1320,21 @@ export const projectScenarioOverYears = (
 					ev.line.leverId,
 				);
 				delta = secondRoundDelta(delta, multiplier, y);
+				psnbShift += delta;
 			}
 			if (delta > 0) freed += delta;
 			if (delta < 0) required += Math.abs(delta);
 		}
-		projections.push({ year: y, freed, required, net: freed - required });
+		projections.push({
+			year: y,
+			freed,
+			required,
+			net: freed - required,
+			psnbShift,
+			debtInterestGbp,
+			debtStockDeltaGbp,
+			debtGdpDeltaPp,
+		});
 	}
 	return projections;
 };

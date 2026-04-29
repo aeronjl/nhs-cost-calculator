@@ -8,11 +8,16 @@
 //
 // Methodology mirrors existing household-impact.ts: direct calculation for
 // IT/NICs/VAT/dividend/state pension/UC/child benefit; decile fallback for
-// public-good levers (NHS, defence). The synthetic population gives us
-// within-decile heterogeneity that the 9-archetype catalog can't.
+// public-good levers (NHS, defence) and future debt service. The synthetic
+// population gives us within-decile heterogeneity that the 9-archetype
+// catalog can't.
 
 import { getProgramme } from "@/data/levers/uk-spending";
 import { getTaxLever } from "@/data/levers/tax-rates";
+import {
+	FUTURE_DEBT_SERVICE_INCIDENCE,
+	projectBorrowingPath,
+} from "@/lib/borrowing";
 import {
 	type LineEvaluation,
 	type ScenarioResult,
@@ -64,7 +69,15 @@ const computeLineImpactForSynth = (
 	const { line, deltaGbp } = evaluation;
 
 	if (line.type === "borrow") {
-		return { leverId: "", method: "skipped", impactGbp: 0 };
+		const year5 = projectBorrowingPath(line.magnitude, 5)[4];
+		const decileShare = FUTURE_DEBT_SERVICE_INCIDENCE[decile - 1] ?? 0.1;
+		return {
+			leverId: "",
+			method: "decile",
+			impactGbp:
+				((year5?.interestCostGbp ?? 0) * decileShare) /
+				HOUSEHOLDS_PER_DECILE_REAL,
+		};
 	}
 
 	if (line.type === "programme") {

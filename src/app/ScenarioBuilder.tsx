@@ -319,10 +319,10 @@ export default function ScenarioBuilder({
 				/>
 
 				<p className="text-xs text-muted-foreground text-center pt-2 border-t">
-					Each line is first-order. Tax responses are not modelled at large
-					changes; programme cuttability constraints are flagged in each line's
-					methodology popover; borrowing magnitude doesn't include interest
-					compounding over time.
+					Each line is modelled through the scenario engine. Tax levers use
+					marginal-rate behavioural response; programme cuttability constraints
+					are flagged in each methodology popover; borrowing is financing plus
+					debt-service over time.
 				</p>
 			</CardContent>
 			<ScenarioDiffModal

@@ -270,4 +270,21 @@ describe("evaluateMicrosim — basic-rate IT raise", () => {
 			expect(pensCouple.mean).toBeLessThan(workingCouple.mean);
 		}
 	});
+
+	it("allocates borrowing as future debt-service incidence", () => {
+		const pop = generatePopulation(500, 42);
+		const result = evaluateScenario([
+			{
+				id: "b",
+				type: "borrow",
+				leverId: "",
+				magnitude: 10_000_000_000,
+			},
+		]);
+		const { agg, perHousehold } = evaluateMicrosim(pop, result);
+		expect(agg.skippedLines).toBe(0);
+		expect(agg.losers).toBeGreaterThan(0);
+		expect(agg.decileMean[9]).toBeGreaterThan(agg.decileMean[0]!);
+		expect(perHousehold[0]?.perLine[0]?.method).toBe("decile");
+	});
 });

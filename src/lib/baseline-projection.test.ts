@@ -48,6 +48,25 @@ const yp = (year: number, net: number): YearProjection => ({
 	net,
 	freed: net > 0 ? net : 0,
 	required: net < 0 ? Math.abs(net) : 0,
+	psnbShift: net,
+	debtInterestGbp: 0,
+	debtStockDeltaGbp: 0,
+	debtGdpDeltaPp: 0,
+});
+
+const borrowYp = (
+	year: number,
+	net: number,
+	psnbShift: number,
+): YearProjection => ({
+	year,
+	net,
+	freed: net > 0 ? net : 0,
+	required: net < 0 ? Math.abs(net) : 0,
+	psnbShift,
+	debtInterestGbp: Math.max(0, -net),
+	debtStockDeltaGbp: 10_000_000_000,
+	debtGdpDeltaPp: 0.4,
 });
 
 describe("projectAgainstBaseline", () => {
@@ -65,6 +84,20 @@ describe("projectAgainstBaseline", () => {
 		const cmp = projectAgainstBaseline(proj, TEST_BASELINE);
 		expect(cmp.years[0]?.adjustedPsnb).toBe(120_000_000_000);
 		expect(cmp.years[2]?.adjustedPsnb).toBe(100_000_000_000);
+	});
+
+	it("borrowing can provide cash while worsening PSNB", () => {
+		const proj = [
+			borrowYp(1, 9_500_000_000, -10_500_000_000),
+			borrowYp(2, -500_000_000, -500_000_000),
+			borrowYp(3, -500_000_000, -500_000_000),
+		];
+		const cmp = projectAgainstBaseline(proj, TEST_BASELINE);
+		expect(cmp.years[0]?.scenarioNet).toBe(9_500_000_000);
+		expect(cmp.years[0]?.psnbShift).toBe(-10_500_000_000);
+		expect(cmp.years[0]?.adjustedPsnb).toBe(110_500_000_000);
+		expect(cmp.years[0]?.adjustedDebtGdp).toBeCloseTo(95.42);
+		expect(cmp.years[2]?.debtStockDeltaGbp).toBe(11_500_000_000);
 	});
 
 	it("identifies the fiscal-rule year and adjusts headroom", () => {

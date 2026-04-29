@@ -7,11 +7,15 @@
 // can show "vs OBR baseline" framing alongside its raw scenario figures.
 //
 // Sign convention from `evaluateScenarioOverYears`:
-//   projection[i].net > 0 = revenue freed (taxes raised, programmes cut, etc.)
-//   projection[i].net < 0 = revenue required (taxes cut, programmes raised)
+//   projection[i].net > 0 = fiscal capacity in that year
+//   projection[i].psnbShift > 0 = PSNB improves
 //
-// Baseline shift: revenue freed REDUCES PSNB; revenue required INCREASES PSNB.
-// So `adjustedPsnb = baselinePsnb - projection.net`.
+// Borrowing is the important exception: it can provide year-1 cash (`net`)
+// while worsening PSNB (`psnbShift`) because debt issuance is financing, not
+// revenue.
+//
+// Baseline shift: positive psnbShift REDUCES PSNB; negative psnbShift
+// INCREASES PSNB. So `adjustedPsnb = baselinePsnb - projection.psnbShift`.
 
 import type {
 	BaselineYear,
@@ -30,6 +34,9 @@ export interface BaselineRelativeYear {
 	baselinePsnbPctGdp: number;
 	adjustedPsnbPctGdp: number;
 	baselineDebtGdp: number;
+	// Cumulative scenario effect on debt stock relative to baseline.
+	debtStockDeltaGbp: number;
+	adjustedDebtGdp: number;
 	gdp: number;
 }
 
@@ -49,23 +56,33 @@ export const projectAgainstBaseline = (
 	baseline: OBRBaseline = OBR_BASELINE,
 ): BaselineComparison => {
 	const years: BaselineRelativeYear[] = [];
+	let cumulativeDebtStockDeltaGbp = 0;
 	for (let i = 0; i < projection.length; i++) {
 		const proj = projection[i];
 		const baseYear: BaselineYear | undefined = baseline.years[i];
 		if (!proj || !baseYear) continue;
-		const adjustedPsnb = baseYear.psnb - proj.net;
+		const psnbShift = proj.psnbShift ?? proj.net;
+		const adjustedPsnb = baseYear.psnb - psnbShift;
 		const adjustedPsnbPctGdp =
 			baseYear.gdp > 0 ? (adjustedPsnb / baseYear.gdp) * 100 : 0;
+		cumulativeDebtStockDeltaGbp -= psnbShift;
+		const adjustedDebtGdp =
+			baseYear.psndPctGdp +
+			(baseYear.gdp > 0
+				? (cumulativeDebtStockDeltaGbp / baseYear.gdp) * 100
+				: 0);
 		years.push({
 			year: i + 1,
 			fiscalYear: baseYear.fiscalYear,
 			baselinePsnb: baseYear.psnb,
 			scenarioNet: proj.net,
 			adjustedPsnb,
-			psnbShift: proj.net,
+			psnbShift,
 			baselinePsnbPctGdp: baseYear.psnbPctGdp,
 			adjustedPsnbPctGdp,
 			baselineDebtGdp: baseYear.psndPctGdp,
+			debtStockDeltaGbp: cumulativeDebtStockDeltaGbp,
+			adjustedDebtGdp,
 			gdp: baseYear.gdp,
 		});
 	}

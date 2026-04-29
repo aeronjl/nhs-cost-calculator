@@ -42,6 +42,11 @@ const formatBn = (n: number): string => {
 const formatPct = (n: number, digits = 0): string =>
 	`${Math.round(n * 100)}%`;
 
+const formatDelta = (n: number): string => {
+	const sign = n >= 0 ? "+" : "−";
+	return `${sign}${formatBn(Math.abs(n))}`;
+};
+
 export function TopZone({
 	result,
 	dynamic,
@@ -70,6 +75,9 @@ export function TopZone({
 	const distrSignificant =
 		distribution.modelledLines > 0 &&
 		(Math.abs(bottomPerHh) > 1 || Math.abs(topPerHh) > 1);
+	const psnbDiverges =
+		year1Projection &&
+		Math.abs(year1Projection.psnbShift - year1Projection.net) > 1_000_000;
 
 	return (
 		<div className="space-y-3">
@@ -93,6 +101,11 @@ export function TopZone({
 					<div className="text-[10px] text-muted-foreground">
 						after marginal-rate response: £
 						{Math.round(dynamic.dynamicNet).toLocaleString()}
+					</div>
+				)}
+				{psnbDiverges && year1Projection && (
+					<div className="text-[10px] text-muted-foreground">
+						PSNB shift: {formatDelta(year1Projection.psnbShift)}
 					</div>
 				)}
 				{year5Projection && year1Projection && (

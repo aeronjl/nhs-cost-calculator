@@ -30,6 +30,10 @@ import type {
 	LineEvaluation,
 	ScenarioResult,
 } from "./scenario";
+import {
+	FUTURE_DEBT_SERVICE_INCIDENCE,
+	projectBorrowingPath,
+} from "./borrowing";
 
 // How much of a household's income falls within [lower, upper). Used to
 // compute exposure to each tax band.
@@ -43,7 +47,6 @@ const ART = 125_140;
 const NIC_PRIMARY = 12_570;
 const NIC_UEL = 50_270;
 const VAT_BASE_FRAC = 1 / 1.2; // share of price that's NOT VAT (at 20%)
-
 export interface HouseholdLineImpact {
 	leverId: string;
 	type: "tax" | "programme" | "borrow";
@@ -72,16 +75,21 @@ const computeLineImpact = (
 ): HouseholdLineImpact => {
 	const { line, deltaGbp, description } = evaluation;
 
-	// Borrow lines: no direct household impact in the short run. Long-run
-	// debt-servicing cost is allocated by gilt-holding distribution (concentrated
-	// top decile + pension funds), but for simplicity we skip per-household.
+	// Borrow lines: no immediate household tax bill, but debt service lands on
+	// future taxpayers. Allocate year-5 annual interest using a broad tax-base
+	// incidence vector: slightly progressive, but not as top-heavy as asset taxes.
 	if (line.type === "borrow") {
+		const year5 = projectBorrowingPath(line.magnitude, 5)[4];
+		const decileShare =
+			FUTURE_DEBT_SERVICE_INCIDENCE[household.decile - 1] ?? 0.1;
 		return {
 			leverId: "",
 			type: "borrow",
 			description,
-			impactGbp: 0,
-			method: "skipped",
+			impactGbp:
+				((year5?.interestCostGbp ?? 0) * decileShare) /
+				HOUSEHOLDS_PER_DECILE,
+			method: "decile",
 		};
 	}
 

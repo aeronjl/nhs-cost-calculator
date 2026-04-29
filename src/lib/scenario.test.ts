@@ -499,14 +499,18 @@ describe("evaluateLineDistribution", () => {
 		magnitude,
 	});
 
-	it("returns null for borrow lines (no incidence)", () => {
+	it("distributes borrow lines as future debt-service incidence", () => {
 		const r = evaluateLine({
 			id: "x",
 			type: "borrow",
 			leverId: "",
 			magnitude: 10_000_000_000,
 		});
-		expect(evaluateLineDistribution(r)).toBeNull();
+		const dist = evaluateLineDistribution(r);
+		expect(dist).not.toBeNull();
+		expect(dist).toHaveLength(10);
+		expect(dist!.every((v) => v > 0)).toBe(true);
+		expect(dist![9]).toBeGreaterThan(dist![0]!);
 	});
 
 	it("returns null for tax-other (no incidence vector populated)", () => {
@@ -577,10 +581,13 @@ describe("evaluateScenarioDistribution", () => {
 			},
 		]);
 		const sd = evaluateScenarioDistribution(result);
-		expect(sd.modelledLines).toBe(1);
+		expect(sd.modelledLines).toBe(2);
 		expect(sd.totalLines).toBe(3);
-		// modelledDelta is £6bn (just the basic-rate IT line)
-		expect(sd.modelledDelta).toBeCloseTo(6_000_000_000, -3);
+		// modelledDelta includes the basic-rate IT line plus year-5 borrow
+		// debt service. tax-other remains unallocated.
+		expect(sd.modelledDelta).toBeGreaterThan(6_000_000_000);
+		expect(sd.modelledDelta).toBeLessThan(7_000_000_000);
+		expect(sd.totalDelta - sd.modelledDelta).toBeCloseTo(2_000_000_000, -3);
 	});
 });
 
@@ -695,7 +702,7 @@ describe("projectScenarioOverYears", () => {
 		);
 	});
 
-	it("borrow line: net erodes as cumulative interest accumulates", () => {
+	it("borrow line: year-1 cash turns into ongoing debt-service drag", () => {
 		const result = evaluateScenario([
 			{
 				id: "b",
@@ -705,10 +712,13 @@ describe("projectScenarioOverYears", () => {
 			},
 		]);
 		const proj = projectScenarioOverYears(result, 5);
-		// Year 1: £10bn − £450m interest = £9.55bn
-		// Year 5: £10bn − £450m × 5 = £7.75bn
-		expect(proj[0]?.net).toBeCloseTo(9_550_000_000);
-		expect(proj[4]?.net).toBeCloseTo(7_750_000_000);
+		// Borrowing supplies cash only in year 1. After that it is an
+		// interest-cost drag, while PSNB worsens from issuance + debt service.
+		expect(proj[0]?.net).toBeGreaterThan(9_000_000_000);
+		expect(proj[1]?.net).toBeLessThan(0);
+		expect(proj[4]?.net).toBeLessThan(0);
+		expect(proj[0]?.psnbShift).toBeLessThan(-10_000_000_000);
+		expect(proj[4]?.debtStockDeltaGbp).toBeGreaterThan(10_000_000_000);
 	});
 
 	it("freeze line: yield ramps to year-N target then stays (with macro feedback)", () => {

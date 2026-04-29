@@ -4,6 +4,7 @@ import {
 	getProgramme,
 } from "@/data/levers/uk-spending";
 import { BORROWING } from "@/data/levers/borrowing";
+import { projectBorrowingPath } from "@/lib/borrowing";
 
 // A "trade-off allocation" partitions a target funding amount across three
 // levers (tax, borrow, cut). State is held in £ rather than fractions so we
@@ -98,8 +99,9 @@ export interface BorrowImpact {
 }
 
 export function describeBorrow(amount: number): BorrowImpact {
+	const year1 = projectBorrowingPath(amount, 1)[0];
 	return {
-		annualInterest: amount * BORROWING.thirtyYearGiltYield,
+		annualInterest: year1?.interestCostGbp ?? amount * BORROWING.thirtyYearGiltYield,
 		debtGdpDelta: (amount / BORROWING.ukGdp) * 100,
 	};
 }

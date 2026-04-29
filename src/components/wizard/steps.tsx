@@ -1189,19 +1189,19 @@ const BORROW_CHOICES: BorrowChoice[] = [
 		title: "Borrow £20bn",
 		subtitle: "Plug the gap with debt issuance",
 		context:
-			"Debt-servicing cost ~£900m/yr at current 4.5% gilt yield. Compounds over 5 years.",
+			"Year-1 financing; debt interest then follows the marginal gilt portfolio and risk premium.",
 		magnitude: 20_000_000_000,
 	},
 	{
 		title: "Borrow £10bn",
 		subtitle: "Smaller debt-funded plug",
-		context: "Debt-servicing ~£450m/yr.",
+		context: "Supplies cash up front, then worsens PSNB through interest costs.",
 		magnitude: 10_000_000_000,
 	},
 	{
 		title: "Repay £5bn of debt",
 		subtitle: "Reduce gilt issuance",
-		context: "Frees ~£225m/yr in future debt-servicing costs.",
+		context: "Uses cash now, improves PSNB and saves debt interest later.",
 		magnitude: -5_000_000_000,
 	},
 ];
