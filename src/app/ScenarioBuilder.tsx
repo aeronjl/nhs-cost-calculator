@@ -10,6 +10,7 @@ import { ComparisonsAffordedList } from "@/components/ui/comparisons-afforded-li
 import { MethodologyPopover } from "@/components/ui/methodology-popover";
 import { cn } from "@/lib/utils";
 import type { ResolvedComparison } from "@/data/comparisons";
+import { BORROWING_STRATEGIES } from "@/data/levers/borrowing";
 import { TAX_LEVERS } from "@/data/levers/tax-rates";
 import { UK_SPENDING_PROGRAMMES } from "@/data/levers/uk-spending";
 import { comparisonsCovered } from "@/lib/counterfactual";
@@ -561,6 +562,23 @@ function BorrowLineControls({
 				aria-label="Billions to borrow"
 			/>
 			<span className="text-xs text-muted-foreground">bn</span>
+			<select
+				value={line.borrowingStrategyId ?? "dmo-remit"}
+				onChange={(e) =>
+					onUpdate({
+						borrowingStrategyId: e.target
+							.value as ScenarioLine["borrowingStrategyId"],
+					})
+				}
+				className="rounded border border-input bg-background px-2 py-1 text-sm"
+				aria-label="Borrowing financing strategy"
+			>
+				{BORROWING_STRATEGIES.map((strategy) => (
+					<option key={strategy.id} value={strategy.id}>
+						{strategy.label}
+					</option>
+				))}
+			</select>
 		</>
 	);
 }

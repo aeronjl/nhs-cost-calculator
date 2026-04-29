@@ -79,7 +79,9 @@ const computeLineImpact = (
 	// future taxpayers. Allocate year-5 annual interest using a broad tax-base
 	// incidence vector: slightly progressive, but not as top-heavy as asset taxes.
 	if (line.type === "borrow") {
-		const year5 = projectBorrowingPath(line.magnitude, 5)[4];
+		const year5 = projectBorrowingPath(line.magnitude, 5, {
+			strategyId: line.borrowingStrategyId,
+		})[4];
 		const decileShare =
 			FUTURE_DEBT_SERVICE_INCIDENCE[household.decile - 1] ?? 0.1;
 		return {

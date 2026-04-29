@@ -31,8 +31,19 @@ const formatBn = (n: number): string => {
 
 const formatPct = (n: number): string => `${n.toFixed(1)}%`;
 
+const formatSignedPp = (n: number): string => {
+	const sign = n > 0 ? "+" : n < 0 ? "−" : "";
+	return `${sign}${Math.abs(n).toFixed(2)}pp`;
+};
+
 export function BaselineComparisonPanel({ comparison }: Props) {
-	const { years, ruleYear, adjustedStabilityHeadroom, baseline } = comparison;
+	const {
+		years,
+		ruleYear,
+		adjustedStabilityHeadroom,
+		baseline,
+		diagnostics,
+	} = comparison;
 	if (years.length === 0) return null;
 
 	const lastYear = years[years.length - 1]!;
@@ -115,6 +126,40 @@ export function BaselineComparisonPanel({ comparison }: Props) {
 						</div>
 					</div>
 				)}
+
+				<div className="border-t pt-2">
+					<div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">
+						Fiscal reaction risk
+					</div>
+					<div className="flex items-baseline justify-between gap-2 text-sm">
+						<span
+							className={cn(
+								"font-semibold uppercase tracking-wide text-[11px]",
+								diagnostics.riskRating === "breach"
+									? "text-red-700"
+									: diagnostics.riskRating === "tight"
+										? "text-amber-700"
+										: diagnostics.riskRating === "watch"
+											? "text-yellow-700"
+											: "text-blue-700",
+							)}
+						>
+							{diagnostics.riskRating}
+						</span>
+						<span className="text-[10px] text-muted-foreground tabular-nums">
+							Debt proxy {formatSignedPp(diagnostics.debtProxyShiftPpAtHorizon)}
+						</span>
+					</div>
+					{diagnostics.policyReactionGbp > 0 && (
+						<div className="text-[10px] text-amber-700 mt-0.5">
+							Implied consolidation need:{" "}
+							{formatBn(diagnostics.policyReactionGbp)}
+						</div>
+					)}
+					<div className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
+						{diagnostics.note}
+					</div>
+				</div>
 			</div>
 
 			{meaningfulShift && (

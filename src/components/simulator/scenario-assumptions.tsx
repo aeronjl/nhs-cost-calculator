@@ -1,9 +1,12 @@
 "use client";
 
 import { MethodologyPopover } from "@/components/ui/methodology-popover";
+import { getBorrowingStrategy } from "@/data/levers/borrowing";
 import { getTaxLever } from "@/data/levers/tax-rates";
 import {
+	projectBorrowingFan,
 	projectBorrowingPath,
+	projectBorrowingStrategyCases,
 	projectBorrowingStressCases,
 } from "@/lib/borrowing";
 import {
@@ -69,9 +72,30 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 				)
 			: null;
 	const borrowingSummary =
-		line.type === "borrow" ? projectBorrowingPath(line.magnitude, 5) : null;
+		line.type === "borrow"
+			? projectBorrowingPath(line.magnitude, 5, {
+					strategyId: line.borrowingStrategyId,
+				})
+			: null;
 	const borrowingStress =
-		line.type === "borrow" ? projectBorrowingStressCases(line.magnitude, 5) : null;
+		line.type === "borrow"
+			? projectBorrowingStressCases(line.magnitude, 5, {
+					strategyId: line.borrowingStrategyId,
+				})
+			: null;
+	const borrowingStrategies =
+		line.type === "borrow"
+			? projectBorrowingStrategyCases(line.magnitude, 5)
+			: null;
+	const borrowingFan =
+		line.type === "borrow"
+			? projectBorrowingFan(
+					line.magnitude,
+					5,
+					{ strategyId: line.borrowingStrategyId },
+					500,
+				)
+			: null;
 	const adjustmentPct = Math.round(dynamic.behaviouralAdjustmentFraction * 100);
 	const adjustmentSignificant = dynamic.behaviouralAdjustmentFraction > 0.05;
 	const outputSignificant = Math.abs(dynamic.outputEffectGbp) > 1_000_000;
@@ -142,8 +166,11 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 				<MethodologyPopover methodology={methodology} label="full methodology">
 					<BehaviouralModelBlock summary={modelSummary} />
 					<BorrowingModelBlock
+						strategyId={line.borrowingStrategyId}
 						path={borrowingSummary}
 						stress={borrowingStress}
+						strategyCases={borrowingStrategies}
+						fan={borrowingFan}
 					/>
 				</MethodologyPopover>
 			</div>
@@ -190,21 +217,35 @@ function BehaviouralModelBlock({
 }
 
 function BorrowingModelBlock({
+	strategyId,
 	path,
 	stress,
+	strategyCases,
+	fan,
 }: {
+	strategyId: Parameters<typeof getBorrowingStrategy>[0];
 	path: ReturnType<typeof projectBorrowingPath> | null;
 	stress: ReturnType<typeof projectBorrowingStressCases> | null;
+	strategyCases: ReturnType<typeof projectBorrowingStrategyCases> | null;
+	fan: ReturnType<typeof projectBorrowingFan> | null;
 }) {
 	if (!path || path.length === 0) return null;
 	const year1 = path[0]!;
 	const yearN = path[path.length - 1]!;
+	const strategy = getBorrowingStrategy(strategyId);
+	const fanYearN = fan?.at(-1);
 	return (
 		<div>
 			<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
 				Debt financing model
 			</div>
 			<dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs">
+				<div className="contents">
+					<dt className="text-muted-foreground">Financing strategy</dt>
+					<dd className="tabular-nums text-right font-medium">
+						{strategy.label}
+					</dd>
+				</div>
 				<div className="contents">
 					<dt className="text-muted-foreground">Year-1 cash</dt>
 					<dd className="tabular-nums text-right font-medium">
@@ -290,6 +331,43 @@ function BorrowingModelBlock({
 							);
 						})}
 					</dl>
+				</div>
+			)}
+			{strategyCases && (
+				<div className="mt-2 border-t pt-2">
+					<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
+						Strategy cases, year {yearN.year} interest
+					</div>
+					<dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs">
+						{strategyCases.map((item) => {
+							const finalYear = item.path.at(-1)!;
+							return (
+								<div key={item.id} className="contents">
+									<dt className="text-muted-foreground">{item.label}</dt>
+									<dd className="tabular-nums text-right font-medium">
+										{formatSignedBn(-finalYear.interestCostGbp)}
+									</dd>
+								</div>
+							);
+						})}
+					</dl>
+				</div>
+			)}
+			{fanYearN && (
+				<div className="mt-2 border-t pt-2">
+					<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
+						Stochastic rate fan, year {fanYearN.year}
+					</div>
+					<div className="text-xs text-muted-foreground leading-snug">
+						Debt-interest 90% band:{" "}
+						<span className="font-medium text-foreground">
+							{formatSignedBn(-fanYearN.interestCostBand.p95)}
+						</span>{" "}
+						to{" "}
+						<span className="font-medium text-foreground">
+							{formatSignedBn(-fanYearN.interestCostBand.p5)}
+						</span>
+					</div>
 				</div>
 			)}
 			<p className="text-xs text-muted-foreground italic mt-2 leading-snug">

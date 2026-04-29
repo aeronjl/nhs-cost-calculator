@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
 	borrowingRiskPremium,
 	effectiveBorrowingRate,
+	projectBorrowingFan,
 	projectBorrowingPath,
+	projectBorrowingStrategyCases,
 	projectBorrowingStressCases,
 } from "./borrowing";
 
@@ -74,5 +76,30 @@ describe("borrowing model", () => {
 		expect(credibilityFinal.interestCostGbp).toBeGreaterThan(
 			centralFinal.interestCostGbp,
 		);
+	});
+
+	it("compares financing strategies", () => {
+		const cases = projectBorrowingStrategyCases(20_000_000_000, 5);
+		expect(cases.map((c) => c.id)).toEqual([
+			"dmo-remit",
+			"short-funded",
+			"long-funded",
+			"index-linked-heavy",
+		]);
+		const short = cases.find((c) => c.id === "short-funded")!.path.at(-1)!;
+		const long = cases.find((c) => c.id === "long-funded")!.path.at(-1)!;
+		expect(short.refinancingGbp).toBeGreaterThan(long.refinancingGbp);
+	});
+
+	it("generates deterministic stochastic borrowing fan bands", () => {
+		const a = projectBorrowingFan(20_000_000_000, 5, {}, 200, 99);
+		const b = projectBorrowingFan(20_000_000_000, 5, {}, 200, 99);
+		expect(a).toEqual(b);
+		expect(a).toHaveLength(5);
+		const final = a.at(-1)!;
+		expect(final.interestCostBand.p95).toBeGreaterThan(
+			final.interestCostBand.p5,
+		);
+		expect(final.centralDebtStockGbp).toBeGreaterThan(20_000_000_000);
 	});
 });

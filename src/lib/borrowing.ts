@@ -1,15 +1,31 @@
-import { BORROWING, type DebtInstrument } from "@/data/levers/borrowing";
+import {
+	BORROWING,
+	DEFAULT_BORROWING_STRATEGY_ID,
+	type BorrowingStrategyId,
+	type DebtInstrument,
+	getBorrowingStrategy,
+} from "@/data/levers/borrowing";
 import type { IncidenceVector } from "@/lib/distribution";
+import {
+	type PercentileBand,
+	computeBand,
+	sampleNormal,
+	seededRng,
+} from "@/lib/uncertainty";
 
 export interface BorrowingPathAssumptions {
 	nominalGrowth: number;
 	bankRate: number;
 	inflation: number;
+	strategyId: BorrowingStrategyId;
 	// Parallel shift from macro feedback or a stress scenario, expressed as a
 	// rate (0.01 = +100bp).
 	yieldCurveShift?: number;
 	// CPI/RPI shock for index-linked gilts, expressed in percentage points.
 	cpiDeviationPp?: number;
+	// Explicit portfolio override for research tests or user-defined strategy
+	// work. When present, it takes precedence over `strategyId`.
+	portfolio?: readonly DebtInstrument[];
 }
 
 export interface BorrowingInstrumentCost {
@@ -44,9 +60,24 @@ export interface BorrowingYear {
 }
 
 export interface BorrowingStressCase {
-	id: "central" | "rate-shock" | "inflation-shock" | "credibility-shock";
+	id:
+		| "central"
+		| "rate-shock"
+		| "inflation-shock"
+		| "credibility-shock"
+		| BorrowingStrategyId;
 	label: string;
 	path: BorrowingYear[];
+}
+
+export interface BorrowingFanYear {
+	year: number;
+	centralInterestCostGbp: number;
+	interestCostBand: PercentileBand;
+	centralDebtStockGbp: number;
+	debtStockBand: PercentileBand;
+	centralPsnbShiftGbp: number;
+	psnbShiftBand: PercentileBand;
 }
 
 // Future debt-service incidence: broad taxpayer base, mildly progressive.
@@ -60,7 +91,17 @@ const DEFAULT_ASSUMPTIONS: BorrowingPathAssumptions = {
 	nominalGrowth: 0.04,
 	bankRate: BORROWING.bankRate,
 	inflation: BORROWING.inflation,
+	strategyId: DEFAULT_BORROWING_STRATEGY_ID,
 };
+
+const resolvedAssumptions = (
+	assumptions: Partial<BorrowingPathAssumptions> = {},
+): BorrowingPathAssumptions => ({ ...DEFAULT_ASSUMPTIONS, ...assumptions });
+
+const portfolioFor = (
+	assumptions: BorrowingPathAssumptions,
+): readonly DebtInstrument[] =>
+	assumptions.portfolio ?? getBorrowingStrategy(assumptions.strategyId).portfolio;
 
 const gdpAtYear = (
 	year: number,
@@ -77,9 +118,10 @@ export const borrowingRiskPremium = (
 	openingDebtGbp: number,
 	year: number,
 	amount: number,
-	assumptions: BorrowingPathAssumptions = DEFAULT_ASSUMPTIONS,
+	assumptions: Partial<BorrowingPathAssumptions> = {},
 ): number => {
-	const debtGdpDeltaPp = (openingDebtGbp / gdpAtYear(year, assumptions)) * 100;
+	const a = resolvedAssumptions(assumptions);
+	const debtGdpDeltaPp = (openingDebtGbp / gdpAtYear(year, a)) * 100;
 	const linear =
 		debtGdpDeltaPp * BORROWING.risk.debtGdpRiskPremiumPerPp;
 	const excess = Math.max(
@@ -125,16 +167,17 @@ export const effectiveBorrowingRate = (
 	openingDebtGbp: number,
 	year: number,
 	amount: number,
-	assumptions: BorrowingPathAssumptions = DEFAULT_ASSUMPTIONS,
+	assumptions: Partial<BorrowingPathAssumptions> = {},
 ): { rate: number; riskPremium: number; instruments: BorrowingInstrumentCost[] } => {
+	const a = resolvedAssumptions(assumptions);
 	const riskPremium = borrowingRiskPremium(
 		openingDebtGbp,
 		year,
 		amount,
-		assumptions,
+		a,
 	);
-	const instruments = BORROWING.portfolio.map((instrument) => {
-		const rate = instrumentRate(instrument, riskPremium, assumptions);
+	const instruments = portfolioFor(a).map((instrument) => {
+		const rate = instrumentRate(instrument, riskPremium, a);
 		const debtSlice = openingDebtGbp * instrument.share;
 		const refinancingGbp =
 			Math.abs(debtSlice) / Math.max(0.25, instrument.maturityYears);
@@ -156,7 +199,7 @@ export const projectBorrowingPath = (
 	years: number,
 	assumptions: Partial<BorrowingPathAssumptions> = {},
 ): BorrowingYear[] => {
-	const a = { ...DEFAULT_ASSUMPTIONS, ...assumptions };
+	const a = resolvedAssumptions(assumptions);
 	const rows: BorrowingYear[] = [];
 	let openingDebtGbp = amount;
 
@@ -216,7 +259,7 @@ export const projectBorrowingStressCases = (
 	years: number,
 	assumptions: Partial<BorrowingPathAssumptions> = {},
 ): BorrowingStressCase[] => {
-	const central = { ...DEFAULT_ASSUMPTIONS, ...assumptions };
+	const central = resolvedAssumptions(assumptions);
 	return [
 		{
 			id: "central",
@@ -249,4 +292,61 @@ export const projectBorrowingStressCases = (
 			}),
 		},
 	];
+};
+
+export const projectBorrowingStrategyCases = (
+	amount: number,
+	years: number,
+	assumptions: Partial<BorrowingPathAssumptions> = {},
+): BorrowingStressCase[] =>
+	BORROWING.strategies.map((strategy) => ({
+		id: strategy.id,
+		label: strategy.label,
+		path: projectBorrowingPath(amount, years, {
+			...assumptions,
+			strategyId: strategy.id,
+		}),
+	}));
+
+export const projectBorrowingFan = (
+	amount: number,
+	years: number,
+	assumptions: Partial<BorrowingPathAssumptions> = {},
+	samples = 1000,
+	seed = 73,
+): BorrowingFanYear[] => {
+	const centralPath = projectBorrowingPath(amount, years, assumptions);
+	const rng = seededRng(seed);
+	const interestByYear: number[][] = Array.from({ length: years }, () => []);
+	const debtByYear: number[][] = Array.from({ length: years }, () => []);
+	const psnbByYear: number[][] = Array.from({ length: years }, () => []);
+
+	for (let sample = 0; sample < samples; sample++) {
+		const bankRateShock = sampleNormal(rng, { mean: 0, sd: 0.0075 });
+		const inflationShock = sampleNormal(rng, { mean: 0, sd: 0.0125 });
+		const giltShock = sampleNormal(rng, { mean: 0, sd: 0.01 });
+		const path = projectBorrowingPath(amount, years, {
+			...assumptions,
+			bankRate: Math.max(-0.005, (assumptions.bankRate ?? BORROWING.bankRate) + bankRateShock),
+			inflation: Math.max(-0.01, (assumptions.inflation ?? BORROWING.inflation) + inflationShock),
+			yieldCurveShift: (assumptions.yieldCurveShift ?? 0) + giltShock,
+			cpiDeviationPp: (assumptions.cpiDeviationPp ?? 0) + inflationShock * 100,
+		});
+		for (let i = 0; i < years; i++) {
+			const row = path[i]!;
+			interestByYear[i]!.push(row.interestCostGbp);
+			debtByYear[i]!.push(row.debtStockDeltaGbp);
+			psnbByYear[i]!.push(row.psnbShiftGbp);
+		}
+	}
+
+	return centralPath.map((row, index) => ({
+		year: row.year,
+		centralInterestCostGbp: row.interestCostGbp,
+		interestCostBand: computeBand(interestByYear[index]!),
+		centralDebtStockGbp: row.debtStockDeltaGbp,
+		debtStockBand: computeBand(debtByYear[index]!),
+		centralPsnbShiftGbp: row.psnbShiftGbp,
+		psnbShiftBand: computeBand(psnbByYear[index]!),
+	}));
 };

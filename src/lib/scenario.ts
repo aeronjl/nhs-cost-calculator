@@ -77,7 +77,11 @@ import {
 	type SpendingProgramme,
 	getProgramme,
 } from "@/data/levers/uk-spending";
-import { BORROWING } from "@/data/levers/borrowing";
+import {
+	BORROWING,
+	type BorrowingStrategyId,
+	getBorrowingStrategy,
+} from "@/data/levers/borrowing";
 import type { Methodology } from "@/lib/methodology";
 import {
 	FUTURE_DEBT_SERVICE_INCIDENCE,
@@ -95,6 +99,7 @@ export interface ScenarioLine {
 	type: LineType;
 	leverId: string; // programme id, tax id, or "" for borrow
 	magnitude: number; // % for programme, pp for tax, GBP for borrow
+	borrowingStrategyId?: BorrowingStrategyId;
 	// "Break the rules" flag: when set, the lever has been forced through
 	// despite a statutory protection or pre-introduction status. The
 	// evaluator applies a yield haircut (markets/avoidance) and a fixed
@@ -257,13 +262,17 @@ export function evaluateLine(
 	// Magnitude is current-pound input from the user; scale to era-£ when
 	// rendering historical eras so "Borrow £20bn" reads as ~£1.5bn in 1979.
 	const amount = line.magnitude * gdpScale;
+	const strategy =
+		line.type === "borrow" && line.borrowingStrategyId
+			? getBorrowingStrategy(line.borrowingStrategyId)
+			: null;
 	return {
 		line,
 		deltaGbp: amount,
 		description:
 			amount >= 0
-				? `Borrow £${(amount / 1_000_000_000).toFixed(1)}bn`
-				: `Repay £${(Math.abs(amount) / 1_000_000_000).toFixed(1)}bn of debt`,
+				? `Borrow £${(amount / 1_000_000_000).toFixed(1)}bn${strategy ? ` (${strategy.label})` : ""}`
+				: `Repay £${(Math.abs(amount) / 1_000_000_000).toFixed(1)}bn of debt${strategy ? ` (${strategy.label})` : ""}`,
 		methodology: BORROWING.methodology,
 		source: BORROWING.source,
 	};
@@ -330,7 +339,12 @@ export function serializeScenario(lines: ScenarioLine[]): string {
 		.map((line) => {
 			const code = TYPE_CODE[line.type];
 			const suffix = line.overridden ? ":o" : "";
-			if (line.type === "borrow") return `${code}:${line.magnitude}${suffix}`;
+			if (line.type === "borrow") {
+				const strategySuffix = line.borrowingStrategyId
+					? `:${line.borrowingStrategyId}`
+					: "";
+				return `${code}:${line.magnitude}${strategySuffix}${suffix}`;
+			}
 			return `${code}:${line.leverId}:${line.magnitude}${suffix}`;
 		})
 		.join(",");
@@ -354,14 +368,20 @@ export function deserializeScenario(s: string): ScenarioLine[] {
 			const overridden = parts[parts.length - 1] === "o";
 			const dataParts = overridden ? parts.slice(0, -1) : parts;
 			if (type === "borrow") {
-				if (dataParts.length !== 2) return null;
+				if (dataParts.length !== 2 && dataParts.length !== 3) return null;
 				const mag = Number(dataParts[1]);
 				if (!Number.isFinite(mag)) return null;
+				const strategyId = dataParts[2];
+				const borrowingStrategyId =
+					strategyId && getBorrowingStrategy(strategyId).id === strategyId
+						? (strategyId as BorrowingStrategyId)
+						: undefined;
 				return {
 					id: newId(),
 					type,
 					leverId: "",
 					magnitude: mag,
+					...(borrowingStrategyId && { borrowingStrategyId }),
 					...(overridden && { overridden: true }),
 				};
 			}
@@ -516,7 +536,11 @@ export interface ScenarioDistribution {
 
 const distributionDeltaForLine = (evaluation: LineEvaluation): number => {
 	if (evaluation.line.type !== "borrow") return evaluation.deltaGbp;
-	return projectBorrowingPath(evaluation.line.magnitude, 5)[4]?.interestCostGbp ?? 0;
+	return (
+		projectBorrowingPath(evaluation.line.magnitude, 5, {
+			strategyId: evaluation.line.borrowingStrategyId,
+		})[4]?.interestCostGbp ?? 0
+	);
 };
 
 export const evaluateLineDistribution = (
@@ -1110,6 +1134,7 @@ export const projectScenarioWithGEFeedback = (
 					nominalGrowth: a.nominalGrowth,
 					bankRate: a.bankRate,
 					inflation: a.inflation,
+					strategyId: ev.line.borrowingStrategyId,
 					yieldCurveShift: macroState.giltYieldDeviationPp / 100,
 					cpiDeviationPp: macroState.cpiDeviationPp,
 				});
@@ -1213,6 +1238,7 @@ export const projectScenarioBandsByYear = (
 						nominalGrowth: a.nominalGrowth,
 						bankRate: a.bankRate,
 						inflation: a.inflation,
+						strategyId: line.borrowingStrategyId,
 					})[y - 1]!.netFundingGbp;
 				} else if (line.type === "tax") {
 					const lever = getTaxLever(line.leverId);
@@ -1273,6 +1299,7 @@ export const projectScenarioOverYears = (
 					nominalGrowth: a.nominalGrowth,
 					bankRate: a.bankRate,
 					inflation: a.inflation,
+					strategyId: ev.line.borrowingStrategyId,
 				})[y - 1]!;
 				delta = borrowing.netFundingGbp;
 				psnbShift += borrowing.psnbShiftGbp;

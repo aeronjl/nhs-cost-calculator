@@ -147,6 +147,22 @@ describe("serializeScenario / deserializeScenario", () => {
 		);
 	});
 
+	it("round-trips borrowing strategy in compact URLs", () => {
+		const lines: ScenarioLine[] = [
+			{
+				id: "b",
+				type: "borrow",
+				leverId: "",
+				magnitude: 20_000_000_000,
+				borrowingStrategyId: "long-funded",
+			},
+		];
+		const s = serializeScenario(lines);
+		expect(s).toBe("b:20000000000:long-funded");
+		const back = deserializeScenario(s);
+		expect(back[0]?.borrowingStrategyId).toBe("long-funded");
+	});
+
 	it("ignores invalid lines", () => {
 		const r = deserializeScenario(
 			"p:not-a-programme:5,t:basic-rate-income-tax:1,garbage,p::5",
@@ -719,6 +735,36 @@ describe("projectScenarioOverYears", () => {
 		expect(proj[4]?.net).toBeLessThan(0);
 		expect(proj[0]?.psnbShift).toBeLessThan(-10_000_000_000);
 		expect(proj[4]?.debtStockDeltaGbp).toBeGreaterThan(10_000_000_000);
+	});
+
+	it("borrow line respects selected financing strategy", () => {
+		const short = projectScenarioOverYears(
+			evaluateScenario([
+				{
+					id: "b",
+					type: "borrow",
+					leverId: "",
+					magnitude: 20_000_000_000,
+					borrowingStrategyId: "short-funded",
+				},
+			]),
+			5,
+			{ bankRate: 0.06 },
+		);
+		const long = projectScenarioOverYears(
+			evaluateScenario([
+				{
+					id: "b",
+					type: "borrow",
+					leverId: "",
+					magnitude: 20_000_000_000,
+					borrowingStrategyId: "long-funded",
+				},
+			]),
+			5,
+			{ bankRate: 0.06 },
+		);
+		expect(short[4]!.debtInterestGbp).toBeGreaterThan(long[4]!.debtInterestGbp);
 	});
 
 	it("freeze line: yield ramps to year-N target then stays (with macro feedback)", () => {

@@ -69,7 +69,9 @@ const computeLineImpactForSynth = (
 	const { line, deltaGbp } = evaluation;
 
 	if (line.type === "borrow") {
-		const year5 = projectBorrowingPath(line.magnitude, 5)[4];
+		const year5 = projectBorrowingPath(line.magnitude, 5, {
+			strategyId: line.borrowingStrategyId,
+		})[4];
 		const decileShare = FUTURE_DEBT_SERVICE_INCIDENCE[decile - 1] ?? 0.1;
 		return {
 			leverId: "",

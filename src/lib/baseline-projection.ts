@@ -48,8 +48,80 @@ export interface BaselineComparison {
 	// Positive = scenario keeps the country within rule + leaves margin.
 	// Negative = scenario breaks the rule.
 	adjustedStabilityHeadroom: number;
+	diagnostics: FiscalRuleDiagnostics;
 	baseline: OBRBaseline;
 }
+
+export type FiscalRiskRating = "low" | "watch" | "tight" | "breach";
+
+export interface FiscalRuleDiagnostics {
+	stabilityRuleBreached: boolean;
+	consolidationRequiredGbp: number;
+	headroomBufferGbp: number;
+	debtProxyRisingAtHorizon: boolean;
+	debtProxyShiftPpAtHorizon: number;
+	policyReactionGbp: number;
+	riskRating: FiscalRiskRating;
+	note: string;
+}
+
+export const evaluateFiscalRuleDiagnostics = (
+	years: readonly BaselineRelativeYear[],
+	baseline: OBRBaseline,
+	adjustedStabilityHeadroom: number,
+): FiscalRuleDiagnostics => {
+	const ruleYear =
+		years.find((y) => y.fiscalYear === baseline.stabilityRuleAt) ??
+		years.at(-1) ??
+		null;
+	const previousYear =
+		ruleYear && ruleYear.year > 1
+			? years.find((y) => y.year === ruleYear.year - 1)
+			: null;
+	const stabilityRuleBreached = adjustedStabilityHeadroom < 0;
+	const consolidationRequiredGbp = stabilityRuleBreached
+		? Math.abs(adjustedStabilityHeadroom)
+		: 0;
+	const headroomBufferGbp = adjustedStabilityHeadroom;
+	const debtProxyRisingAtHorizon =
+		!!ruleYear &&
+		!!previousYear &&
+		ruleYear.adjustedDebtGdp > previousYear.adjustedDebtGdp;
+	const debtProxyShiftPpAtHorizon = ruleYear
+		? ruleYear.adjustedDebtGdp - ruleYear.baselineDebtGdp
+		: 0;
+	const riskRating: FiscalRiskRating = stabilityRuleBreached
+		? "breach"
+		: adjustedStabilityHeadroom < 5_000_000_000 || debtProxyRisingAtHorizon
+			? "tight"
+			: adjustedStabilityHeadroom < 15_000_000_000 ||
+					Math.abs(debtProxyShiftPpAtHorizon) > 1
+				? "watch"
+				: "low";
+	const policyReactionGbp =
+		riskRating === "breach"
+			? consolidationRequiredGbp
+			: riskRating === "tight"
+				? Math.max(0, 10_000_000_000 - adjustedStabilityHeadroom)
+				: 0;
+	const note = stabilityRuleBreached
+		? "Scenario breaches the stability-rule margin; a professional forecast would normally include offsetting tax or spending action."
+		: debtProxyRisingAtHorizon
+			? "Scenario leaves the debt proxy rising at the rule horizon, so market and policy reaction risk is elevated."
+			: adjustedStabilityHeadroom < 15_000_000_000
+				? "Scenario leaves limited headroom relative to normal forecast error."
+				: "Scenario preserves material headroom against the current fiscal-rule proxy.";
+	return {
+		stabilityRuleBreached,
+		consolidationRequiredGbp,
+		headroomBufferGbp,
+		debtProxyRisingAtHorizon,
+		debtProxyShiftPpAtHorizon,
+		policyReactionGbp,
+		riskRating,
+		note,
+	};
+};
 
 export const projectAgainstBaseline = (
 	projection: readonly YearProjection[],
@@ -92,11 +164,17 @@ export const projectAgainstBaseline = (
 	const adjustedStabilityHeadroom = ruleYear
 		? baseline.stabilityRuleHeadroom + ruleYear.psnbShift
 		: baseline.stabilityRuleHeadroom;
+	const diagnostics = evaluateFiscalRuleDiagnostics(
+		years,
+		baseline,
+		adjustedStabilityHeadroom,
+	);
 
 	return {
 		years,
 		ruleYear,
 		adjustedStabilityHeadroom,
+		diagnostics,
 		baseline,
 	};
 };
