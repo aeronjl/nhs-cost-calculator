@@ -116,6 +116,12 @@ describe("projectAgainstBaseline", () => {
 		expect(cmp.diagnostics.stabilityRuleBreached).toBe(true);
 		expect(cmp.diagnostics.consolidationRequiredGbp).toBe(5_000_000_000);
 		expect(cmp.diagnostics.riskRating).toBe("breach");
+		expect(cmp.policyReactionPath.at(-1)?.correctionGbp).toBe(
+			5_000_000_000,
+		);
+		expect(cmp.policyReactionPath.at(-1)?.correctedPsnb).toBe(
+			90_000_000_000,
+		);
 	});
 
 	it("flags thin headroom as fiscal reaction risk before formal breach", () => {
@@ -125,6 +131,7 @@ describe("projectAgainstBaseline", () => {
 		expect(cmp.diagnostics.stabilityRuleBreached).toBe(false);
 		expect(cmp.diagnostics.riskRating).toBe("tight");
 		expect(cmp.diagnostics.policyReactionGbp).toBe(8_000_000_000);
+		expect(cmp.policyReactionPath).toHaveLength(3);
 	});
 
 	it("computes adjusted PSNB as % of GDP correctly", () => {

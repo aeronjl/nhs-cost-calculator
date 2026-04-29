@@ -49,6 +49,7 @@ export interface BaselineComparison {
 	// Negative = scenario breaks the rule.
 	adjustedStabilityHeadroom: number;
 	diagnostics: FiscalRuleDiagnostics;
+	policyReactionPath: readonly PolicyReactionYear[];
 	baseline: OBRBaseline;
 }
 
@@ -63,6 +64,14 @@ export interface FiscalRuleDiagnostics {
 	policyReactionGbp: number;
 	riskRating: FiscalRiskRating;
 	note: string;
+}
+
+export interface PolicyReactionYear {
+	year: number;
+	fiscalYear: string;
+	correctionGbp: number;
+	correctedPsnb: number;
+	correctedDebtGdp: number;
 }
 
 export const evaluateFiscalRuleDiagnostics = (
@@ -123,6 +132,30 @@ export const evaluateFiscalRuleDiagnostics = (
 	};
 };
 
+export const buildPolicyReactionPath = (
+	years: readonly BaselineRelativeYear[],
+	diagnostics: FiscalRuleDiagnostics,
+): PolicyReactionYear[] => {
+	if (diagnostics.policyReactionGbp <= 0 || years.length === 0) return [];
+	const horizonYear = years.at(-1)?.year ?? years.length;
+	let cumulativeCorrectionGbp = 0;
+	return years.map((year) => {
+		const ramp =
+			horizonYear <= 1 ? 1 : Math.max(0, (year.year - 1) / (horizonYear - 1));
+		const correctionGbp = diagnostics.policyReactionGbp * ramp;
+		cumulativeCorrectionGbp += correctionGbp;
+		return {
+			year: year.year,
+			fiscalYear: year.fiscalYear,
+			correctionGbp,
+			correctedPsnb: year.adjustedPsnb - correctionGbp,
+			correctedDebtGdp:
+				year.adjustedDebtGdp -
+				(year.gdp > 0 ? (cumulativeCorrectionGbp / year.gdp) * 100 : 0),
+		};
+	});
+};
+
 export const projectAgainstBaseline = (
 	projection: readonly YearProjection[],
 	baseline: OBRBaseline = OBR_BASELINE,
@@ -169,12 +202,14 @@ export const projectAgainstBaseline = (
 		baseline,
 		adjustedStabilityHeadroom,
 	);
+	const policyReactionPath = buildPolicyReactionPath(years, diagnostics);
 
 	return {
 		years,
 		ruleYear,
 		adjustedStabilityHeadroom,
 		diagnostics,
+		policyReactionPath,
 		baseline,
 	};
 };

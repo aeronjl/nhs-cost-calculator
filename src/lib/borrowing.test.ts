@@ -3,6 +3,7 @@ import {
 	borrowingRiskPremium,
 	effectiveBorrowingRate,
 	projectBorrowingFan,
+	projectBorrowingMarketReactionPath,
 	projectBorrowingPath,
 	projectBorrowingStrategyCases,
 	projectBorrowingStressCases,
@@ -101,5 +102,17 @@ describe("borrowing model", () => {
 			final.interestCostBand.p5,
 		);
 		expect(final.centralDebtStockGbp).toBeGreaterThan(20_000_000_000);
+	});
+
+	it("adds an endogenous market premium for large borrowing packages", () => {
+		const central = projectBorrowingPath(150_000_000_000, 5);
+		const reaction = projectBorrowingMarketReactionPath(150_000_000_000, 5);
+		expect(reaction.at(-1)!.marketReactionPremium).toBeGreaterThan(0);
+		expect(reaction.at(-1)!.interestCostGbp).toBeGreaterThan(
+			central.at(-1)!.interestCostGbp,
+		);
+		expect(reaction.some((year) => year.marketReactionTrigger !== "none")).toBe(
+			true,
+		);
 	});
 });

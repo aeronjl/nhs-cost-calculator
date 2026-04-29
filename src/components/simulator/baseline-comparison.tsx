@@ -43,6 +43,7 @@ export function BaselineComparisonPanel({ comparison }: Props) {
 		adjustedStabilityHeadroom,
 		baseline,
 		diagnostics,
+		policyReactionPath,
 	} = comparison;
 	if (years.length === 0) return null;
 
@@ -159,6 +160,20 @@ export function BaselineComparisonPanel({ comparison }: Props) {
 					<div className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
 						{diagnostics.note}
 					</div>
+					{policyReactionPath.length > 0 && (
+						<div className="mt-1.5 rounded-sm bg-muted/40 px-2 py-1 text-[10px] text-muted-foreground">
+							Rule-correction path:{" "}
+							<span className="font-medium text-foreground">
+								{formatBn(policyReactionPath.at(-1)!.correctionGbp)}
+							</span>{" "}
+							annual tightening by {policyReactionPath.at(-1)!.fiscalYear},
+							leaving PSNB at{" "}
+							<span className="font-medium text-foreground">
+								{formatBn(policyReactionPath.at(-1)!.correctedPsnb)}
+							</span>
+							.
+						</div>
+					)}
 				</div>
 			</div>
 

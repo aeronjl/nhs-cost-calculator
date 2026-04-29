@@ -57,6 +57,8 @@ The model reports:
 
 Fiscal-rule diagnostics compare scenario-adjusted PSNB and debt proxy paths against the OBR baseline. If the stability-rule margin is exhausted, the model reports the implied consolidation need rather than treating the scenario as unconstrained.
 
+The rule-correction path is a stylised policy reaction. When headroom is breached or becomes very thin, the model ramps in the required annual fiscal tightening by the rule horizon and reports corrected PSNB/debt outcomes. It is not a recommendation about whether the adjustment should come from tax rises or spending cuts.
+
 ## Stress And Stochastic Cases
 
 Deterministic stress cases show:
@@ -66,6 +68,22 @@ Deterministic stress cases show:
 - +100bp gilt credibility premium.
 
 The stochastic fan samples Bank Rate, inflation, and gilt-premium shocks with a seeded Monte Carlo draw. Bands are parameter uncertainty around borrowing costs, not a complete macroeconomic scenario tree.
+
+The fan now uses correlated macro-fiscal shocks rather than independent draws. A common stress factor pushes Bank Rate, inflation, and gilt premia in the same direction while reducing nominal-growth assumptions at the margin. This is still a reduced-form covariance structure, but it avoids the unrealistic case where adverse rate, inflation, and credibility shocks are sampled as unrelated events.
+
+## Market Reaction Loop
+
+Large borrowing packages also receive an endogenous market-reaction path. The central path applies the static debt/GDP and issuance risk premium. The market-reaction path then carries forward an additional credibility premium when debt/GDP, refinancing exposure, or the size of the issuance package cross risk thresholds:
+
+```text
+reaction_premium_t =
+  0.75 * reaction_premium_(t-1)
+  + debt_gdp_pressure_t
+  + refinancing_pressure_t
+  + large_issuance_pressure_t
+```
+
+The premium is capped at 150bp. This is deliberately stylised: it represents a loss of fiscal credibility or a weaker gilt-market absorption environment, not a forecast of DMO auction tails.
 
 ## Sources
 

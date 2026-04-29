@@ -5,6 +5,7 @@ import { getBorrowingStrategy } from "@/data/levers/borrowing";
 import { getTaxLever } from "@/data/levers/tax-rates";
 import {
 	projectBorrowingFan,
+	projectBorrowingMarketReactionPath,
 	projectBorrowingPath,
 	projectBorrowingStrategyCases,
 	projectBorrowingStressCases,
@@ -96,6 +97,12 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 					500,
 				)
 			: null;
+	const borrowingMarketReaction =
+		line.type === "borrow"
+			? projectBorrowingMarketReactionPath(line.magnitude, 5, {
+					strategyId: line.borrowingStrategyId,
+				})
+			: null;
 	const adjustmentPct = Math.round(dynamic.behaviouralAdjustmentFraction * 100);
 	const adjustmentSignificant = dynamic.behaviouralAdjustmentFraction > 0.05;
 	const outputSignificant = Math.abs(dynamic.outputEffectGbp) > 1_000_000;
@@ -171,6 +178,7 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 						stress={borrowingStress}
 						strategyCases={borrowingStrategies}
 						fan={borrowingFan}
+						marketReaction={borrowingMarketReaction}
 					/>
 				</MethodologyPopover>
 			</div>
@@ -222,18 +230,21 @@ function BorrowingModelBlock({
 	stress,
 	strategyCases,
 	fan,
+	marketReaction,
 }: {
 	strategyId: Parameters<typeof getBorrowingStrategy>[0];
 	path: ReturnType<typeof projectBorrowingPath> | null;
 	stress: ReturnType<typeof projectBorrowingStressCases> | null;
 	strategyCases: ReturnType<typeof projectBorrowingStrategyCases> | null;
 	fan: ReturnType<typeof projectBorrowingFan> | null;
+	marketReaction: ReturnType<typeof projectBorrowingMarketReactionPath> | null;
 }) {
 	if (!path || path.length === 0) return null;
 	const year1 = path[0]!;
 	const yearN = path[path.length - 1]!;
 	const strategy = getBorrowingStrategy(strategyId);
 	const fanYearN = fan?.at(-1);
+	const marketYearN = marketReaction?.at(-1);
 	return (
 		<div>
 			<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
@@ -368,6 +379,29 @@ function BorrowingModelBlock({
 							{formatSignedBn(-fanYearN.interestCostBand.p5)}
 						</span>
 					</div>
+				</div>
+			)}
+			{marketYearN && marketYearN.marketReactionPremium > 0.0001 && (
+				<div className="mt-2 border-t pt-2">
+					<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
+						Market reaction path, year {marketYearN.year}
+					</div>
+					<dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs">
+						<div className="contents">
+							<dt className="text-muted-foreground">Credibility premium</dt>
+							<dd className="tabular-nums text-right font-medium">
+								{(marketYearN.marketReactionPremium * 10_000).toFixed(1)}bp
+							</dd>
+						</div>
+						<div className="contents">
+							<dt className="text-muted-foreground">Interest vs central</dt>
+							<dd className="tabular-nums text-right font-medium">
+								{formatSignedBn(
+									-(marketYearN.interestCostGbp - yearN.interestCostGbp),
+								)}
+							</dd>
+						</div>
+					</dl>
 				</div>
 			)}
 			<p className="text-xs text-muted-foreground italic mt-2 leading-snug">

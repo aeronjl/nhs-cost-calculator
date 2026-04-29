@@ -80,6 +80,11 @@ export interface BorrowingFanYear {
 	psnbShiftBand: PercentileBand;
 }
 
+export interface BorrowingMarketReactionYear extends BorrowingYear {
+	marketReactionPremium: number;
+	marketReactionTrigger: "none" | "debt-gdp" | "refinancing" | "issuance";
+}
+
 // Future debt-service incidence: broad taxpayer base, mildly progressive.
 // This is deliberately less top-heavy than wealth/capital taxes because debt
 // service is usually financed from the whole tax mix over time.
@@ -112,6 +117,35 @@ const issuancePressurePremium = (amount: number): number => {
 	if (amount <= 0) return 0;
 	const excess = Math.max(0, amount - 50_000_000_000);
 	return (excess / 100_000_000_000) * BORROWING.risk.issuancePremiumPer100bn;
+};
+
+const nextMarketReaction = (
+	previousPremium: number,
+	amount: number,
+	row: BorrowingYear,
+): { premium: number; trigger: BorrowingMarketReactionYear["marketReactionTrigger"] } => {
+	if (amount <= 0) return { premium: Math.max(0, previousPremium * 0.7), trigger: "none" };
+	const debtPressure = Math.max(0, row.debtGdpDeltaPp - 1.5) * 0.00025;
+	const refinancingPressure = Math.max(0, row.refinancingPctGdp - 0.25) * 0.00035;
+	const issuancePressure =
+		amount > BORROWING.grossFinancingRequirement * 0.15 ? 0.00035 : 0;
+	const premium = Math.min(
+		0.015,
+		previousPremium * 0.75 +
+			debtPressure +
+			refinancingPressure +
+			issuancePressure,
+	);
+	const maxPressure = Math.max(debtPressure, refinancingPressure, issuancePressure);
+	const trigger =
+		maxPressure === 0
+			? "none"
+			: maxPressure === issuancePressure
+				? "issuance"
+				: maxPressure === refinancingPressure
+					? "refinancing"
+					: "debt-gdp";
+	return { premium, trigger };
 };
 
 export const borrowingRiskPremium = (
@@ -254,6 +288,77 @@ export const projectBorrowingPath = (
 	return rows;
 };
 
+export const projectBorrowingMarketReactionPath = (
+	amount: number,
+	years: number,
+	assumptions: Partial<BorrowingPathAssumptions> = {},
+): BorrowingMarketReactionYear[] => {
+	const a = resolvedAssumptions(assumptions);
+	const rows: BorrowingMarketReactionYear[] = [];
+	let openingDebtGbp = amount;
+	let marketReactionPremium = 0;
+	let marketReactionTrigger: BorrowingMarketReactionYear["marketReactionTrigger"] =
+		"none";
+
+	for (let year = 1; year <= years; year++) {
+		const nominalGdpGbp = gdpAtYear(year, a);
+		const primaryFinancingGbp = year === 1 ? amount : 0;
+		const { rate, riskPremium, instruments } = effectiveBorrowingRate(
+			openingDebtGbp,
+			year,
+			amount,
+			{
+				...a,
+				yieldCurveShift: (a.yieldCurveShift ?? 0) + marketReactionPremium,
+			},
+		);
+		const interestCostGbp = instruments.reduce(
+			(sum, instrument) => sum + instrument.interestCostGbp,
+			0,
+		);
+		const refinancingGbp = instruments.reduce(
+			(sum, instrument) => sum + instrument.refinancingGbp,
+			0,
+		);
+		const closingDebtGbp = openingDebtGbp + interestCostGbp;
+		const debtGdpDeltaPp = (closingDebtGbp / nominalGdpGbp) * 100;
+		const psnbIncreaseGbp = primaryFinancingGbp + interestCostGbp;
+		const rMinusG = rate - a.nominalGrowth;
+		const stabilisingPrimaryBalanceGbp =
+			(closingDebtGbp * rMinusG) / (1 + a.nominalGrowth);
+		const row: BorrowingMarketReactionYear = {
+			year,
+			nominalGdpGbp,
+			primaryFinancingGbp,
+			interestCostGbp,
+			netFundingGbp: primaryFinancingGbp - interestCostGbp,
+			psnbIncreaseGbp,
+			psnbShiftGbp: -psnbIncreaseGbp,
+			openingDebtGbp,
+			closingDebtGbp,
+			debtStockDeltaGbp: closingDebtGbp,
+			debtGdpDeltaPp,
+			effectiveRate: rate,
+			riskPremium,
+			rMinusG,
+			stabilisingPrimaryBalanceGbp,
+			debtInterestPctGdp: (interestCostGbp / nominalGdpGbp) * 100,
+			refinancingPctGdp: (refinancingGbp / nominalGdpGbp) * 100,
+			refinancingGbp,
+			instruments,
+			marketReactionPremium,
+			marketReactionTrigger,
+		};
+		rows.push(row);
+		const next = nextMarketReaction(marketReactionPremium, amount, row);
+		marketReactionPremium = next.premium;
+		marketReactionTrigger = next.trigger;
+		openingDebtGbp = closingDebtGbp;
+	}
+
+	return rows;
+};
+
 export const projectBorrowingStressCases = (
 	amount: number,
 	years: number,
@@ -322,13 +427,20 @@ export const projectBorrowingFan = (
 	const psnbByYear: number[][] = Array.from({ length: years }, () => []);
 
 	for (let sample = 0; sample < samples; sample++) {
-		const bankRateShock = sampleNormal(rng, { mean: 0, sd: 0.0075 });
-		const inflationShock = sampleNormal(rng, { mean: 0, sd: 0.0125 });
-		const giltShock = sampleNormal(rng, { mean: 0, sd: 0.01 });
+		const commonShock = sampleNormal(rng, { mean: 0, sd: 1 });
+		const bankRateShock =
+			commonShock * 0.0055 + sampleNormal(rng, { mean: 0, sd: 0.0045 });
+		const inflationShock =
+			commonShock * 0.009 + sampleNormal(rng, { mean: 0, sd: 0.006 });
+		const giltShock =
+			commonShock * 0.008 + sampleNormal(rng, { mean: 0, sd: 0.0055 });
+		const growthShock =
+			commonShock * -0.004 + sampleNormal(rng, { mean: 0, sd: 0.006 });
 		const path = projectBorrowingPath(amount, years, {
 			...assumptions,
 			bankRate: Math.max(-0.005, (assumptions.bankRate ?? BORROWING.bankRate) + bankRateShock),
 			inflation: Math.max(-0.01, (assumptions.inflation ?? BORROWING.inflation) + inflationShock),
+			nominalGrowth: Math.max(0, (assumptions.nominalGrowth ?? 0.04) + growthShock),
 			yieldCurveShift: (assumptions.yieldCurveShift ?? 0) + giltShock,
 			cpiDeviationPp: (assumptions.cpiDeviationPp ?? 0) + inflationShock * 100,
 		});
