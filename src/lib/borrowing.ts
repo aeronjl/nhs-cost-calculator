@@ -88,12 +88,16 @@ export interface BorrowingStressCase {
 }
 
 export interface BorrowingStrategyFrontierCase {
-	id: BorrowingStrategyId;
+	id: BorrowingStrategyId | "optimised";
 	label: string;
 	path: BorrowingYear[];
 	cumulativeInterestCostGbp: number;
 	finalInterestCostGbp: number;
 	finalDebtStockGbp: number;
+	averageMaturityYears: number;
+	weightedBankRatePassThrough: number;
+	treasuryBillShare: number;
+	indexLinkedShare: number;
 	refinancingRiskScoreGbp: number;
 	bankRateRiskScoreGbp: number;
 	absorptionRiskScoreGbp: number;
@@ -104,6 +108,26 @@ export interface BorrowingStrategyFrontierCase {
 export interface BorrowingStrategyFrontier {
 	cases: BorrowingStrategyFrontierCase[];
 	recommended: BorrowingStrategyFrontierCase;
+}
+
+export interface BorrowingOptimiserConstraints {
+	shareStep: number;
+	minAverageMaturityYears: number;
+	maxAverageMaturityYears: number;
+	maxBankRatePassThrough: number;
+	maxTreasuryBillShare: number;
+	maxIndexLinkedShare: number;
+	minLongGiltShare: number;
+	minMediumGiltShare: number;
+}
+
+export interface BorrowingStrategyOptimisation {
+	optimum: BorrowingStrategyFrontierCase;
+	dmoRemit: BorrowingStrategyFrontierCase;
+	improvementVsDmoGbp: number;
+	searchedPortfolios: number;
+	feasiblePortfolios: number;
+	constraints: BorrowingOptimiserConstraints;
 }
 
 export interface BorrowingFanYear {
@@ -159,6 +183,16 @@ const STRATEGY_FRONTIER_REFINANCING_STRESS_RATE = 0.004;
 const STRATEGY_FRONTIER_BANK_RATE_STRESS = 0.01;
 const STRATEGY_FRONTIER_ABSORPTION_STRESS_RATE = 0.0025;
 const AUCTION_TAIL_UNCOVERED_SUPPLY_BP = 25;
+const DEFAULT_OPTIMISER_CONSTRAINTS: BorrowingOptimiserConstraints = {
+	shareStep: 0.05,
+	minAverageMaturityYears: 8,
+	maxAverageMaturityYears: 16,
+	maxBankRatePassThrough: 0.35,
+	maxTreasuryBillShare: 0.2,
+	maxIndexLinkedShare: 0.25,
+	minLongGiltShare: 0.05,
+	minMediumGiltShare: 0.2,
+};
 const APF_SUPPLY_SHARE: Record<DebtInstrument["id"], number> = {
 	"treasury-bills": 0,
 	"short-gilts": 0.2,
@@ -201,6 +235,28 @@ export const annualApfCompetingSupplyGbp = (): number =>
 
 const competingApfSupplyFor = (instrument: DebtInstrument): number =>
 	annualApfCompetingSupplyGbp() * APF_SUPPLY_SHARE[instrument.id];
+
+const portfolioWithShares = (
+	shares: Record<DebtInstrument["id"], number>,
+): readonly DebtInstrument[] =>
+	BORROWING.portfolio.map((instrument) => ({
+		...instrument,
+		share: shares[instrument.id],
+	}));
+
+const weightedAverageMaturity = (portfolio: readonly DebtInstrument[]): number =>
+	portfolio.reduce(
+		(sum, instrument) => sum + instrument.share * instrument.maturityYears,
+		0,
+	);
+
+const weightedBankRatePassThrough = (
+	portfolio: readonly DebtInstrument[],
+): number =>
+	portfolio.reduce(
+		(sum, instrument) => sum + instrument.share * instrument.bankRatePassThrough,
+		0,
+	);
 
 export const estimateMonetaryFiscalExposure = (
 	bankRateShock = 0.01,
@@ -642,65 +698,176 @@ export const projectBorrowingStrategyCases = (
 		}),
 	}));
 
+const scoreBorrowingPortfolio = (
+	id: BorrowingStrategyFrontierCase["id"],
+	label: string,
+	portfolio: readonly DebtInstrument[],
+	amount: number,
+	years: number,
+	assumptions: Partial<BorrowingPathAssumptions>,
+): BorrowingStrategyFrontierCase => {
+	const path = projectBorrowingPath(amount, years, {
+		...assumptions,
+		portfolio,
+	});
+	const finalYear = path.at(-1)!;
+	const cumulativeInterestCostGbp = path.reduce(
+		(sum, row) => sum + row.interestCostGbp,
+		0,
+	);
+	const passThrough = weightedBankRatePassThrough(portfolio);
+	const refinancingRiskScoreGbp =
+		finalYear.refinancingGbp * STRATEGY_FRONTIER_REFINANCING_STRESS_RATE;
+	const bankRateRiskScoreGbp =
+		Math.abs(finalYear.debtStockDeltaGbp) *
+		passThrough *
+		STRATEGY_FRONTIER_BANK_RATE_STRESS;
+	const absorptionRiskScoreGbp = finalYear.instruments.reduce(
+		(sum, instrument) =>
+			sum +
+			instrument.uncoveredAuctionSupplyGbp *
+				STRATEGY_FRONTIER_ABSORPTION_STRESS_RATE +
+			instrument.netMarketSupplyGbp * (instrument.auctionTailBp / 10_000),
+		0,
+	);
+	const totalRiskScoreGbp =
+		refinancingRiskScoreGbp +
+		bankRateRiskScoreGbp +
+		absorptionRiskScoreGbp;
+	return {
+		id,
+		label,
+		path,
+		cumulativeInterestCostGbp,
+		finalInterestCostGbp: finalYear.interestCostGbp,
+		finalDebtStockGbp: finalYear.debtStockDeltaGbp,
+		averageMaturityYears: weightedAverageMaturity(portfolio),
+		weightedBankRatePassThrough: passThrough,
+		treasuryBillShare:
+			portfolio.find((instrument) => instrument.id === "treasury-bills")
+				?.share ?? 0,
+		indexLinkedShare:
+			portfolio.find((instrument) => instrument.id === "index-linked-gilts")
+				?.share ?? 0,
+		refinancingRiskScoreGbp,
+		bankRateRiskScoreGbp,
+		absorptionRiskScoreGbp,
+		totalRiskScoreGbp,
+		objectiveGbp: cumulativeInterestCostGbp + totalRiskScoreGbp,
+	};
+};
+
 export const projectBorrowingStrategyFrontier = (
 	amount: number,
 	years: number,
 	assumptions: Partial<BorrowingPathAssumptions> = {},
 ): BorrowingStrategyFrontier => {
 	const cases = BORROWING.strategies.map<BorrowingStrategyFrontierCase>(
-		(strategy) => {
-			const path = projectBorrowingPath(amount, years, {
-				...assumptions,
-				strategyId: strategy.id,
-			});
-			const finalYear = path.at(-1)!;
-			const cumulativeInterestCostGbp = path.reduce(
-				(sum, row) => sum + row.interestCostGbp,
-				0,
-			);
-			const weightedBankRatePassThrough = strategy.portfolio.reduce(
-				(sum, instrument) =>
-					sum + instrument.share * instrument.bankRatePassThrough,
-				0,
-			);
-			const refinancingRiskScoreGbp =
-				finalYear.refinancingGbp * STRATEGY_FRONTIER_REFINANCING_STRESS_RATE;
-			const bankRateRiskScoreGbp =
-				Math.abs(finalYear.debtStockDeltaGbp) *
-				weightedBankRatePassThrough *
-				STRATEGY_FRONTIER_BANK_RATE_STRESS;
-			const absorptionRiskScoreGbp = finalYear.instruments.reduce(
-				(sum, instrument) =>
-					sum +
-					instrument.uncoveredAuctionSupplyGbp *
-						STRATEGY_FRONTIER_ABSORPTION_STRESS_RATE +
-					instrument.netMarketSupplyGbp *
-						(instrument.auctionTailBp / 10_000),
-				0,
-			);
-			const totalRiskScoreGbp =
-				refinancingRiskScoreGbp +
-				bankRateRiskScoreGbp +
-				absorptionRiskScoreGbp;
-			return {
-				id: strategy.id,
-				label: strategy.label,
-				path,
-				cumulativeInterestCostGbp,
-				finalInterestCostGbp: finalYear.interestCostGbp,
-				finalDebtStockGbp: finalYear.debtStockDeltaGbp,
-				refinancingRiskScoreGbp,
-				bankRateRiskScoreGbp,
-				absorptionRiskScoreGbp,
-				totalRiskScoreGbp,
-				objectiveGbp: cumulativeInterestCostGbp + totalRiskScoreGbp,
-			};
-		},
+		(strategy) =>
+			scoreBorrowingPortfolio(
+				strategy.id,
+				strategy.label,
+				strategy.portfolio,
+				amount,
+				years,
+				assumptions,
+			),
 	);
 	const recommended = cases.reduce((best, item) =>
 		item.objectiveGbp < best.objectiveGbp ? item : best,
 	);
 	return { cases, recommended };
+};
+
+const optimiserConstraintSatisfied = (
+	portfolio: readonly DebtInstrument[],
+	constraints: BorrowingOptimiserConstraints,
+): boolean => {
+	const share = (id: DebtInstrument["id"]) =>
+		portfolio.find((instrument) => instrument.id === id)?.share ?? 0;
+	const averageMaturityYears = weightedAverageMaturity(portfolio);
+	return (
+		averageMaturityYears >= constraints.minAverageMaturityYears &&
+		averageMaturityYears <= constraints.maxAverageMaturityYears &&
+		weightedBankRatePassThrough(portfolio) <=
+			constraints.maxBankRatePassThrough &&
+		share("treasury-bills") <= constraints.maxTreasuryBillShare &&
+		share("index-linked-gilts") <= constraints.maxIndexLinkedShare &&
+		share("long-gilts") >= constraints.minLongGiltShare &&
+		share("medium-gilts") >= constraints.minMediumGiltShare
+	);
+};
+
+export const optimiseBorrowingStrategy = (
+	amount: number,
+	years: number,
+	assumptions: Partial<BorrowingPathAssumptions> = {},
+	constraints: Partial<BorrowingOptimiserConstraints> = {},
+): BorrowingStrategyOptimisation => {
+	const resolvedConstraints = {
+		...DEFAULT_OPTIMISER_CONSTRAINTS,
+		...constraints,
+	};
+	const units = Math.round(1 / resolvedConstraints.shareStep);
+	let searchedPortfolios = 0;
+	let feasiblePortfolios = 0;
+	let optimum: BorrowingStrategyFrontierCase | null = null;
+
+	for (let bills = 0; bills <= units; bills++) {
+		for (let short = 0; short <= units - bills; short++) {
+			for (let medium = 0; medium <= units - bills - short; medium++) {
+				for (
+					let long = 0;
+					long <= units - bills - short - medium;
+					long++
+				) {
+					const indexLinked = units - bills - short - medium - long;
+					searchedPortfolios++;
+					const shares: Record<DebtInstrument["id"], number> = {
+						"treasury-bills": bills / units,
+						"short-gilts": short / units,
+						"medium-gilts": medium / units,
+						"long-gilts": long / units,
+						"index-linked-gilts": indexLinked / units,
+					};
+					const portfolio = portfolioWithShares(shares);
+					if (!optimiserConstraintSatisfied(portfolio, resolvedConstraints)) {
+						continue;
+					}
+					feasiblePortfolios++;
+					const candidate = scoreBorrowingPortfolio(
+						"optimised",
+						"Optimised mix",
+						portfolio,
+						amount,
+						years,
+						assumptions,
+					);
+					if (!optimum || candidate.objectiveGbp < optimum.objectiveGbp) {
+						optimum = candidate;
+					}
+				}
+			}
+		}
+	}
+
+	const dmoRemit = scoreBorrowingPortfolio(
+		"dmo-remit",
+		"DMO-style blend",
+		getBorrowingStrategy("dmo-remit").portfolio,
+		amount,
+		years,
+		assumptions,
+	);
+	const best = optimum ?? dmoRemit;
+	return {
+		optimum: best,
+		dmoRemit,
+		improvementVsDmoGbp: Math.max(0, dmoRemit.objectiveGbp - best.objectiveGbp),
+		searchedPortfolios,
+		feasiblePortfolios,
+		constraints: resolvedConstraints,
+	};
 };
 
 export const projectBorrowingFan = (

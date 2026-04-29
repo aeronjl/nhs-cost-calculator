@@ -44,6 +44,18 @@ objective =
 
 Refinancing risk prices the annual rollover stock, Bank Rate risk prices the one-year shock exposure implied by each portfolio's pass-through, and absorption risk prices overloads against the market-capacity proxy. This surfaces the strategy with the lowest combined objective while still showing the user's selected strategy.
 
+## Dynamic Debt-Management Optimiser
+
+The fixed strategies are supplemented by a constrained optimiser. It searches feasible 5pp issuance mixes across Treasury bills, short gilts, medium gilts, long gilts, and index-linked gilts. Candidate portfolios must meet debt-management constraints for average maturity, Bank Rate exposure, Treasury bill share, index-linked share, and minimum medium/long-gilt issuance. Each feasible mix is then scored with the same cost-risk objective used for the strategy frontier:
+
+```text
+optimised_mix =
+  argmin(objective)
+  subject to maturity, rollover, Bank Rate, and instrument-share constraints
+```
+
+This is not a DMO auction calendar. It is a reduced-form optimiser for the marginal financing package, designed to show when the user's selected strategy is materially away from the model's least-cost-risk portfolio.
+
 ## Market Absorption
 
 Each strategy is also checked against annual DMO-style issuance buckets. The model estimates the marginal issuance allocated to each maturity/type bucket and adds a weighted APF/QT competing-supply proxy, because gilt sales or runoff from the Bank of England portfolio can absorb investor balance sheet capacity at the same time as new DMO issuance.
@@ -195,4 +207,4 @@ The update scripts validate source domains, required instruments, share totals, 
 
 ## Known Limitations
 
-The model does not yet estimate a structural MPC forecast or a complete joint macro-fiscal covariance matrix. The auction demand curves are reduced-form maturity-bucket curves, not a security-by-security DMO auction calendar with individual syndications, taps, and investor order books.
+The model does not yet estimate a structural MPC forecast or a complete joint macro-fiscal covariance matrix. The auction demand curves and optimiser are reduced-form maturity-bucket tools, not a security-by-security DMO auction calendar with individual syndications, taps, and investor order books.

@@ -4,6 +4,7 @@ import {
 	borrowingRiskPremium,
 	effectiveBorrowingRate,
 	estimateMonetaryFiscalExposure,
+	optimiseBorrowingStrategy,
 	projectBorrowingFan,
 	projectBorrowingMarketReactionPath,
 	projectBorrowingPath,
@@ -174,6 +175,37 @@ describe("borrowing model", () => {
 		expect(short.bankRateRiskScoreGbp).toBeGreaterThan(
 			long.bankRateRiskScoreGbp,
 		);
+	});
+
+	it("optimises issuance mix subject to debt-management constraints", () => {
+		const result = optimiseBorrowingStrategy(20_000_000_000, 5);
+		const optimum = result.optimum;
+		const finalYear = optimum.path.at(-1)!;
+		expect(result.searchedPortfolios).toBeGreaterThan(
+			result.feasiblePortfolios,
+		);
+		expect(result.feasiblePortfolios).toBeGreaterThan(0);
+		expect(optimum.objectiveGbp).toBeLessThanOrEqual(
+			result.dmoRemit.objectiveGbp,
+		);
+		expect(optimum.averageMaturityYears).toBeGreaterThanOrEqual(
+			result.constraints.minAverageMaturityYears,
+		);
+		expect(optimum.averageMaturityYears).toBeLessThanOrEqual(
+			result.constraints.maxAverageMaturityYears,
+		);
+		expect(optimum.weightedBankRatePassThrough).toBeLessThanOrEqual(
+			result.constraints.maxBankRatePassThrough,
+		);
+		expect(optimum.treasuryBillShare).toBeLessThanOrEqual(
+			result.constraints.maxTreasuryBillShare,
+		);
+		expect(optimum.indexLinkedShare).toBeLessThanOrEqual(
+			result.constraints.maxIndexLinkedShare,
+		);
+		expect(
+			finalYear.instruments.reduce((sum, item) => sum + item.share, 0),
+		).toBeCloseTo(1);
 	});
 
 	it("generates deterministic stochastic borrowing fan bands", () => {

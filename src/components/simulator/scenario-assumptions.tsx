@@ -5,6 +5,7 @@ import { getBorrowingStrategy } from "@/data/levers/borrowing";
 import { getTaxLever } from "@/data/levers/tax-rates";
 import {
 	estimateMonetaryFiscalExposure,
+	optimiseBorrowingStrategy,
 	projectBorrowingFan,
 	projectBorrowingMarketReactionPath,
 	projectBorrowingPath,
@@ -94,6 +95,8 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 		line.type === "borrow"
 			? projectBorrowingStrategyFrontier(line.magnitude, 5)
 			: null;
+	const borrowingOptimisation =
+		line.type === "borrow" ? optimiseBorrowingStrategy(line.magnitude, 5) : null;
 	const borrowingFan =
 		line.type === "borrow"
 			? projectBorrowingFan(
@@ -184,6 +187,7 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 						stress={borrowingStress}
 						strategyCases={borrowingStrategies}
 						strategyFrontier={borrowingFrontier}
+						strategyOptimisation={borrowingOptimisation}
 						fan={borrowingFan}
 						marketReaction={borrowingMarketReaction}
 					/>
@@ -237,6 +241,7 @@ function BorrowingModelBlock({
 	stress,
 	strategyCases,
 	strategyFrontier,
+	strategyOptimisation,
 	fan,
 	marketReaction,
 }: {
@@ -245,6 +250,7 @@ function BorrowingModelBlock({
 	stress: ReturnType<typeof projectBorrowingStressCases> | null;
 	strategyCases: ReturnType<typeof projectBorrowingStrategyCases> | null;
 	strategyFrontier: ReturnType<typeof projectBorrowingStrategyFrontier> | null;
+	strategyOptimisation: ReturnType<typeof optimiseBorrowingStrategy> | null;
 	fan: ReturnType<typeof projectBorrowingFan> | null;
 	marketReaction: ReturnType<typeof projectBorrowingMarketReactionPath> | null;
 }) {
@@ -270,6 +276,9 @@ function BorrowingModelBlock({
 						strategyFrontier.recommended.objectiveGbp,
 				)
 			: 0;
+	const optimisedMix = strategyOptimisation
+		? formatPortfolioMix(strategyOptimisation.optimum.path.at(-1)?.instruments ?? [])
+		: null;
 	return (
 		<div>
 			<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
@@ -440,6 +449,34 @@ function BorrowingModelBlock({
 					</dl>
 				</div>
 			)}
+			{strategyOptimisation && optimisedMix && (
+				<div className="mt-2 border-t pt-2">
+					<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
+						Dynamic optimiser
+					</div>
+					<dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs">
+						<div className="contents">
+							<dt className="text-muted-foreground">Least-cost-risk mix</dt>
+							<dd className="tabular-nums text-right font-medium">
+								{optimisedMix}
+							</dd>
+						</div>
+						<div className="contents">
+							<dt className="text-muted-foreground">Objective gain vs DMO</dt>
+							<dd className="tabular-nums text-right font-medium">
+								£{formatBn(strategyOptimisation.improvementVsDmoGbp)}
+							</dd>
+						</div>
+						<div className="contents">
+							<dt className="text-muted-foreground">Feasible portfolios</dt>
+							<dd className="tabular-nums text-right font-medium">
+								{strategyOptimisation.feasiblePortfolios}/
+								{strategyOptimisation.searchedPortfolios}
+							</dd>
+						</div>
+					</dl>
+				</div>
+			)}
 			{fanYearN && (
 				<div className="mt-2 border-t pt-2">
 					<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
@@ -512,6 +549,22 @@ const formatBn = (n: number): string => {
 	if (n >= 1_000_000) return `${Math.round(n / 1_000_000)}m`;
 	return Math.round(n).toLocaleString();
 };
+
+const formatPortfolioMix = (
+	instruments: readonly { id: string; share: number }[],
+): string =>
+	instruments
+		.filter((instrument) => instrument.share >= 0.025)
+		.map((instrument) => {
+			const label =
+				instrument.id === "treasury-bills"
+					? "Bills"
+					: instrument.id === "index-linked-gilts"
+						? "IL"
+						: instrument.id.replace("-gilts", "").replace("-", " ");
+			return `${label} ${Math.round(instrument.share * 100)}%`;
+		})
+		.join(" · ");
 
 const formatSignedBn = (n: number): string => {
 	const sign = n >= 0 ? "+" : "−";
