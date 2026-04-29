@@ -9,6 +9,7 @@ export interface BorrowingBacktestEpisode {
 	id: string;
 	name: string;
 	date: string;
+	regime: "normal" | "credibility-shock" | "monetary-backstop";
 	amountGbp: number;
 	years: number;
 	strategyId?: BorrowingStrategyId;
@@ -26,6 +27,7 @@ export const BORROWING_BACKTEST_EPISODES: readonly BorrowingBacktestEpisode[] = 
 		id: "growth-plan-2022",
 		name: "Growth Plan 2022",
 		date: "2022-09-23",
+		regime: "credibility-shock",
 		amountGbp: 43_500_000_000,
 		years: 5,
 		strategyId: "dmo-remit",
@@ -47,6 +49,7 @@ export const BORROWING_BACKTEST_EPISODES: readonly BorrowingBacktestEpisode[] = 
 		id: "pandemic-borrowing-2020",
 		name: "Pandemic emergency borrowing",
 		date: "2020-04-01",
+		regime: "monetary-backstop",
 		amountGbp: 300_000_000_000,
 		years: 5,
 		strategyId: "dmo-remit",
@@ -68,6 +71,7 @@ export const BORROWING_BACKTEST_EPISODES: readonly BorrowingBacktestEpisode[] = 
 		id: "autumn-budget-2024",
 		name: "Autumn Budget 2024",
 		date: "2024-10-30",
+		regime: "normal",
 		amountGbp: 20_000_000_000,
 		years: 5,
 		strategyId: "dmo-remit",

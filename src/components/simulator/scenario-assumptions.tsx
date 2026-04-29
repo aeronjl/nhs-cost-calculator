@@ -13,6 +13,7 @@ import {
 	projectBorrowingStrategyFrontier,
 	projectBorrowingStressCases,
 } from "@/lib/borrowing";
+import { estimateBorrowingStressRegime } from "@/lib/borrowing-regime";
 import {
 	type BehaviouralModelSummary,
 	describeBehaviouralModel,
@@ -112,6 +113,12 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 					strategyId: line.borrowingStrategyId,
 				})
 			: null;
+	const borrowingRegime =
+		line.type === "borrow"
+			? estimateBorrowingStressRegime(line.magnitude, 5, {
+					strategyId: line.borrowingStrategyId,
+				})
+			: null;
 	const adjustmentPct = Math.round(dynamic.behaviouralAdjustmentFraction * 100);
 	const adjustmentSignificant = dynamic.behaviouralAdjustmentFraction > 0.05;
 	const outputSignificant = Math.abs(dynamic.outputEffectGbp) > 1_000_000;
@@ -190,6 +197,7 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 						strategyOptimisation={borrowingOptimisation}
 						fan={borrowingFan}
 						marketReaction={borrowingMarketReaction}
+						regime={borrowingRegime}
 					/>
 				</MethodologyPopover>
 			</div>
@@ -244,6 +252,7 @@ function BorrowingModelBlock({
 	strategyOptimisation,
 	fan,
 	marketReaction,
+	regime,
 }: {
 	strategyId: Parameters<typeof getBorrowingStrategy>[0];
 	path: ReturnType<typeof projectBorrowingPath> | null;
@@ -253,6 +262,7 @@ function BorrowingModelBlock({
 	strategyOptimisation: ReturnType<typeof optimiseBorrowingStrategy> | null;
 	fan: ReturnType<typeof projectBorrowingFan> | null;
 	marketReaction: ReturnType<typeof projectBorrowingMarketReactionPath> | null;
+	regime: ReturnType<typeof estimateBorrowingStressRegime> | null;
 }) {
 	if (!path || path.length === 0) return null;
 	const year1 = path[0]!;
@@ -517,6 +527,42 @@ function BorrowingModelBlock({
 					</dl>
 				</div>
 			)}
+			{regime && (
+				<div className="mt-2 border-t pt-2">
+					<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
+						Regime classifier
+					</div>
+					<dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs">
+						<div className="contents">
+							<dt className="text-muted-foreground">Top regime</dt>
+							<dd className="tabular-nums text-right font-medium">
+								{regime.topRegime.label} (
+								{formatProbability(regime.topRegime.probability)})
+							</dd>
+						</div>
+						<div className="contents">
+							<dt className="text-muted-foreground">Expected overlay</dt>
+							<dd className="tabular-nums text-right font-medium">
+								{formatSignedBp(regime.expectedOverlayBp)}
+							</dd>
+						</div>
+						<div className="contents">
+							<dt className="text-muted-foreground">Peak pressure</dt>
+							<dd className="tabular-nums text-right font-medium">
+								{regime.expectedPeakPressureBp.toFixed(0)}bp
+							</dd>
+						</div>
+					</dl>
+					<div className="mt-1 text-[10px] text-muted-foreground leading-snug">
+						{regime.probabilities
+							.map(
+								(item) =>
+									`${item.label}: ${formatProbability(item.probability)}`,
+							)
+							.join(" · ")}
+					</div>
+				</div>
+			)}
 			<div className="mt-2 border-t pt-2">
 				<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
 					Monetary-fiscal overlay
@@ -575,6 +621,13 @@ const formatSignedPp = (n: number): string => {
 	const sign = n >= 0 ? "+" : "−";
 	return `${sign}${Math.abs(n).toFixed(2)}pp`;
 };
+
+const formatSignedBp = (n: number): string => {
+	const sign = n >= 0 ? "+" : "−";
+	return `${sign}${Math.abs(n).toFixed(0)}bp`;
+};
+
+const formatProbability = (n: number): string => `${Math.round(n * 100)}%`;
 
 const formatSignedPct = (n: number): string => {
 	const sign = n >= 0 ? "+" : "−";

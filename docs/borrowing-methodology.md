@@ -196,6 +196,17 @@ The audit deliberately distinguishes:
 
 The reference page reports central and overlay pass rates, mean absolute basis-point misses, and the largest miss. This is a calibration diagnostic, not a claim that future episodes will match the same overlays.
 
+## Regime Classifier
+
+The backtest labels also feed a forward-looking regime classifier in `src/lib/borrowing-regime.ts`. For any borrowing package, the model computes features from the central market-reaction path:
+
+- Borrowing size as a share of the DMO gross financing requirement.
+- Debt/GDP shift at the horizon.
+- Central peak pressure from debt-risk, auction absorption, and market reaction premia.
+- Peak auction concession, absorption stress, and endogenous market-reaction premium.
+
+Those features are compared with the labelled backtest episodes using a scaled nearest-neighbour softmax. The output is a probability distribution over normal absorption, credibility shock, and monetary-backstop regimes. Each regime carries an expected yield overlay, so the UI can report both the central pressure and the probability-weighted peak pressure. This is deliberately small-sample and diagnostic: it turns known misses into explicit regime risk rather than pretending the central borrowing model can infer institutional credibility or central-bank backstop states from issuance arithmetic alone.
+
 ## Sources
 
 - UK Debt Management Office financing remit: https://www.dmo.gov.uk/responsibilities/financing-remit/
@@ -236,4 +247,4 @@ The update scripts validate source domains, required instruments, share totals, 
 
 ## Known Limitations
 
-The model does not yet estimate a structural MPC forecast or a complete joint macro-fiscal covariance matrix. The auction demand curves and optimiser are reduced-form maturity-bucket tools, not a security-by-security DMO auction calendar with individual syndications, taps, and investor order books. Backtest overlays are hand-labelled historical regimes; they do not yet feed an estimated probability model for credibility loss or central-bank backstop states.
+The model does not yet estimate a structural MPC forecast or a complete joint macro-fiscal covariance matrix. The auction demand curves and optimiser are reduced-form maturity-bucket tools, not a security-by-security DMO auction calendar with individual syndications, taps, and investor order books. The regime classifier is calibrated from a small, hand-labelled episode set, so its probabilities should be read as structured stress diagnostics rather than statistically estimated event frequencies.
