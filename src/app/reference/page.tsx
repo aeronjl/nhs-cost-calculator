@@ -3,6 +3,7 @@ import {
 	HeaderAction,
 	SimulatorHeader,
 } from "@/components/simulator/header";
+import { BorrowingBacktestSection } from "@/components/simulator/borrowing-backtest-section";
 import { BacktestSection } from "@/components/simulator/backtest-section";
 import NHSSpendingCalculator from "../NHSSpendingCalculator";
 import PersonalTaxBurden from "../PersonalTaxBurden";
@@ -179,6 +180,20 @@ export default async function Reference({
 						methodology.
 					</p>
 					<BacktestSection />
+				</section>
+
+				<section aria-labelledby="borrowing-backtest-heading">
+					<h2
+						id="borrowing-backtest-heading"
+						className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-1"
+					>
+						Borrowing stress backtests
+					</h2>
+					<p className="text-xs text-muted-foreground mb-4">
+						How the gilt-market borrowing model performs against historical UK
+						stress episodes and low-stress fiscal events.
+					</p>
+					<BorrowingBacktestSection />
 				</section>
 			</div>
 		</div>

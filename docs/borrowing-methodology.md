@@ -182,6 +182,18 @@ reaction_premium_t =
 
 The premium is capped at 150bp. This is deliberately stylised: it represents a loss of fiscal credibility or a weaker gilt-market absorption environment, not a forecast of DMO auction tails.
 
+## Historical Backtests
+
+Borrowing stress calibration is checked against curated historical episodes in `src/data/borrowing-backtests.ts`. Each episode defines the discretionary borrowing shock, an observed peak gilt-move range, the source, and any regime overlay needed to make the central model comparable with history.
+
+The audit deliberately distinguishes:
+
+- Central fit: issuance size, debt/GDP, absorption, and endogenous market reaction explain the observed range.
+- Credibility overlay: the central model undercalls a political or institutional confidence shock, as in the 2022 Growth Plan.
+- Monetary backstop overlay: the central model overcalls stress because QE or safe-asset demand suppressed yields, as in pandemic borrowing.
+
+The reference page reports central and overlay pass rates, mean absolute basis-point misses, and the largest miss. This is a calibration diagnostic, not a claim that future episodes will match the same overlays.
+
 ## Sources
 
 - UK Debt Management Office financing remit: https://www.dmo.gov.uk/responsibilities/financing-remit/
@@ -191,6 +203,8 @@ The premium is capped at 150bp. This is deliberately stylised: it represents a l
 - Bank of England Monetary Policy Summary, March 2026: https://www.bankofengland.co.uk/monetary-policy-summary-and-minutes/2026/march-2026
 - OBR Fiscal risks and sustainability, July 2025: https://obr.uk/frs/fiscal-risks-and-sustainability-july-2025/
 - OBR Economic and fiscal outlook, March 2025: https://obr.uk/efo/economic-and-fiscal-outlook-march-2025/
+- OBR Economic and fiscal outlook, November 2022: https://obr.uk/efo/economic-and-fiscal-outlook-november-2022/
+- OBR Briefing Paper 8, Forecasting during the coronavirus pandemic: https://obr.uk/forecasts-in-depth/brief-guides-and-explainers/briefing-paper-no-8-forecasting-during-the-coronavirus-pandemic/
 
 ## Calibration Workflow
 
@@ -220,4 +234,4 @@ The update scripts validate source domains, required instruments, share totals, 
 
 ## Known Limitations
 
-The model does not yet estimate a structural MPC forecast or a complete joint macro-fiscal covariance matrix. The auction demand curves and optimiser are reduced-form maturity-bucket tools, not a security-by-security DMO auction calendar with individual syndications, taps, and investor order books.
+The model does not yet estimate a structural MPC forecast or a complete joint macro-fiscal covariance matrix. The auction demand curves and optimiser are reduced-form maturity-bucket tools, not a security-by-security DMO auction calendar with individual syndications, taps, and investor order books. Backtest overlays are hand-labelled historical regimes; they do not yet feed an estimated probability model for credibility loss or central-bank backstop states.
