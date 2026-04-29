@@ -79,6 +79,25 @@ export interface BorrowingStressCase {
 	path: BorrowingYear[];
 }
 
+export interface BorrowingStrategyFrontierCase {
+	id: BorrowingStrategyId;
+	label: string;
+	path: BorrowingYear[];
+	cumulativeInterestCostGbp: number;
+	finalInterestCostGbp: number;
+	finalDebtStockGbp: number;
+	refinancingRiskScoreGbp: number;
+	bankRateRiskScoreGbp: number;
+	absorptionRiskScoreGbp: number;
+	totalRiskScoreGbp: number;
+	objectiveGbp: number;
+}
+
+export interface BorrowingStrategyFrontier {
+	cases: BorrowingStrategyFrontierCase[];
+	recommended: BorrowingStrategyFrontierCase;
+}
+
 export interface BorrowingFanYear {
 	year: number;
 	centralInterestCostGbp: number;
@@ -122,6 +141,9 @@ const ABSORPTION_PREMIUM_CAP = 0.0075;
 const APF_ANNUAL_SUPPLY_SHARE = 0.12;
 const APF_CROWDING_WEIGHT = 0.25;
 const APF_BANK_RATE_CASHFLOW_BETA = 0.25;
+const STRATEGY_FRONTIER_REFINANCING_STRESS_RATE = 0.004;
+const STRATEGY_FRONTIER_BANK_RATE_STRESS = 0.01;
+const STRATEGY_FRONTIER_ABSORPTION_STRESS_RATE = 0.0025;
 const ABSORPTION_PREMIUM_SENSITIVITY: Record<DebtInstrument["id"], number> = {
 	"treasury-bills": 0.0025,
 	"short-gilts": 0.002,
@@ -565,6 +587,62 @@ export const projectBorrowingStrategyCases = (
 			strategyId: strategy.id,
 		}),
 	}));
+
+export const projectBorrowingStrategyFrontier = (
+	amount: number,
+	years: number,
+	assumptions: Partial<BorrowingPathAssumptions> = {},
+): BorrowingStrategyFrontier => {
+	const cases = BORROWING.strategies.map<BorrowingStrategyFrontierCase>(
+		(strategy) => {
+			const path = projectBorrowingPath(amount, years, {
+				...assumptions,
+				strategyId: strategy.id,
+			});
+			const finalYear = path.at(-1)!;
+			const cumulativeInterestCostGbp = path.reduce(
+				(sum, row) => sum + row.interestCostGbp,
+				0,
+			);
+			const weightedBankRatePassThrough = strategy.portfolio.reduce(
+				(sum, instrument) =>
+					sum + instrument.share * instrument.bankRatePassThrough,
+				0,
+			);
+			const refinancingRiskScoreGbp =
+				finalYear.refinancingGbp * STRATEGY_FRONTIER_REFINANCING_STRESS_RATE;
+			const bankRateRiskScoreGbp =
+				Math.abs(finalYear.debtStockDeltaGbp) *
+				weightedBankRatePassThrough *
+				STRATEGY_FRONTIER_BANK_RATE_STRESS;
+			const absorptionRiskScoreGbp =
+				Math.max(0, finalYear.absorptionStressIndex - 1) *
+				BORROWING.grossFinancingRequirement *
+				STRATEGY_FRONTIER_ABSORPTION_STRESS_RATE;
+			const totalRiskScoreGbp =
+				refinancingRiskScoreGbp +
+				bankRateRiskScoreGbp +
+				absorptionRiskScoreGbp;
+			return {
+				id: strategy.id,
+				label: strategy.label,
+				path,
+				cumulativeInterestCostGbp,
+				finalInterestCostGbp: finalYear.interestCostGbp,
+				finalDebtStockGbp: finalYear.debtStockDeltaGbp,
+				refinancingRiskScoreGbp,
+				bankRateRiskScoreGbp,
+				absorptionRiskScoreGbp,
+				totalRiskScoreGbp,
+				objectiveGbp: cumulativeInterestCostGbp + totalRiskScoreGbp,
+			};
+		},
+	);
+	const recommended = cases.reduce((best, item) =>
+		item.objectiveGbp < best.objectiveGbp ? item : best,
+	);
+	return { cases, recommended };
+};
 
 export const projectBorrowingFan = (
 	amount: number,

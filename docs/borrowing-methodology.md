@@ -30,6 +30,20 @@ Alternative strategies are modelled explicitly:
 - `long-funded`: more long gilts; higher term premium, lower refinancing exposure.
 - `index-linked-heavy`: more inflation-linked issuance; higher inflation sensitivity.
 
+## Strategy Cost-Risk Frontier
+
+The model scores the financing strategies on a cost-risk objective rather than ranking only by coupon cost:
+
+```text
+objective =
+  cumulative_interest_cost
+  + refinancing_risk_score
+  + bank_rate_risk_score
+  + absorption_risk_score
+```
+
+Refinancing risk prices the annual rollover stock, Bank Rate risk prices the one-year shock exposure implied by each portfolio's pass-through, and absorption risk prices overloads against the market-capacity proxy. This surfaces the strategy with the lowest combined objective while still showing the user's selected strategy.
+
 ## Market Absorption
 
 Each strategy is also checked against annual DMO-style issuance buckets. The model estimates the marginal issuance allocated to each maturity/type bucket and compares it with a digestible share of that bucket's annual planned remit. The numerator includes a weighted APF/QT competing-supply proxy, because gilt sales or runoff from the Bank of England portfolio can absorb investor balance sheet capacity at the same time as new DMO issuance:
@@ -158,4 +172,4 @@ The update script validates source domains, required instruments, share totals, 
 
 ## Known Limitations
 
-The model does not yet estimate full demand curves for gilt auctions, a structural MPC forecast, or a complete joint macro-fiscal covariance matrix. It also treats the financing strategy as chosen ex ante rather than optimised dynamically as market conditions evolve.
+The model does not yet estimate full demand curves for gilt auctions, a structural MPC forecast, or a complete joint macro-fiscal covariance matrix. The financing frontier is a static cost-risk score across named strategies, not a full DMO-style optimisation over auction calendars and investor demand.

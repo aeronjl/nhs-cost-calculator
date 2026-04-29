@@ -9,6 +9,7 @@ import {
 	projectBorrowingMarketReactionPath,
 	projectBorrowingPath,
 	projectBorrowingStrategyCases,
+	projectBorrowingStrategyFrontier,
 	projectBorrowingStressCases,
 } from "@/lib/borrowing";
 import {
@@ -88,6 +89,10 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 	const borrowingStrategies =
 		line.type === "borrow"
 			? projectBorrowingStrategyCases(line.magnitude, 5)
+			: null;
+	const borrowingFrontier =
+		line.type === "borrow"
+			? projectBorrowingStrategyFrontier(line.magnitude, 5)
 			: null;
 	const borrowingFan =
 		line.type === "borrow"
@@ -178,6 +183,7 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 						path={borrowingSummary}
 						stress={borrowingStress}
 						strategyCases={borrowingStrategies}
+						strategyFrontier={borrowingFrontier}
 						fan={borrowingFan}
 						marketReaction={borrowingMarketReaction}
 					/>
@@ -230,6 +236,7 @@ function BorrowingModelBlock({
 	path,
 	stress,
 	strategyCases,
+	strategyFrontier,
 	fan,
 	marketReaction,
 }: {
@@ -237,6 +244,7 @@ function BorrowingModelBlock({
 	path: ReturnType<typeof projectBorrowingPath> | null;
 	stress: ReturnType<typeof projectBorrowingStressCases> | null;
 	strategyCases: ReturnType<typeof projectBorrowingStrategyCases> | null;
+	strategyFrontier: ReturnType<typeof projectBorrowingStrategyFrontier> | null;
 	fan: ReturnType<typeof projectBorrowingFan> | null;
 	marketReaction: ReturnType<typeof projectBorrowingMarketReactionPath> | null;
 }) {
@@ -247,6 +255,17 @@ function BorrowingModelBlock({
 	const fanYearN = fan?.at(-1);
 	const marketYearN = marketReaction?.at(-1);
 	const monetaryExposure = estimateMonetaryFiscalExposure(0.01);
+	const selectedFrontierCase = strategyFrontier?.cases.find(
+		(item) => item.id === strategy.id,
+	);
+	const frontierPenaltyGbp =
+		selectedFrontierCase && strategyFrontier
+			? Math.max(
+					0,
+					selectedFrontierCase.objectiveGbp -
+						strategyFrontier.recommended.objectiveGbp,
+				)
+			: 0;
 	return (
 		<div>
 			<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
@@ -378,6 +397,33 @@ function BorrowingModelBlock({
 								</div>
 							);
 						})}
+					</dl>
+				</div>
+			)}
+			{strategyFrontier && (
+				<div className="mt-2 border-t pt-2">
+					<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
+						Cost-risk frontier
+					</div>
+					<dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs">
+						<div className="contents">
+							<dt className="text-muted-foreground">Lowest objective</dt>
+							<dd className="tabular-nums text-right font-medium">
+								{strategyFrontier.recommended.label}
+							</dd>
+						</div>
+						<div className="contents">
+							<dt className="text-muted-foreground">Selected penalty</dt>
+							<dd className="tabular-nums text-right font-medium">
+								£{formatBn(frontierPenaltyGbp)}
+							</dd>
+						</div>
+						<div className="contents">
+							<dt className="text-muted-foreground">Frontier risk reserve</dt>
+							<dd className="tabular-nums text-right font-medium">
+								£{formatBn(strategyFrontier.recommended.totalRiskScoreGbp)}
+							</dd>
+						</div>
 					</dl>
 				</div>
 			)}

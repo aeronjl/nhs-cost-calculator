@@ -8,6 +8,7 @@ import {
 	projectBorrowingMarketReactionPath,
 	projectBorrowingPath,
 	projectBorrowingStrategyCases,
+	projectBorrowingStrategyFrontier,
 	projectBorrowingStressCases,
 } from "./borrowing";
 
@@ -71,9 +72,11 @@ describe("borrowing model", () => {
 		expect(year1!.absorptionStressIndex).toBeLessThan(1);
 		expect(year1!.absorptionPremium).toBe(0);
 		expect(year1!.absorptionBottleneck).toBe("none");
-		expect(year1!.instruments.some((instrument) => instrument.competingApfSupplyGbp > 0)).toBe(
-			true,
-		);
+		expect(
+			year1!.instruments.some(
+				(instrument) => instrument.competingApfSupplyGbp > 0,
+			),
+		).toBe(true);
 	});
 
 	it("adds an absorption concession when issuance overloads a maturity bucket", () => {
@@ -135,6 +138,27 @@ describe("borrowing model", () => {
 		const short = cases.find((c) => c.id === "short-funded")!.path.at(-1)!;
 		const long = cases.find((c) => c.id === "long-funded")!.path.at(-1)!;
 		expect(short.refinancingGbp).toBeGreaterThan(long.refinancingGbp);
+	});
+
+	it("scores a financing strategy cost-risk frontier", () => {
+		const frontier = projectBorrowingStrategyFrontier(20_000_000_000, 5);
+		expect(frontier.cases.map((item) => item.id)).toEqual([
+			"dmo-remit",
+			"short-funded",
+			"long-funded",
+			"index-linked-heavy",
+		]);
+		expect(frontier.recommended.objectiveGbp).toBe(
+			Math.min(...frontier.cases.map((item) => item.objectiveGbp)),
+		);
+		const short = frontier.cases.find((item) => item.id === "short-funded")!;
+		const long = frontier.cases.find((item) => item.id === "long-funded")!;
+		expect(short.refinancingRiskScoreGbp).toBeGreaterThan(
+			long.refinancingRiskScoreGbp,
+		);
+		expect(short.bankRateRiskScoreGbp).toBeGreaterThan(
+			long.bankRateRiskScoreGbp,
+		);
 	});
 
 	it("generates deterministic stochastic borrowing fan bands", () => {
