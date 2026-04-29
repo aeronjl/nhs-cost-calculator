@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { estimateBorrowingStressRegime } from "./borrowing-regime";
+import { projectBorrowingFan } from "./borrowing";
+import {
+	estimateBorrowingStressRegime,
+	projectBorrowingRegimeFan,
+} from "./borrowing-regime";
 
 describe("borrowing stress regime model", () => {
 	it("classifies scored marginal investment borrowing as normal", () => {
@@ -39,5 +43,25 @@ describe("borrowing stress regime model", () => {
 			"normal",
 		]);
 		expect(probabilityTotal).toBeCloseTo(1);
+	});
+
+	it("adds regime switching to borrowing fan tails", () => {
+		const base = projectBorrowingFan(43_500_000_000, 5, {}, 400, 12);
+		const switched = projectBorrowingRegimeFan(
+			43_500_000_000,
+			5,
+			{},
+			400,
+			12,
+		);
+		expect(switched).toEqual(
+			projectBorrowingRegimeFan(43_500_000_000, 5, {}, 400, 12),
+		);
+		expect(switched.at(-1)!.interestCostBand.p95).toBeGreaterThan(
+			base.at(-1)!.interestCostBand.p95,
+		);
+		expect(switched.at(-1)!.debtStockBand.p95).toBeGreaterThan(
+			base.at(-1)!.debtStockBand.p95,
+		);
 	});
 });

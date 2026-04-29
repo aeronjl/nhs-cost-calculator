@@ -155,7 +155,7 @@ Deterministic stress cases show:
 - +3pp inflation.
 - +100bp gilt credibility premium.
 
-The stochastic fan samples Bank Rate, inflation, and gilt-premium shocks with a seeded Monte Carlo draw. Bands are parameter uncertainty around borrowing costs, not a complete macroeconomic scenario tree.
+The stochastic fan samples Bank Rate, inflation, and gilt-premium shocks with a seeded Monte Carlo draw. For borrowing lines it also samples a labelled regime from the credibility/backstop classifier and applies that regime's yield overlay to the draw. Bands are parameter and regime uncertainty around borrowing costs, not a complete macroeconomic scenario tree.
 
 The fan now uses correlated macro-fiscal shocks rather than independent draws. A common stress factor pushes Bank Rate, inflation, and gilt premia in the same direction while reducing nominal-growth assumptions at the margin. This is still a reduced-form covariance structure, but it avoids the unrealistic case where adverse rate, inflation, and credibility shocks are sampled as unrelated events.
 
@@ -168,7 +168,7 @@ The OBR baseline comparison also runs a joint macro-fiscal fan. Each draw sample
 - 90% headroom band at the rule horizon.
 - PSNB and debt/GDP bands at the rule horizon.
 
-This is still reduced-form rather than a full OBR economy forecast, but it makes fiscal-rule risk probabilistic instead of treating the central headroom estimate as certain.
+When the scenario includes positive borrowing, each fiscal-rule fan draw also samples the borrowing stress regime and feeds the resulting yield overlay through the scenario projection. This is still reduced-form rather than a full OBR economy forecast, but it makes fiscal-rule risk probabilistic instead of treating the central headroom estimate as certain.
 
 ## Market Reaction Loop
 
@@ -205,7 +205,7 @@ The backtest labels also feed a forward-looking regime classifier in `src/lib/bo
 - Central peak pressure from debt-risk, auction absorption, and market reaction premia.
 - Peak auction concession, absorption stress, and endogenous market-reaction premium.
 
-Those features are compared with the labelled backtest episodes using a scaled nearest-neighbour softmax. The output is a probability distribution over normal absorption, credibility shock, and monetary-backstop regimes. Each regime carries an expected yield overlay, so the UI can report both the central pressure and the probability-weighted peak pressure. This is deliberately small-sample and diagnostic: it turns known misses into explicit regime risk rather than pretending the central borrowing model can infer institutional credibility or central-bank backstop states from issuance arithmetic alone.
+Those features are compared with the labelled backtest episodes using a scaled nearest-neighbour softmax. The output is a probability distribution over normal absorption, credibility shock, and monetary-backstop regimes. Each regime carries an expected yield overlay, so the UI can report both the central pressure and the probability-weighted peak pressure. The stochastic borrowing and fiscal-rule fans sample from this distribution on each draw. This is deliberately small-sample and diagnostic: it turns known misses into explicit regime risk rather than pretending the central borrowing model can infer institutional credibility or central-bank backstop states from issuance arithmetic alone.
 
 ## Sources
 

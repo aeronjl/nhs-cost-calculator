@@ -1,9 +1,17 @@
 import { BORROWING_BACKTEST_EPISODES } from "@/data/borrowing-backtests";
 import { BORROWING, type BorrowingStrategyId } from "@/data/levers/borrowing";
 import {
+	type BorrowingFanYear,
 	type BorrowingMarketReactionYear,
+	type BorrowingPathAssumptions,
+	projectBorrowingPath,
 	projectBorrowingMarketReactionPath,
 } from "@/lib/borrowing";
+import {
+	computeBand,
+	sampleNormal,
+	seededRng,
+} from "@/lib/uncertainty";
 
 export type BorrowingStressRegimeId =
 	| "normal"
@@ -35,6 +43,13 @@ export interface BorrowingRegimeEstimate {
 	expectedOverlayBp: number;
 	expectedPeakPressureBp: number;
 	stressRating: "low" | "watch" | "stress";
+}
+
+export interface BorrowingRegimeDraw {
+	id: BorrowingStressRegimeId;
+	label: string;
+	overlayBp: number;
+	probability: number;
 }
 
 const REGIME_LABELS: Record<BorrowingStressRegimeId, string> = {
@@ -193,4 +208,101 @@ export const estimateBorrowingStressRegime = (
 		expectedPeakPressureBp,
 		stressRating: stressRatingFor(expectedPeakPressureBp, topRegime.id),
 	};
+};
+
+export const drawBorrowingStressRegime = (
+	estimate: BorrowingRegimeEstimate,
+	rng: () => number,
+): BorrowingRegimeDraw => {
+	const threshold = rng();
+	let cumulative = 0;
+	for (const regime of estimate.probabilities) {
+		cumulative += regime.probability;
+		if (threshold <= cumulative) {
+			return {
+				id: regime.id,
+				label: regime.label,
+				overlayBp: regime.expectedOverlayBp,
+				probability: regime.probability,
+			};
+		}
+	}
+	const fallback = estimate.probabilities.at(-1)!;
+	return {
+		id: fallback.id,
+		label: fallback.label,
+		overlayBp: fallback.expectedOverlayBp,
+		probability: fallback.probability,
+	};
+};
+
+export const sampleBorrowingRegimeOverlayBp = (
+	estimate: BorrowingRegimeEstimate,
+	rng: () => number,
+): number => drawBorrowingStressRegime(estimate, rng).overlayBp;
+
+export const projectBorrowingRegimeFan = (
+	amount: number,
+	years: number,
+	assumptions: Partial<BorrowingPathAssumptions> = {},
+	samples = 1000,
+	seed = 73,
+): BorrowingFanYear[] => {
+	const centralPath = projectBorrowingPath(amount, years, assumptions);
+	const regimeEstimate = estimateBorrowingStressRegime(amount, years, {
+		strategyId: assumptions.strategyId,
+	});
+	const rng = seededRng(seed);
+	const regimeRng = seededRng(seed + 7_919);
+	const interestByYear: number[][] = Array.from({ length: years }, () => []);
+	const debtByYear: number[][] = Array.from({ length: years }, () => []);
+	const psnbByYear: number[][] = Array.from({ length: years }, () => []);
+
+	for (let sample = 0; sample < samples; sample++) {
+		const commonShock = sampleNormal(rng, { mean: 0, sd: 1 });
+		const bankRateShock =
+			commonShock * 0.0055 + sampleNormal(rng, { mean: 0, sd: 0.0045 });
+		const inflationShock =
+			commonShock * 0.009 + sampleNormal(rng, { mean: 0, sd: 0.006 });
+		const giltShock =
+			commonShock * 0.008 + sampleNormal(rng, { mean: 0, sd: 0.0055 });
+		const growthShock =
+			commonShock * -0.004 + sampleNormal(rng, { mean: 0, sd: 0.006 });
+		const regimeOverlay =
+			sampleBorrowingRegimeOverlayBp(regimeEstimate, regimeRng) / 10_000;
+		const path = projectBorrowingPath(amount, years, {
+			...assumptions,
+			bankRate: Math.max(
+				-0.005,
+				(assumptions.bankRate ?? BORROWING.bankRate) + bankRateShock,
+			),
+			inflation: Math.max(
+				-0.01,
+				(assumptions.inflation ?? BORROWING.inflation) + inflationShock,
+			),
+			nominalGrowth: Math.max(
+				0,
+				(assumptions.nominalGrowth ?? 0.04) + growthShock,
+			),
+			yieldCurveShift:
+				(assumptions.yieldCurveShift ?? 0) + giltShock + regimeOverlay,
+			cpiDeviationPp: (assumptions.cpiDeviationPp ?? 0) + inflationShock * 100,
+		});
+		for (let i = 0; i < years; i++) {
+			const row = path[i]!;
+			interestByYear[i]!.push(row.interestCostGbp);
+			debtByYear[i]!.push(row.debtStockDeltaGbp);
+			psnbByYear[i]!.push(row.psnbShiftGbp);
+		}
+	}
+
+	return centralPath.map((row, index) => ({
+		year: row.year,
+		centralInterestCostGbp: row.interestCostGbp,
+		interestCostBand: computeBand(interestByYear[index]!),
+		centralDebtStockGbp: row.debtStockDeltaGbp,
+		debtStockBand: computeBand(debtByYear[index]!),
+		centralPsnbShiftGbp: row.psnbShiftGbp,
+		psnbShiftBand: computeBand(psnbByYear[index]!),
+	}));
 };

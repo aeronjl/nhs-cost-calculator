@@ -6,14 +6,16 @@ import { getTaxLever } from "@/data/levers/tax-rates";
 import {
 	estimateMonetaryFiscalExposure,
 	optimiseBorrowingStrategy,
-	projectBorrowingFan,
 	projectBorrowingMarketReactionPath,
 	projectBorrowingPath,
 	projectBorrowingStrategyCases,
 	projectBorrowingStrategyFrontier,
 	projectBorrowingStressCases,
 } from "@/lib/borrowing";
-import { estimateBorrowingStressRegime } from "@/lib/borrowing-regime";
+import {
+	estimateBorrowingStressRegime,
+	projectBorrowingRegimeFan,
+} from "@/lib/borrowing-regime";
 import {
 	type BehaviouralModelSummary,
 	describeBehaviouralModel,
@@ -100,7 +102,7 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 		line.type === "borrow" ? optimiseBorrowingStrategy(line.magnitude, 5) : null;
 	const borrowingFan =
 		line.type === "borrow"
-			? projectBorrowingFan(
+			? projectBorrowingRegimeFan(
 					line.magnitude,
 					5,
 					{ strategyId: line.borrowingStrategyId },
@@ -260,7 +262,7 @@ function BorrowingModelBlock({
 	strategyCases: ReturnType<typeof projectBorrowingStrategyCases> | null;
 	strategyFrontier: ReturnType<typeof projectBorrowingStrategyFrontier> | null;
 	strategyOptimisation: ReturnType<typeof optimiseBorrowingStrategy> | null;
-	fan: ReturnType<typeof projectBorrowingFan> | null;
+	fan: ReturnType<typeof projectBorrowingRegimeFan> | null;
 	marketReaction: ReturnType<typeof projectBorrowingMarketReactionPath> | null;
 	regime: ReturnType<typeof estimateBorrowingStressRegime> | null;
 }) {
@@ -490,7 +492,7 @@ function BorrowingModelBlock({
 			{fanYearN && (
 				<div className="mt-2 border-t pt-2">
 					<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
-						Stochastic rate fan, year {fanYearN.year}
+						Stochastic rate/regime fan, year {fanYearN.year}
 					</div>
 					<div className="text-xs text-muted-foreground leading-snug">
 						Debt-interest 90% band:{" "}

@@ -235,4 +235,32 @@ describe("projectFiscalRuleFan", () => {
 		);
 		expect(costly.headroomBand.p50).toBeLessThan(revenue.headroomBand.p50);
 	});
+
+	it("samples borrowing stress regimes inside the fiscal-rule fan", () => {
+		const result = evaluateScenario([
+			{
+				id: "borrow",
+				type: "borrow",
+				leverId: "",
+				magnitude: 43_500_000_000,
+			},
+		]);
+		const switched = projectFiscalRuleFan(result, TEST_BASELINE, 300, 7);
+		const continuousOnly = projectFiscalRuleFan(
+			result,
+			TEST_BASELINE,
+			300,
+			7,
+			{},
+			{ regimeSwitching: false },
+		);
+		expect(switched.breachProbability).toBeGreaterThan(
+			continuousOnly.breachProbability,
+		);
+		expect(switched.headroomBand.p5).toBeLessThan(
+			continuousOnly.headroomBand.p5,
+		);
+		expect(switched.headroomBand).not.toEqual(continuousOnly.headroomBand);
+		expect(switched.centralHeadroomGbp).toBe(continuousOnly.centralHeadroomGbp);
+	});
 });

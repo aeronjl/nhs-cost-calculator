@@ -35,6 +35,11 @@ import {
 	sampleNormal,
 	seededRng,
 } from "./uncertainty";
+import {
+	type BorrowingRegimeEstimate,
+	estimateBorrowingStressRegime,
+	sampleBorrowingRegimeOverlayBp,
+} from "./borrowing-regime";
 
 export interface BaselineRelativeYear {
 	year: number; // 1-indexed; year 1 = baseline.years[0]
@@ -129,6 +134,10 @@ export interface FiscalRuleFan {
 	policyReactionBand: PercentileBand;
 	centralHeadroomGbp: number;
 	centralRiskRating: FiscalRiskRating;
+}
+
+export interface FiscalRuleFanOptions {
+	regimeSwitching?: boolean;
 }
 
 const POLICY_REACTION_PROTOTYPES: readonly Omit<
@@ -423,12 +432,36 @@ const sampledBaseline = (
 	};
 };
 
+const borrowingRegimeForScenario = (
+	result: ScenarioResult,
+	years: number,
+): BorrowingRegimeEstimate | null => {
+	let amountGbp = 0;
+	let largestBorrowingLine: ScenarioResult["lines"][number] | null = null;
+	for (const evaluation of result.lines) {
+		const { line } = evaluation;
+		if (line.type !== "borrow" || line.magnitude <= 0) continue;
+		amountGbp += line.magnitude;
+		if (
+			!largestBorrowingLine ||
+			line.magnitude > largestBorrowingLine.line.magnitude
+		) {
+			largestBorrowingLine = evaluation;
+		}
+	}
+	if (amountGbp <= 0) return null;
+	return estimateBorrowingStressRegime(amountGbp, years, {
+		strategyId: largestBorrowingLine?.line.borrowingStrategyId,
+	});
+};
+
 export const projectFiscalRuleFan = (
 	result: ScenarioResult,
 	baseline: OBRBaseline = OBR_BASELINE,
 	samples = 1000,
 	seed = 137,
 	assumptions: Partial<ProjectionAssumptions> = {},
+	options: FiscalRuleFanOptions = {},
 ): FiscalRuleFan => {
 	const centralProjection = projectScenarioWithGEFeedback(
 		result,
@@ -437,6 +470,7 @@ export const projectFiscalRuleFan = (
 	).withFeedback;
 	const central = projectAgainstBaseline(centralProjection, baseline);
 	const rng = seededRng(seed);
+	const regimeRng = seededRng(seed + 7_919);
 	const headroomSamples: number[] = [];
 	const ruleYearPsnbSamples: number[] = [];
 	const ruleYearDebtGdpSamples: number[] = [];
@@ -444,6 +478,10 @@ export const projectFiscalRuleFan = (
 	let breachCount = 0;
 	let tightOrBreachCount = 0;
 	let debtRisingCount = 0;
+	const borrowingRegime =
+		options.regimeSwitching === false
+			? null
+			: borrowingRegimeForScenario(result, baseline.years.length);
 
 	for (let sample = 0; sample < samples; sample++) {
 		const commonShock = sampleNormal(rng, { mean: 0, sd: 1 });
@@ -455,6 +493,10 @@ export const projectFiscalRuleFan = (
 			commonShock * 0.0055 + sampleNormal(rng, { mean: 0, sd: 0.004 });
 		const giltShock =
 			commonShock * 0.0075 + sampleNormal(rng, { mean: 0, sd: 0.005 });
+		const regimeOverlay =
+			borrowingRegime === null
+				? 0
+				: sampleBorrowingRegimeOverlayBp(borrowingRegime, regimeRng) / 10_000;
 		let persistentPsnbErrorPctGdp = 0;
 		const psnbErrorsGbp = baseline.years.map((year) => {
 			const innovation =
@@ -481,7 +523,8 @@ export const projectFiscalRuleFan = (
 					-0.005,
 					(assumptions.bankRate ?? 0.0375) + bankRateShock,
 				),
-				yieldCurveShift: (assumptions.yieldCurveShift ?? 0) + giltShock,
+				yieldCurveShift:
+					(assumptions.yieldCurveShift ?? 0) + giltShock + regimeOverlay,
 			},
 		).withFeedback;
 		const comparison = projectAgainstBaseline(projection, sampled);
