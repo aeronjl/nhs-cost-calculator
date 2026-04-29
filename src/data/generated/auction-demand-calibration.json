@@ -1,0 +1,83 @@
+{
+  "asOf": "2024-25",
+  "source": {
+    "url": "https://www.dmo.gov.uk/media/dmgaetip/gar2025a.pdf",
+    "label": "UK DMO Annual Review 2024-25"
+  },
+  "sourceDetails": [
+    {
+      "url": "https://www.dmo.gov.uk/media/dmgaetip/gar2025a.pdf",
+      "label": "DMO Annual Review 2024-25, Table 10 and Table 19"
+    },
+    {
+      "url": "https://www.dmo.gov.uk/media/5rqb2scf/gar2024_final.pdf",
+      "label": "DMO Annual Review 2023-24, Table 10 and Table 18"
+    },
+    {
+      "url": "https://www.dmo.gov.uk/data/gilt-market/results-of-gilt-operations/",
+      "label": "DMO gilt operation results data"
+    }
+  ],
+  "method": "Normal cover ratios use 70% 2024-25 DMO annual-review average cover and 30% 2023-24 average cover. Gilt demand elasticities are reduced-form slopes scaled by 2024-25 cover, observed conventional-gilt tails, and a maturity liquidity weight. Treasury bill cover is tender-size weighted across one-, three-, and six-month tenders.",
+  "observations": {
+    "treasury-bills": {
+      "latestCoverRatio": 3.3607,
+      "previousCoverRatio": 3.5921,
+      "latestTailBp": null,
+      "previousTailBp": null,
+      "note": "Tender-size weighted average cover from one-, three-, and six-month Treasury bill tenders."
+    },
+    "short-gilts": {
+      "latestCoverRatio": 3.18,
+      "previousCoverRatio": 2.7,
+      "latestTailBp": 0.6,
+      "previousTailBp": 0.8
+    },
+    "medium-gilts": {
+      "latestCoverRatio": 3.1,
+      "previousCoverRatio": 2.86,
+      "latestTailBp": 0.8,
+      "previousTailBp": 0.7
+    },
+    "long-gilts": {
+      "latestCoverRatio": 3.16,
+      "previousCoverRatio": 2.73,
+      "latestTailBp": 0.4,
+      "previousTailBp": 0.7
+    },
+    "index-linked-gilts": {
+      "latestCoverRatio": 3.28,
+      "previousCoverRatio": 2.85,
+      "latestTailBp": null,
+      "previousTailBp": null,
+      "note": "DMO table does not report a conventional yield tail for index-linked gilt auctions."
+    }
+  },
+  "curves": {
+    "treasury-bills": {
+      "normalCoverRatio": 3.43,
+      "elasticityShareOfAnnualIssuancePerBp": 0.0041,
+      "tailShareOfConcession": 0.15
+    },
+    "short-gilts": {
+      "normalCoverRatio": 3.036,
+      "elasticityShareOfAnnualIssuancePerBp": 0.0033,
+      "tailShareOfConcession": 0.19
+    },
+    "medium-gilts": {
+      "normalCoverRatio": 3.028,
+      "elasticityShareOfAnnualIssuancePerBp": 0.002,
+      "tailShareOfConcession": 0.26
+    },
+    "long-gilts": {
+      "normalCoverRatio": 3.031,
+      "elasticityShareOfAnnualIssuancePerBp": 0.0029,
+      "tailShareOfConcession": 0.2
+    },
+    "index-linked-gilts": {
+      "normalCoverRatio": 3.151,
+      "elasticityShareOfAnnualIssuancePerBp": 0.0015,
+      "tailShareOfConcession": 0.35
+    }
+  }
+}

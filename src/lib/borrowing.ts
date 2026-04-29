@@ -5,6 +5,7 @@ import {
 	type DebtInstrument,
 	getBorrowingStrategy,
 } from "@/data/levers/borrowing";
+import auctionDemandCalibration from "@/data/generated/auction-demand-calibration.json";
 import type { IncidenceVector } from "@/lib/distribution";
 import {
 	type PercentileBand,
@@ -165,33 +166,8 @@ const APF_SUPPLY_SHARE: Record<DebtInstrument["id"], number> = {
 	"long-gilts": 0.35,
 	"index-linked-gilts": 0.1,
 };
-const AUCTION_DEMAND_CURVES: Record<DebtInstrument["id"], AuctionDemandCurve> = {
-	"treasury-bills": {
-		normalCoverRatio: 2.8,
-		elasticityShareOfAnnualIssuancePerBp: 0.004,
-		tailShareOfConcession: 0.15,
-	},
-	"short-gilts": {
-		normalCoverRatio: 2.25,
-		elasticityShareOfAnnualIssuancePerBp: 0.0035,
-		tailShareOfConcession: 0.2,
-	},
-	"medium-gilts": {
-		normalCoverRatio: 2,
-		elasticityShareOfAnnualIssuancePerBp: 0.0028,
-		tailShareOfConcession: 0.25,
-	},
-	"long-gilts": {
-		normalCoverRatio: 1.75,
-		elasticityShareOfAnnualIssuancePerBp: 0.002,
-		tailShareOfConcession: 0.35,
-	},
-	"index-linked-gilts": {
-		normalCoverRatio: 1.6,
-		elasticityShareOfAnnualIssuancePerBp: 0.0018,
-		tailShareOfConcession: 0.4,
-	},
-};
+const AUCTION_DEMAND_CURVES =
+	auctionDemandCalibration.curves as Record<DebtInstrument["id"], AuctionDemandCurve>;
 
 const resolvedAssumptions = (
 	assumptions: Partial<BorrowingPathAssumptions> = {},

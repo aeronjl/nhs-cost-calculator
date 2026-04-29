@@ -12,7 +12,9 @@
     "test:watch": "vitest",
     "borrowing:check": "node scripts/update-borrowing-calibration.mjs --check",
     "borrowing:update": "node scripts/update-borrowing-calibration.mjs",
-    "ci": "npm run typecheck && npm run borrowing:check && npm run test && npm run build"
+    "auction:check": "node scripts/update-auction-demand-calibration.mjs --check",
+    "auction:update": "node scripts/update-auction-demand-calibration.mjs",
+    "ci": "npm run typecheck && npm run borrowing:check && npm run auction:check && npm run test && npm run build"
   },
   "dependencies": {
     "@radix-ui/react-popover": "^1.1.15",

@@ -48,7 +48,7 @@ Refinancing risk prices the annual rollover stock, Bank Rate risk prices the one
 
 Each strategy is also checked against annual DMO-style issuance buckets. The model estimates the marginal issuance allocated to each maturity/type bucket and adds a weighted APF/QT competing-supply proxy, because gilt sales or runoff from the Bank of England portfolio can absorb investor balance sheet capacity at the same time as new DMO issuance.
 
-The absorption layer is now an auction demand curve. Each instrument has a normal bid-cover ratio and a price-elastic demand slope. The model estimates how much yield concession would be required to clear the net supply:
+The absorption layer is now an auction demand curve calibrated from DMO Annual Review auction and Treasury bill tender tables. Each instrument has a normal bid-cover ratio and a price-elastic demand slope. The model estimates how much yield concession would be required to clear the net supply:
 
 ```text
 net_market_supply_i =
@@ -62,7 +62,7 @@ required_concession_bp_i =
   / demand_elasticity_i
 ```
 
-When supply exceeds base demand, the instrument receives an auction-clearing concession capped at 75bp. The model also reports the implied cover ratio, auction-tail proxy, and any residual uncovered supply after the capped concession. Long and index-linked gilts have lower demand elasticity than bills and short conventional gilts because depth is thinner and investor bases are more specialised.
+When supply exceeds base demand, the instrument receives an auction-clearing concession capped at 75bp. The model also reports the implied cover ratio, auction-tail proxy, and any residual uncovered supply after the capped concession. Long and index-linked gilts have lower demand elasticity than bills and short conventional gilts because depth is thinner and investor bases are more specialised. The calibration lives in `src/data/generated/auction-demand-calibration.json` so changes to DMO cover/tail data are reviewable.
 
 ## Monetary-Fiscal Overlay
 
@@ -150,18 +150,21 @@ The premium is capped at 150bp. This is deliberately stylised: it represents a l
 
 - UK Debt Management Office financing remit: https://www.dmo.gov.uk/responsibilities/financing-remit/
 - DMO Budget 2025 remit revision: https://www.dmo.gov.uk/media/qh4nii4m/sa261125.pdf
+- DMO Annual Review 2024-25: https://www.dmo.gov.uk/media/dmgaetip/gar2025a.pdf
+- DMO Annual Review 2023-24: https://www.dmo.gov.uk/media/5rqb2scf/gar2024_final.pdf
 - Bank of England Monetary Policy Summary, March 2026: https://www.bankofengland.co.uk/monetary-policy-summary-and-minutes/2026/march-2026
 - OBR Fiscal risks and sustainability, July 2025: https://obr.uk/frs/fiscal-risks-and-sustainability-july-2025/
 - OBR Economic and fiscal outlook, March 2025: https://obr.uk/efo/economic-and-fiscal-outlook-march-2025/
 
 ## Calibration Workflow
 
-The model reads its numeric assumptions from `src/data/generated/borrowing-calibration.json`. The generated file is intentionally checked into git so builds are deterministic and reviewable.
+The model reads debt-stock, yield, APF, and issuance assumptions from `src/data/generated/borrowing-calibration.json`. Auction demand curves are stored separately in `src/data/generated/auction-demand-calibration.json`. Both generated files are intentionally checked into git so builds are deterministic and reviewable.
 
 Validate the current calibration:
 
 ```bash
 npm run borrowing:check
+npm run auction:check
 ```
 
 Update from a structured extract:
@@ -174,9 +177,10 @@ Or from a maintained endpoint:
 
 ```bash
 BORROWING_CALIBRATION_URL=https://example.gov.uk/borrowing-calibration.json npm run borrowing:update
+AUCTION_DEMAND_CALIBRATION_URL=https://example.gov.uk/auction-demand-calibration.json npm run auction:update
 ```
 
-The update script validates source domains, required instruments, share totals, rate ranges, debt aggregates, and risk-premium parameters before replacing the generated file. It does not scrape PDFs directly; the expected input is a structured extract from the official DMO, Bank of England, and OBR publications listed above.
+The update scripts validate source domains, required instruments, share totals, rate ranges, debt aggregates, risk-premium parameters, auction cover ratios, tails, and demand-curve slopes before replacing generated files. They do not scrape PDFs directly; the expected input is a structured extract from the official DMO, Bank of England, and OBR publications listed above.
 
 ## Known Limitations
 
