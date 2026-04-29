@@ -3,6 +3,7 @@
 // forecast the DMO remit line-by-line; it is to avoid treating debt issuance
 // as permanent fiscal space.
 
+import calibration from "@/data/generated/borrowing-calibration.json";
 import type { Methodology } from "@/lib/methodology";
 
 export type DebtInstrumentId =
@@ -64,13 +65,27 @@ export interface BorrowingConstants {
 	risk: BorrowingRiskSettings;
 	asOf: string;
 	source: { url: string; label: string };
+	sourceDetails: readonly { url: string; label: string }[];
 	methodology: Methodology;
 }
 
-const SOURCE = {
-	url: "https://www.dmo.gov.uk/responsibilities/financing-remit/",
-	label: "UK DMO remit · OBR fiscal risks · Bank of England",
-} as const;
+export const BORROWING_CALIBRATION = calibration;
+
+type CalibratedInstrument = {
+	share: number;
+	maturityYears: number;
+	nominalYield?: number;
+	realYield?: number;
+	inflationLinked?: boolean;
+	bankRatePassThrough: number;
+};
+
+const SOURCE = calibration.source;
+const SOURCE_DETAILS = calibration.sourceDetails;
+const CALIBRATED_INSTRUMENTS = calibration.instruments as Record<
+	DebtInstrumentId,
+	CalibratedInstrument
+>;
 
 const instrument = (
 	id: DebtInstrumentId,
@@ -90,54 +105,53 @@ const instrument = (
 	note,
 });
 
+const calibratedInstrument = (
+	id: DebtInstrumentId,
+	label: string,
+	note: string,
+): DebtInstrument => {
+	const c = CALIBRATED_INSTRUMENTS[id];
+	return instrument(
+		id,
+		label,
+		c.share,
+		c.maturityYears,
+		c.inflationLinked
+			? { realYield: c.realYield, inflationLinked: true }
+			: { nominalYield: c.nominalYield },
+		c.bankRatePassThrough,
+		note,
+	);
+};
+
 // Central marginal issuance mix. Calibrated to the DMO's 2025-26 Budget 2025
 // remit revision: planned gilt sales £303.7bn, short conventional 44.0%,
 // medium conventional 33.6%, long conventional 9.5%, index-linked 10.2%,
 // unallocated 2.7%, plus an £11bn Treasury bill financing contribution.
 const DMO_REMIT_PORTFOLIO: readonly DebtInstrument[] = [
-	instrument(
+	calibratedInstrument(
 		"treasury-bills",
 		"Treasury bills",
-		0.035,
-		0.5,
-		{ nominalYield: 0.0375 },
-		1,
 		"Short debt-management issuance. Cheapest initially, but reprices quickly with Bank Rate.",
 	),
-	instrument(
+	calibratedInstrument(
 		"short-gilts",
 		"Short conventional gilts",
-		0.439,
-		5,
-		{ nominalYield: 0.04 },
-		0.35,
 		"Dominant marginal issuance bucket in the latest DMO remit; reprices materially with Bank Rate.",
 	),
-	instrument(
+	calibratedInstrument(
 		"medium-gilts",
 		"Medium conventional gilts",
-		0.335,
-		10,
-		{ nominalYield: 0.046 },
-		0.15,
 		"Core benchmark issuance; less sensitive to Bank Rate than bills or short gilts.",
 	),
-	instrument(
+	calibratedInstrument(
 		"long-gilts",
 		"Long conventional gilts",
-		0.091,
-		30,
-		{ nominalYield: 0.052 },
-		0.05,
 		"Locks in funding but pays the long-end term premium.",
 	),
-	instrument(
+	calibratedInstrument(
 		"index-linked-gilts",
 		"Index-linked gilts",
-		0.1,
-		20,
-		{ realYield: 0.015, inflationLinked: true },
-		0.05,
 		"Principal and coupon uplift with inflation; exposes the Exchequer to RPI/CPI shocks.",
 	),
 ];
@@ -205,49 +219,47 @@ export const getBorrowingStrategy = (
 	BORROWING_STRATEGIES[0]!;
 
 export const BORROWING: BorrowingConstants = {
-	thirtyYearGiltYield: 0.05,
-	bankRate: 0.0375,
-	inflation: 0.03,
-	ukGdp: 2_600_000_000_000,
-	ukDebt: 2_500_000_000_000,
-	grossFinancingRequirement: 322_500_000_000,
-	averageDebtMaturityYears: 15,
-	reservesBalances: 631_488_000_000,
-	apfGiltStock: 528_000_000_000,
+	thirtyYearGiltYield: calibration.thirtyYearGiltYield,
+	bankRate: calibration.bankRate,
+	inflation: calibration.inflation,
+	ukGdp: calibration.ukGdp,
+	ukDebt: calibration.ukDebt,
+	grossFinancingRequirement: calibration.grossFinancingRequirement,
+	averageDebtMaturityYears: calibration.averageDebtMaturityYears,
+	reservesBalances: calibration.reservesBalances,
+	apfGiltStock: calibration.apfGiltStock,
 	portfolio: DMO_REMIT_PORTFOLIO,
 	strategies: BORROWING_STRATEGIES,
-	risk: {
-		debtGdpRiskPremiumPerPp: 0.0005,
-		issuancePremiumPer100bn: 0.0002,
-		convexityThresholdDebtGdpPp: 2,
-		convexityPremiumPerPpSquared: 0.00008,
-	},
-	asOf: "2026-04",
+	risk: calibration.risk,
+	asOf: calibration.asOf,
 	source: SOURCE,
+	sourceDetails: SOURCE_DETAILS,
 	methodology: {
 		source: SOURCE,
-		asOf: "2026-04",
+		asOf: calibration.asOf,
 		measure:
 			"Marginal UK debt-financing model. Borrowing is split across Treasury bills, conventional gilts, and index-linked gilts; debt interest responds to the yield curve, inflation, Bank Rate, refinancing, financing strategy, and a debt/GDP risk premium.",
 		alternatives: [
 			{
 				label: "Single 30-year gilt yield",
-				value: 0.05,
+				value: calibration.thirtyYearGiltYield,
 				note: "Simpler but misses the recent shift toward shorter issuance and the inflation exposure of index-linked gilts.",
 			},
 			{
 				label: "Treasury bill funding",
-				value: 0.0375,
+				value: CALIBRATED_INSTRUMENTS["treasury-bills"].nominalYield ?? 0,
 				note: "Cheaper initially but reprices quickly with Bank Rate, which is why short funding raises fiscal risk.",
 			},
 			{
 				label: "Index-linked funding",
-				value: 0.045,
+				value:
+					(CALIBRATED_INSTRUMENTS["index-linked-gilts"].realYield ?? 0) +
+					calibration.inflation,
 				note: "Approximate real yield plus inflation uplift. Inflation shocks raise debt interest quickly.",
 			},
 		],
 		range: {
-			low: 0.0375,
+			low: CALIBRATED_INSTRUMENTS["treasury-bills"].nominalYield ?? 0,
 			high: 0.055,
 			note: "Bills follow Bank Rate; medium and long gilts follow the yield curve; index-linked debt follows real yields plus inflation uplift.",
 		},

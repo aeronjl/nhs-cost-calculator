@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "ci": "npm run typecheck && npm run test && npm run build"
+    "borrowing:check": "node scripts/update-borrowing-calibration.mjs --check",
+    "borrowing:update": "node scripts/update-borrowing-calibration.mjs",
+    "ci": "npm run typecheck && npm run borrowing:check && npm run test && npm run build"
   },
   "dependencies": {
     "@radix-ui/react-popover": "^1.1.15",

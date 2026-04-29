@@ -75,6 +75,30 @@ The stochastic fan samples Bank Rate, inflation, and gilt-premium shocks with a 
 - OBR Fiscal risks and sustainability, July 2025: https://obr.uk/frs/fiscal-risks-and-sustainability-july-2025/
 - OBR Economic and fiscal outlook, March 2025: https://obr.uk/efo/economic-and-fiscal-outlook-march-2025/
 
+## Calibration Workflow
+
+The model reads its numeric assumptions from `src/data/generated/borrowing-calibration.json`. The generated file is intentionally checked into git so builds are deterministic and reviewable.
+
+Validate the current calibration:
+
+```bash
+npm run borrowing:check
+```
+
+Update from a structured extract:
+
+```bash
+npm run borrowing:update -- --input ./path/to/borrowing-calibration.json
+```
+
+Or from a maintained endpoint:
+
+```bash
+BORROWING_CALIBRATION_URL=https://example.gov.uk/borrowing-calibration.json npm run borrowing:update
+```
+
+The update script validates source domains, required instruments, share totals, rate ranges, debt aggregates, and risk-premium parameters before replacing the generated file. It does not scrape PDFs directly; the expected input is a structured extract from the official DMO, Bank of England, and OBR publications listed above.
+
 ## Known Limitations
 
 The model does not yet estimate demand curves for gilt auctions, endogenous monetary-policy reaction functions, or a full joint macro-fiscal covariance matrix. It also treats the financing strategy as chosen ex ante rather than optimised dynamically as market conditions evolve.

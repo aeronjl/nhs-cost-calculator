@@ -1,0 +1,73 @@
+{
+  "asOf": "2026-04",
+  "source": {
+    "url": "https://www.dmo.gov.uk/responsibilities/financing-remit/",
+    "label": "UK DMO remit · OBR fiscal risks · Bank of England"
+  },
+  "sourceDetails": [
+    {
+      "url": "https://www.dmo.gov.uk/media/qh4nii4m/sa261125.pdf",
+      "label": "DMO Budget 2025 remit revision"
+    },
+    {
+      "url": "https://www.bankofengland.co.uk/monetary-policy-summary-and-minutes/2026/march-2026",
+      "label": "Bank of England MPC March 2026"
+    },
+    {
+      "url": "https://obr.uk/frs/fiscal-risks-and-sustainability-july-2025/",
+      "label": "OBR Fiscal risks and sustainability July 2025"
+    },
+    {
+      "url": "https://obr.uk/efo/economic-and-fiscal-outlook-march-2025/",
+      "label": "OBR Economic and fiscal outlook March 2025"
+    }
+  ],
+  "thirtyYearGiltYield": 0.05,
+  "bankRate": 0.0375,
+  "inflation": 0.03,
+  "ukGdp": 2600000000000,
+  "ukDebt": 2500000000000,
+  "grossFinancingRequirement": 322500000000,
+  "averageDebtMaturityYears": 15,
+  "reservesBalances": 631488000000,
+  "apfGiltStock": 528000000000,
+  "instruments": {
+    "treasury-bills": {
+      "share": 0.035,
+      "maturityYears": 0.5,
+      "nominalYield": 0.0375,
+      "bankRatePassThrough": 1
+    },
+    "short-gilts": {
+      "share": 0.439,
+      "maturityYears": 5,
+      "nominalYield": 0.04,
+      "bankRatePassThrough": 0.35
+    },
+    "medium-gilts": {
+      "share": 0.335,
+      "maturityYears": 10,
+      "nominalYield": 0.046,
+      "bankRatePassThrough": 0.15
+    },
+    "long-gilts": {
+      "share": 0.091,
+      "maturityYears": 30,
+      "nominalYield": 0.052,
+      "bankRatePassThrough": 0.05
+    },
+    "index-linked-gilts": {
+      "share": 0.1,
+      "maturityYears": 20,
+      "realYield": 0.015,
+      "inflationLinked": true,
+      "bankRatePassThrough": 0.05
+    }
+  },
+  "risk": {
+    "debtGdpRiskPremiumPerPp": 0.0005,
+    "issuancePremiumPer100bn": 0.0002,
+    "convexityThresholdDebtGdpPp": 2,
+    "convexityPremiumPerPpSquared": 0.00008
+  }
+}
