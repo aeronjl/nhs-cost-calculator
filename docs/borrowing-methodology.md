@@ -46,15 +46,23 @@ Refinancing risk prices the annual rollover stock, Bank Rate risk prices the one
 
 ## Market Absorption
 
-Each strategy is also checked against annual DMO-style issuance buckets. The model estimates the marginal issuance allocated to each maturity/type bucket and compares it with a digestible share of that bucket's annual planned remit. The numerator includes a weighted APF/QT competing-supply proxy, because gilt sales or runoff from the Bank of England portfolio can absorb investor balance sheet capacity at the same time as new DMO issuance:
+Each strategy is also checked against annual DMO-style issuance buckets. The model estimates the marginal issuance allocated to each maturity/type bucket and adds a weighted APF/QT competing-supply proxy, because gilt sales or runoff from the Bank of England portfolio can absorb investor balance sheet capacity at the same time as new DMO issuance.
+
+The absorption layer is now an auction demand curve. Each instrument has a normal bid-cover ratio and a price-elastic demand slope. The model estimates how much yield concession would be required to clear the net supply:
 
 ```text
-absorption_ratio_i =
-  (marginal_issuance_i + APF_competing_supply_i * crowding_weight)
-  / (planned_annual_issuance_i * digestible_share)
+net_market_supply_i =
+  marginal_issuance_i + APF_competing_supply_i * crowding_weight
+
+base_auction_demand_i =
+  planned_annual_issuance_i * digestible_share * normal_cover_i
+
+required_concession_bp_i =
+  max(0, net_market_supply_i - base_auction_demand_i)
+  / demand_elasticity_i
 ```
 
-When the ratio exceeds 1, the instrument receives an absorption concession. Long and index-linked gilts have higher sensitivities than short/medium conventional gilts because depth is thinner and investor bases are more specialised. The concession is capped at 75bp by instrument and is reported separately from the broader debt/GDP risk premium.
+When supply exceeds base demand, the instrument receives an auction-clearing concession capped at 75bp. The model also reports the implied cover ratio, auction-tail proxy, and any residual uncovered supply after the capped concession. Long and index-linked gilts have lower demand elasticity than bills and short conventional gilts because depth is thinner and investor bases are more specialised.
 
 ## Monetary-Fiscal Overlay
 
@@ -172,4 +180,4 @@ The update script validates source domains, required instruments, share totals, 
 
 ## Known Limitations
 
-The model does not yet estimate full demand curves for gilt auctions, a structural MPC forecast, or a complete joint macro-fiscal covariance matrix. The financing frontier is a static cost-risk score across named strategies, not a full DMO-style optimisation over auction calendars and investor demand.
+The model does not yet estimate a structural MPC forecast or a complete joint macro-fiscal covariance matrix. The auction demand curves are reduced-form maturity-bucket curves, not a security-by-security DMO auction calendar with individual syndications, taps, and investor order books.

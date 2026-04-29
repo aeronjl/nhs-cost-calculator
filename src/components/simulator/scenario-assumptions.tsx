@@ -252,6 +252,10 @@ function BorrowingModelBlock({
 	const year1 = path[0]!;
 	const yearN = path[path.length - 1]!;
 	const strategy = getBorrowingStrategy(strategyId);
+	const auctionBottleneck =
+		yearN.instruments.find(
+			(instrument) => instrument.id === yearN.absorptionBottleneck,
+		) ?? null;
 	const fanYearN = fan?.at(-1);
 	const marketYearN = marketReaction?.at(-1);
 	const monetaryExposure = estimateMonetaryFiscalExposure(0.01);
@@ -338,6 +342,15 @@ function BorrowingModelBlock({
 						<dd className="tabular-nums text-right font-medium">
 							{yearN.absorptionStressIndex.toFixed(1)}x{" "}
 							{yearN.absorptionBottleneck.replaceAll("-", " ")}
+						</dd>
+					</div>
+				)}
+				{auctionBottleneck && (
+					<div className="contents">
+						<dt className="text-muted-foreground">Auction cover / tail</dt>
+						<dd className="tabular-nums text-right font-medium">
+							{auctionBottleneck.auctionCoverRatio.toFixed(1)}x /{" "}
+							{auctionBottleneck.auctionTailBp.toFixed(1)}bp
 						</dd>
 					</div>
 				)}

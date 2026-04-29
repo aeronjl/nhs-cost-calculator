@@ -77,6 +77,14 @@ describe("borrowing model", () => {
 				(instrument) => instrument.competingApfSupplyGbp > 0,
 			),
 		).toBe(true);
+		expect(
+			year1!.instruments.every(
+				(instrument) =>
+					instrument.auctionCoverRatio > 1 &&
+					instrument.auctionClearingConcessionBp === 0 &&
+					instrument.auctionTailBp === 0,
+			),
+		).toBe(true);
 	});
 
 	it("adds an absorption concession when issuance overloads a maturity bucket", () => {
@@ -92,6 +100,13 @@ describe("borrowing model", () => {
 		expect(billSlice.absorptionRatio).toBeGreaterThan(1);
 		expect(billSlice.absorptionPremium).toBeGreaterThan(0);
 		expect(billSlice.netMarketSupplyGbp).toBe(billSlice.marginalIssuanceGbp);
+		expect(billSlice.requiredAuctionConcessionBp).toBeGreaterThan(
+			billSlice.auctionClearingConcessionBp,
+		);
+		expect(billSlice.auctionClearingConcessionBp).toBe(75);
+		expect(billSlice.auctionCoverRatio).toBeLessThan(1);
+		expect(billSlice.auctionTailBp).toBeGreaterThan(0);
+		expect(billSlice.uncoveredAuctionSupplyGbp).toBeGreaterThan(0);
 		const longSlice = year1!.instruments.find(
 			(instrument) => instrument.id === "long-gilts",
 		)!;
