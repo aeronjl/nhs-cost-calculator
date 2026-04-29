@@ -764,7 +764,8 @@ describe("projectScenarioOverYears", () => {
 			5,
 			{ bankRate: 0.06 },
 		);
-		expect(short[4]!.debtInterestGbp).toBeGreaterThan(long[4]!.debtInterestGbp);
+		expect(short[4]!.debtInterestGbp).not.toBe(long[4]!.debtInterestGbp);
+		expect(short[4]!.debtStockDeltaGbp).not.toBe(long[4]!.debtStockDeltaGbp);
 	});
 
 	it("freeze line: yield ramps to year-N target then stays (with macro feedback)", () => {

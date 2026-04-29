@@ -32,14 +32,26 @@ Alternative strategies are modelled explicitly:
 
 ## Market Absorption
 
-Each strategy is also checked against annual DMO-style issuance buckets. The model estimates the marginal issuance allocated to each maturity/type bucket and compares it with a digestible share of that bucket's annual planned remit:
+Each strategy is also checked against annual DMO-style issuance buckets. The model estimates the marginal issuance allocated to each maturity/type bucket and compares it with a digestible share of that bucket's annual planned remit. The numerator includes a weighted APF/QT competing-supply proxy, because gilt sales or runoff from the Bank of England portfolio can absorb investor balance sheet capacity at the same time as new DMO issuance:
 
 ```text
 absorption_ratio_i =
-  marginal_issuance_i / (planned_annual_issuance_i * digestible_share)
+  (marginal_issuance_i + APF_competing_supply_i * crowding_weight)
+  / (planned_annual_issuance_i * digestible_share)
 ```
 
 When the ratio exceeds 1, the instrument receives an absorption concession. Long and index-linked gilts have higher sensitivities than short/medium conventional gilts because depth is thinner and investor bases are more specialised. The concession is capped at 75bp by instrument and is reported separately from the broader debt/GDP risk premium.
+
+## Monetary-Fiscal Overlay
+
+The model also reports a Bank Rate sensitivity overlay using Bank of England reserve balances and APF gilt stock. A +100bp Bank Rate shock raises the cost of remunerating reserves directly. A smaller APF cashflow proxy is added to represent the way higher short rates worsen the cashflow gap between APF financing costs and the gilt coupons held in the portfolio:
+
+```text
+reserve_cost = reserves_balances * bank_rate_shock
+apf_cashflow_proxy = apf_gilt_stock * bank_rate_shock * APF_beta
+```
+
+This overlay is not added to every borrowing line's central PSNB path, because it is mostly a whole-balance-sheet sensitivity rather than the direct consequence of one marginal gilt issue. It is exposed beside borrowing scenarios because it materially changes fiscal risk in high-rate states.
 
 ## Rate And Risk Channels
 

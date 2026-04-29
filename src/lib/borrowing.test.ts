@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+	annualApfCompetingSupplyGbp,
 	borrowingRiskPremium,
 	effectiveBorrowingRate,
+	estimateMonetaryFiscalExposure,
 	projectBorrowingFan,
 	projectBorrowingMarketReactionPath,
 	projectBorrowingPath,
@@ -69,6 +71,9 @@ describe("borrowing model", () => {
 		expect(year1!.absorptionStressIndex).toBeLessThan(1);
 		expect(year1!.absorptionPremium).toBe(0);
 		expect(year1!.absorptionBottleneck).toBe("none");
+		expect(year1!.instruments.some((instrument) => instrument.competingApfSupplyGbp > 0)).toBe(
+			true,
+		);
 	});
 
 	it("adds an absorption concession when issuance overloads a maturity bucket", () => {
@@ -83,6 +88,25 @@ describe("borrowing model", () => {
 		expect(year1!.absorptionBottleneck).toBe("treasury-bills");
 		expect(billSlice.absorptionRatio).toBeGreaterThan(1);
 		expect(billSlice.absorptionPremium).toBeGreaterThan(0);
+		expect(billSlice.netMarketSupplyGbp).toBe(billSlice.marginalIssuanceGbp);
+		const longSlice = year1!.instruments.find(
+			(instrument) => instrument.id === "long-gilts",
+		)!;
+		expect(longSlice.netMarketSupplyGbp).toBeGreaterThan(
+			longSlice.marginalIssuanceGbp,
+		);
+	});
+
+	it("estimates monetary-fiscal exposure from reserves and APF stock", () => {
+		const exposure = estimateMonetaryFiscalExposure(0.01);
+		expect(exposure.reserveInterestCostGbp).toBeGreaterThan(0);
+		expect(exposure.apfCashflowProxyGbp).toBeGreaterThan(0);
+		expect(exposure.totalExposureGbp).toBe(
+			exposure.reserveInterestCostGbp + exposure.apfCashflowProxyGbp,
+		);
+		expect(exposure.annualApfCompetingSupplyGbp).toBe(
+			annualApfCompetingSupplyGbp(),
+		);
 	});
 
 	it("builds stress cases for rate, inflation, and credibility shocks", () => {

@@ -37,6 +37,8 @@ export interface BorrowingInstrumentCost {
 	refinancingGbp: number;
 	marginalIssuanceGbp: number;
 	plannedAnnualIssuanceGbp: number;
+	competingApfSupplyGbp: number;
+	netMarketSupplyGbp: number;
 	absorptionRatio: number;
 	absorptionPremium: number;
 }
@@ -92,6 +94,15 @@ export interface BorrowingMarketReactionYear extends BorrowingYear {
 	marketReactionTrigger: "none" | "debt-gdp" | "refinancing" | "issuance";
 }
 
+export interface MonetaryFiscalExposure {
+	bankRateShock: number;
+	reserveInterestCostGbp: number;
+	apfCashflowProxyGbp: number;
+	totalExposureGbp: number;
+	totalExposurePctGdp: number;
+	annualApfCompetingSupplyGbp: number;
+}
+
 // Future debt-service incidence: broad taxpayer base, mildly progressive.
 // This is deliberately less top-heavy than wealth/capital taxes because debt
 // service is usually financed from the whole tax mix over time.
@@ -108,12 +119,22 @@ const DEFAULT_ASSUMPTIONS: BorrowingPathAssumptions = {
 
 const ABSORPTION_CAPACITY_SHARE_OF_ANNUAL_REMIT = 0.3;
 const ABSORPTION_PREMIUM_CAP = 0.0075;
+const APF_ANNUAL_SUPPLY_SHARE = 0.12;
+const APF_CROWDING_WEIGHT = 0.25;
+const APF_BANK_RATE_CASHFLOW_BETA = 0.25;
 const ABSORPTION_PREMIUM_SENSITIVITY: Record<DebtInstrument["id"], number> = {
 	"treasury-bills": 0.0025,
 	"short-gilts": 0.002,
 	"medium-gilts": 0.0025,
 	"long-gilts": 0.0045,
 	"index-linked-gilts": 0.004,
+};
+const APF_SUPPLY_SHARE: Record<DebtInstrument["id"], number> = {
+	"treasury-bills": 0,
+	"short-gilts": 0.2,
+	"medium-gilts": 0.35,
+	"long-gilts": 0.35,
+	"index-linked-gilts": 0.1,
 };
 
 const resolvedAssumptions = (
@@ -143,21 +164,49 @@ const plannedAnnualIssuanceFor = (instrument: DebtInstrument): number => {
 	return BORROWING.grossFinancingRequirement * centralShare;
 };
 
+export const annualApfCompetingSupplyGbp = (): number =>
+	BORROWING.apfGiltStock * APF_ANNUAL_SUPPLY_SHARE;
+
+const competingApfSupplyFor = (instrument: DebtInstrument): number =>
+	annualApfCompetingSupplyGbp() * APF_SUPPLY_SHARE[instrument.id];
+
+export const estimateMonetaryFiscalExposure = (
+	bankRateShock = 0.01,
+): MonetaryFiscalExposure => {
+	const reserveInterestCostGbp = BORROWING.reservesBalances * bankRateShock;
+	const apfCashflowProxyGbp =
+		BORROWING.apfGiltStock * bankRateShock * APF_BANK_RATE_CASHFLOW_BETA;
+	const totalExposureGbp = reserveInterestCostGbp + apfCashflowProxyGbp;
+	return {
+		bankRateShock,
+		reserveInterestCostGbp,
+		apfCashflowProxyGbp,
+		totalExposureGbp,
+		totalExposurePctGdp: (totalExposureGbp / BORROWING.ukGdp) * 100,
+		annualApfCompetingSupplyGbp: annualApfCompetingSupplyGbp(),
+	};
+};
+
 const absorptionForInstrument = (
 	instrument: DebtInstrument,
 	amount: number,
 ): {
 	marginalIssuanceGbp: number;
 	plannedAnnualIssuanceGbp: number;
+	competingApfSupplyGbp: number;
+	netMarketSupplyGbp: number;
 	absorptionRatio: number;
 	absorptionPremium: number;
 } => {
 	const marginalIssuanceGbp = Math.max(0, amount) * instrument.share;
 	const plannedAnnualIssuanceGbp = plannedAnnualIssuanceFor(instrument);
+	const competingApfSupplyGbp = competingApfSupplyFor(instrument);
+	const netMarketSupplyGbp =
+		marginalIssuanceGbp + competingApfSupplyGbp * APF_CROWDING_WEIGHT;
 	const digestibleCapacity =
 		plannedAnnualIssuanceGbp * ABSORPTION_CAPACITY_SHARE_OF_ANNUAL_REMIT;
 	const absorptionRatio =
-		digestibleCapacity > 0 ? marginalIssuanceGbp / digestibleCapacity : 0;
+		digestibleCapacity > 0 ? netMarketSupplyGbp / digestibleCapacity : 0;
 	const absorptionPremium = Math.min(
 		ABSORPTION_PREMIUM_CAP,
 		Math.max(0, absorptionRatio - 1) *
@@ -166,6 +215,8 @@ const absorptionForInstrument = (
 	return {
 		marginalIssuanceGbp,
 		plannedAnnualIssuanceGbp,
+		competingApfSupplyGbp,
+		netMarketSupplyGbp,
 		absorptionRatio,
 		absorptionPremium,
 	};

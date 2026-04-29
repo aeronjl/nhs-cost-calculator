@@ -4,6 +4,7 @@ import { MethodologyPopover } from "@/components/ui/methodology-popover";
 import { getBorrowingStrategy } from "@/data/levers/borrowing";
 import { getTaxLever } from "@/data/levers/tax-rates";
 import {
+	estimateMonetaryFiscalExposure,
 	projectBorrowingFan,
 	projectBorrowingMarketReactionPath,
 	projectBorrowingPath,
@@ -245,6 +246,7 @@ function BorrowingModelBlock({
 	const strategy = getBorrowingStrategy(strategyId);
 	const fanYearN = fan?.at(-1);
 	const marketYearN = marketReaction?.at(-1);
+	const monetaryExposure = estimateMonetaryFiscalExposure(0.01);
 	return (
 		<div>
 			<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
@@ -419,6 +421,25 @@ function BorrowingModelBlock({
 					</dl>
 				</div>
 			)}
+			<div className="mt-2 border-t pt-2">
+				<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
+					Monetary-fiscal overlay
+				</div>
+				<dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs">
+					<div className="contents">
+						<dt className="text-muted-foreground">+100bp reserves/APF exposure</dt>
+						<dd className="tabular-nums text-right font-medium">
+							{formatSignedBn(-monetaryExposure.totalExposureGbp)}
+						</dd>
+					</div>
+					<div className="contents">
+						<dt className="text-muted-foreground">APF/QT competing supply</dt>
+						<dd className="tabular-nums text-right font-medium">
+							£{formatBn(monetaryExposure.annualApfCompetingSupplyGbp)}
+						</dd>
+					</div>
+				</dl>
+			</div>
 			<p className="text-xs text-muted-foreground italic mt-2 leading-snug">
 				Borrowing is modelled as year-1 financing plus debt-service costs; PSNB
 				worsens when gilts are issued and again when interest is financed.
