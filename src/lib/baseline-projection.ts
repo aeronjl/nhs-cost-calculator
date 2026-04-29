@@ -28,6 +28,7 @@ import {
 	type YearProjection,
 	projectScenarioWithGEFeedback,
 } from "./scenario";
+import { TAX_TO_GDP_RATIO } from "./macro";
 import {
 	type PercentileBand,
 	computeBand,
@@ -61,6 +62,7 @@ export interface BaselineComparison {
 	adjustedStabilityHeadroom: number;
 	diagnostics: FiscalRuleDiagnostics;
 	policyReactionPath: readonly PolicyReactionYear[];
+	policyReactionOptions: readonly PolicyReactionOption[];
 	baseline: OBRBaseline;
 }
 
@@ -85,6 +87,37 @@ export interface PolicyReactionYear {
 	correctedDebtGdp: number;
 }
 
+export type PolicyReactionOptionId =
+	| "balanced"
+	| "tax-led"
+	| "spending-led"
+	| "delayed";
+
+export interface PolicyReactionOptionYear extends PolicyReactionYear {
+	grossTighteningGbp: number;
+	effectiveCorrectionGbp: number;
+	taxTighteningGbp: number;
+	spendingTighteningGbp: number;
+	gdpDragGbp: number;
+}
+
+export interface PolicyReactionOption {
+	id: PolicyReactionOptionId;
+	label: string;
+	description: string;
+	taxShare: number;
+	spendingShare: number;
+	multiplier: number;
+	implementationLagYears: number;
+	annualGrossTighteningGbp: number;
+	annualEffectiveCorrectionGbp: number;
+	horizonGdpDragGbp: number;
+	headroomAfterReactionGbp: number;
+	psnbAtHorizon: number;
+	debtGdpAtHorizon: number;
+	path: readonly PolicyReactionOptionYear[];
+}
+
 export interface FiscalRuleFan {
 	samples: number;
 	breachProbability: number;
@@ -97,6 +130,54 @@ export interface FiscalRuleFan {
 	centralHeadroomGbp: number;
 	centralRiskRating: FiscalRiskRating;
 }
+
+const POLICY_REACTION_PROTOTYPES: readonly Omit<
+	PolicyReactionOption,
+	| "annualGrossTighteningGbp"
+	| "annualEffectiveCorrectionGbp"
+	| "horizonGdpDragGbp"
+	| "headroomAfterReactionGbp"
+	| "psnbAtHorizon"
+	| "debtGdpAtHorizon"
+	| "path"
+>[] = [
+	{
+		id: "balanced",
+		label: "Balanced mix",
+		description: "Equal tax and spending package with middle-of-range demand drag.",
+		taxShare: 0.5,
+		spendingShare: 0.5,
+		multiplier: 0.55,
+		implementationLagYears: 0,
+	},
+	{
+		id: "tax-led",
+		label: "Tax-led",
+		description: "Mostly tax rises; lower direct demand drag but higher salience.",
+		taxShare: 0.8,
+		spendingShare: 0.2,
+		multiplier: 0.4,
+		implementationLagYears: 0,
+	},
+	{
+		id: "spending-led",
+		label: "Spending-led",
+		description: "Mostly spending restraint; larger GDP drag from lower demand.",
+		taxShare: 0.2,
+		spendingShare: 0.8,
+		multiplier: 0.75,
+		implementationLagYears: 0,
+	},
+	{
+		id: "delayed",
+		label: "Delayed consolidation",
+		description: "Same balanced mix, but back-loaded after a two-year lag.",
+		taxShare: 0.5,
+		spendingShare: 0.5,
+		multiplier: 0.55,
+		implementationLagYears: 2,
+	},
+];
 
 export const evaluateFiscalRuleDiagnostics = (
 	years: readonly BaselineRelativeYear[],
@@ -180,6 +261,73 @@ export const buildPolicyReactionPath = (
 	});
 };
 
+export const buildPolicyReactionOptions = (
+	years: readonly BaselineRelativeYear[],
+	diagnostics: FiscalRuleDiagnostics,
+): PolicyReactionOption[] => {
+	if (diagnostics.policyReactionGbp <= 0 || years.length === 0) return [];
+	const horizonYear = years.at(-1)?.year ?? years.length;
+
+	return POLICY_REACTION_PROTOTYPES.map((prototype) => {
+		const feedbackDenominator = Math.max(
+			0.4,
+			1 - prototype.multiplier * TAX_TO_GDP_RATIO,
+		);
+		const annualGrossTighteningGbp =
+			diagnostics.policyReactionGbp / feedbackDenominator;
+		let cumulativeEffectiveCorrectionGbp = 0;
+		const path = years.map<PolicyReactionOptionYear>((year) => {
+			const activeYears = Math.max(
+				1,
+				horizonYear - prototype.implementationLagYears,
+			);
+			const ramp =
+				year.year <= prototype.implementationLagYears
+					? 0
+					: Math.min(
+							1,
+							(year.year - prototype.implementationLagYears) / activeYears,
+						);
+			const grossTighteningGbp = annualGrossTighteningGbp * ramp;
+			const gdpDragGbp = grossTighteningGbp * prototype.multiplier;
+			const macroOffsetGbp = gdpDragGbp * TAX_TO_GDP_RATIO;
+			const effectiveCorrectionGbp = Math.max(
+				0,
+				grossTighteningGbp - macroOffsetGbp,
+			);
+			cumulativeEffectiveCorrectionGbp += effectiveCorrectionGbp;
+			return {
+				year: year.year,
+				fiscalYear: year.fiscalYear,
+				correctionGbp: effectiveCorrectionGbp,
+				grossTighteningGbp,
+				effectiveCorrectionGbp,
+				taxTighteningGbp: grossTighteningGbp * prototype.taxShare,
+				spendingTighteningGbp: grossTighteningGbp * prototype.spendingShare,
+				gdpDragGbp,
+				correctedPsnb: year.adjustedPsnb - effectiveCorrectionGbp,
+				correctedDebtGdp:
+					year.adjustedDebtGdp -
+					(year.gdp > 0
+						? (cumulativeEffectiveCorrectionGbp / year.gdp) * 100
+						: 0),
+			};
+		});
+		const horizon = path.at(-1)!;
+		return {
+			...prototype,
+			annualGrossTighteningGbp,
+			annualEffectiveCorrectionGbp: horizon.effectiveCorrectionGbp,
+			horizonGdpDragGbp: horizon.gdpDragGbp,
+			headroomAfterReactionGbp:
+				diagnostics.headroomBufferGbp + horizon.effectiveCorrectionGbp,
+			psnbAtHorizon: horizon.correctedPsnb,
+			debtGdpAtHorizon: horizon.correctedDebtGdp,
+			path,
+		};
+	});
+};
+
 export const projectAgainstBaseline = (
 	projection: readonly YearProjection[],
 	baseline: OBRBaseline = OBR_BASELINE,
@@ -227,6 +375,7 @@ export const projectAgainstBaseline = (
 		adjustedStabilityHeadroom,
 	);
 	const policyReactionPath = buildPolicyReactionPath(years, diagnostics);
+	const policyReactionOptions = buildPolicyReactionOptions(years, diagnostics);
 
 	return {
 		years,
@@ -234,6 +383,7 @@ export const projectAgainstBaseline = (
 		adjustedStabilityHeadroom,
 		diagnostics,
 		policyReactionPath,
+		policyReactionOptions,
 		baseline,
 	};
 };

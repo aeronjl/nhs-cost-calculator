@@ -143,7 +143,9 @@ The model reports:
 
 Fiscal-rule diagnostics compare scenario-adjusted PSNB and debt proxy paths against the OBR baseline. If the stability-rule margin is exhausted, the model reports the implied consolidation need rather than treating the scenario as unconstrained.
 
-The rule-correction path is a stylised policy reaction. When headroom is breached or becomes very thin, the model ramps in the required annual fiscal tightening by the rule horizon and reports corrected PSNB/debt outcomes. It is not a recommendation about whether the adjustment should come from tax rises or spending cuts.
+The rule-correction path is a stylised policy reaction. When headroom is breached or becomes very thin, the model ramps in the required annual fiscal tightening by the rule horizon and reports corrected PSNB/debt outcomes.
+
+The panel also shows fiscal reaction options: balanced, tax-led, spending-led, and delayed consolidation. Each option grosses up the required action for demand-side macro feedback using the model's tax-to-GDP ratio, then reports the implied GDP drag, tax/spending split, corrected PSNB, and debt/GDP at the rule horizon. This is not a recommendation about whether the adjustment should come from tax rises or spending cuts; it is a sensitivity showing how the same rule correction can have different macro and debt-path consequences.
 
 ## Stress And Stochastic Cases
 

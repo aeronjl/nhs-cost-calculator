@@ -129,6 +129,12 @@ describe("projectAgainstBaseline", () => {
 		expect(cmp.policyReactionPath.at(-1)?.correctedPsnb).toBe(
 			90_000_000_000,
 		);
+		expect(cmp.policyReactionOptions.map((option) => option.id)).toEqual([
+			"balanced",
+			"tax-led",
+			"spending-led",
+			"delayed",
+		]);
 	});
 
 	it("flags thin headroom as fiscal reaction risk before formal breach", () => {
@@ -139,6 +145,34 @@ describe("projectAgainstBaseline", () => {
 		expect(cmp.diagnostics.riskRating).toBe("tight");
 		expect(cmp.diagnostics.policyReactionGbp).toBe(8_000_000_000);
 		expect(cmp.policyReactionPath).toHaveLength(3);
+	});
+
+	it("compares fiscal reaction options with macro feedback", () => {
+		const proj = [yp(1, 0), yp(2, 0), yp(3, -15_000_000_000)];
+		const cmp = projectAgainstBaseline(proj, TEST_BASELINE);
+		const taxLed = cmp.policyReactionOptions.find(
+			(option) => option.id === "tax-led",
+		)!;
+		const spendingLed = cmp.policyReactionOptions.find(
+			(option) => option.id === "spending-led",
+		)!;
+		const balanced = cmp.policyReactionOptions.find(
+			(option) => option.id === "balanced",
+		)!;
+		const delayed = cmp.policyReactionOptions.find(
+			(option) => option.id === "delayed",
+		)!;
+		expect(taxLed.annualGrossTighteningGbp).toBeLessThan(
+			spendingLed.annualGrossTighteningGbp,
+		);
+		expect(spendingLed.horizonGdpDragGbp).toBeGreaterThan(
+			taxLed.horizonGdpDragGbp,
+		);
+		expect(taxLed.headroomAfterReactionGbp).toBeCloseTo(0);
+		expect(spendingLed.headroomAfterReactionGbp).toBeCloseTo(0);
+		expect(delayed.debtGdpAtHorizon).toBeGreaterThan(
+			balanced.debtGdpAtHorizon,
+		);
 	});
 
 	it("computes adjusted PSNB as % of GDP correctly", () => {
@@ -152,6 +186,7 @@ describe("projectAgainstBaseline", () => {
 		const proj = [yp(1, 10_000_000_000), yp(2, 10_000_000_000), yp(3, 10_000_000_000), yp(4, 10_000_000_000), yp(5, 10_000_000_000)];
 		const cmp = projectAgainstBaseline(proj, TEST_BASELINE);
 		expect(cmp.years).toHaveLength(3); // truncated to baseline length
+		expect(cmp.policyReactionOptions).toHaveLength(0);
 	});
 });
 

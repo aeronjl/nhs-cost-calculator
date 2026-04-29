@@ -50,6 +50,7 @@ export function BaselineComparisonPanel({ comparison, fiscalRuleFan }: Props) {
 		baseline,
 		diagnostics,
 		policyReactionPath,
+		policyReactionOptions,
 	} = comparison;
 	if (years.length === 0) return null;
 
@@ -204,6 +205,49 @@ export function BaselineComparisonPanel({ comparison, fiscalRuleFan }: Props) {
 								{formatBn(policyReactionPath.at(-1)!.correctedPsnb)}
 							</span>
 							.
+						</div>
+					)}
+					{policyReactionOptions.length > 0 && (
+						<div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+							{policyReactionOptions.map((option) => (
+								<div
+									key={option.id}
+									className="rounded-sm border bg-muted/30 px-2 py-1.5 text-[10px]"
+								>
+									<div className="flex items-baseline justify-between gap-2">
+										<span className="font-medium text-foreground">
+											{option.label}
+										</span>
+										<span className="tabular-nums text-muted-foreground">
+											{Math.round(option.taxShare * 100)}/
+											{Math.round(option.spendingShare * 100)}
+										</span>
+									</div>
+									<div className="mt-1 grid grid-cols-3 gap-1 tabular-nums text-muted-foreground">
+										<div>
+											<div className="uppercase tracking-wider">Action</div>
+											<div className="font-medium text-foreground">
+												{formatBn(option.annualGrossTighteningGbp)}
+											</div>
+										</div>
+										<div>
+											<div className="uppercase tracking-wider">GDP drag</div>
+											<div className="font-medium text-foreground">
+												{formatBn(option.horizonGdpDragGbp)}
+											</div>
+										</div>
+										<div>
+											<div className="uppercase tracking-wider">Debt</div>
+											<div className="font-medium text-foreground">
+												{formatPct(option.debtGdpAtHorizon)}
+											</div>
+										</div>
+									</div>
+									<div className="mt-1 text-muted-foreground leading-snug">
+										{option.description}
+									</div>
+								</div>
+							))}
 						</div>
 					)}
 				</div>
