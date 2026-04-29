@@ -64,6 +64,27 @@ describe("borrowing model", () => {
 		expect(year1!.refinancingPctGdp).toBeGreaterThan(0);
 	});
 
+	it("reports market-absorption metrics without charging small packages", () => {
+		const [year1] = projectBorrowingPath(10_000_000_000, 1);
+		expect(year1!.absorptionStressIndex).toBeLessThan(1);
+		expect(year1!.absorptionPremium).toBe(0);
+		expect(year1!.absorptionBottleneck).toBe("none");
+	});
+
+	it("adds an absorption concession when issuance overloads a maturity bucket", () => {
+		const [year1] = projectBorrowingPath(150_000_000_000, 1, {
+			strategyId: "short-funded",
+		});
+		const billSlice = year1!.instruments.find(
+			(instrument) => instrument.id === "treasury-bills",
+		)!;
+		expect(year1!.absorptionStressIndex).toBeGreaterThan(1);
+		expect(year1!.absorptionPremium).toBeGreaterThan(0);
+		expect(year1!.absorptionBottleneck).toBe("treasury-bills");
+		expect(billSlice.absorptionRatio).toBeGreaterThan(1);
+		expect(billSlice.absorptionPremium).toBeGreaterThan(0);
+	});
+
 	it("builds stress cases for rate, inflation, and credibility shocks", () => {
 		const cases = projectBorrowingStressCases(20_000_000_000, 5);
 		expect(cases.map((c) => c.id)).toEqual([

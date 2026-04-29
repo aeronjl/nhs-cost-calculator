@@ -30,9 +30,20 @@ Alternative strategies are modelled explicitly:
 - `long-funded`: more long gilts; higher term premium, lower refinancing exposure.
 - `index-linked-heavy`: more inflation-linked issuance; higher inflation sensitivity.
 
+## Market Absorption
+
+Each strategy is also checked against annual DMO-style issuance buckets. The model estimates the marginal issuance allocated to each maturity/type bucket and compares it with a digestible share of that bucket's annual planned remit:
+
+```text
+absorption_ratio_i =
+  marginal_issuance_i / (planned_annual_issuance_i * digestible_share)
+```
+
+When the ratio exceeds 1, the instrument receives an absorption concession. Long and index-linked gilts have higher sensitivities than short/medium conventional gilts because depth is thinner and investor bases are more specialised. The concession is capped at 75bp by instrument and is reported separately from the broader debt/GDP risk premium.
+
 ## Rate And Risk Channels
 
-Each instrument has a base nominal yield, or a real yield plus inflation for index-linked gilts. Bank Rate shocks pass through most strongly to bills and short gilts. A parallel yield-curve shock can be supplied by macro feedback or stress tests.
+Each instrument has a base nominal yield, or a real yield plus inflation for index-linked gilts. Bank Rate shocks pass through most strongly to bills and short gilts. A parallel yield-curve shock can be supplied by macro feedback or stress tests. The instrument rate combines base yield, debt-risk premium, market-absorption concession, macro yield shift, and Bank Rate pass-through.
 
 The debt-risk premium is:
 

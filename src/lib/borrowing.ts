@@ -35,6 +35,10 @@ export interface BorrowingInstrumentCost {
 	rate: number;
 	interestCostGbp: number;
 	refinancingGbp: number;
+	marginalIssuanceGbp: number;
+	plannedAnnualIssuanceGbp: number;
+	absorptionRatio: number;
+	absorptionPremium: number;
 }
 
 export interface BorrowingYear {
@@ -56,6 +60,9 @@ export interface BorrowingYear {
 	debtInterestPctGdp: number;
 	refinancingPctGdp: number;
 	refinancingGbp: number;
+	absorptionPremium: number;
+	absorptionStressIndex: number;
+	absorptionBottleneck: DebtInstrument["id"] | "none";
 	instruments: BorrowingInstrumentCost[];
 }
 
@@ -99,6 +106,16 @@ const DEFAULT_ASSUMPTIONS: BorrowingPathAssumptions = {
 	strategyId: DEFAULT_BORROWING_STRATEGY_ID,
 };
 
+const ABSORPTION_CAPACITY_SHARE_OF_ANNUAL_REMIT = 0.3;
+const ABSORPTION_PREMIUM_CAP = 0.0075;
+const ABSORPTION_PREMIUM_SENSITIVITY: Record<DebtInstrument["id"], number> = {
+	"treasury-bills": 0.0025,
+	"short-gilts": 0.002,
+	"medium-gilts": 0.0025,
+	"long-gilts": 0.0045,
+	"index-linked-gilts": 0.004,
+};
+
 const resolvedAssumptions = (
 	assumptions: Partial<BorrowingPathAssumptions> = {},
 ): BorrowingPathAssumptions => ({ ...DEFAULT_ASSUMPTIONS, ...assumptions });
@@ -117,6 +134,41 @@ const issuancePressurePremium = (amount: number): number => {
 	if (amount <= 0) return 0;
 	const excess = Math.max(0, amount - 50_000_000_000);
 	return (excess / 100_000_000_000) * BORROWING.risk.issuancePremiumPer100bn;
+};
+
+const plannedAnnualIssuanceFor = (instrument: DebtInstrument): number => {
+	const centralShare =
+		BORROWING.portfolio.find((item) => item.id === instrument.id)?.share ??
+		instrument.share;
+	return BORROWING.grossFinancingRequirement * centralShare;
+};
+
+const absorptionForInstrument = (
+	instrument: DebtInstrument,
+	amount: number,
+): {
+	marginalIssuanceGbp: number;
+	plannedAnnualIssuanceGbp: number;
+	absorptionRatio: number;
+	absorptionPremium: number;
+} => {
+	const marginalIssuanceGbp = Math.max(0, amount) * instrument.share;
+	const plannedAnnualIssuanceGbp = plannedAnnualIssuanceFor(instrument);
+	const digestibleCapacity =
+		plannedAnnualIssuanceGbp * ABSORPTION_CAPACITY_SHARE_OF_ANNUAL_REMIT;
+	const absorptionRatio =
+		digestibleCapacity > 0 ? marginalIssuanceGbp / digestibleCapacity : 0;
+	const absorptionPremium = Math.min(
+		ABSORPTION_PREMIUM_CAP,
+		Math.max(0, absorptionRatio - 1) *
+			ABSORPTION_PREMIUM_SENSITIVITY[instrument.id],
+	);
+	return {
+		marginalIssuanceGbp,
+		plannedAnnualIssuanceGbp,
+		absorptionRatio,
+		absorptionPremium,
+	};
 };
 
 const nextMarketReaction = (
@@ -173,6 +225,7 @@ export const borrowingRiskPremium = (
 const instrumentRate = (
 	instrument: DebtInstrument,
 	riskPremium: number,
+	absorptionPremium: number,
 	assumptions: BorrowingPathAssumptions,
 ): number => {
 	const bankRateShock = assumptions.bankRate - BORROWING.bankRate;
@@ -182,8 +235,9 @@ const instrumentRate = (
 			-0.02,
 			(instrument.realYield ?? 0) +
 				assumptions.inflation +
-				(assumptions.cpiDeviationPp ?? 0) / 100 +
+			(assumptions.cpiDeviationPp ?? 0) / 100 +
 				riskPremium +
+				absorptionPremium +
 				macroShift +
 				bankRateShock * instrument.bankRatePassThrough,
 		);
@@ -192,6 +246,7 @@ const instrumentRate = (
 		0,
 		(instrument.nominalYield ?? BORROWING.thirtyYearGiltYield) +
 			riskPremium +
+			absorptionPremium +
 			macroShift +
 			bankRateShock * instrument.bankRatePassThrough,
 	);
@@ -211,7 +266,13 @@ export const effectiveBorrowingRate = (
 		a,
 	);
 	const instruments = portfolioFor(a).map((instrument) => {
-		const rate = instrumentRate(instrument, riskPremium, a);
+		const absorption = absorptionForInstrument(instrument, amount);
+		const rate = instrumentRate(
+			instrument,
+			riskPremium,
+			absorption.absorptionPremium,
+			a,
+		);
 		const debtSlice = openingDebtGbp * instrument.share;
 		const refinancingGbp =
 			Math.abs(debtSlice) / Math.max(0.25, instrument.maturityYears);
@@ -222,6 +283,7 @@ export const effectiveBorrowingRate = (
 			rate,
 			interestCostGbp: debtSlice * rate,
 			refinancingGbp,
+			...absorption,
 		};
 	});
 	const rate = instruments.reduce((sum, item) => sum + item.share * item.rate, 0);
@@ -254,6 +316,22 @@ export const projectBorrowingPath = (
 			(sum, instrument) => sum + instrument.refinancingGbp,
 			0,
 		);
+		const absorptionPremium = instruments.reduce(
+			(sum, instrument) => sum + instrument.share * instrument.absorptionPremium,
+			0,
+		);
+		const absorptionBottleneck =
+			instruments.reduce<BorrowingInstrumentCost | null>(
+				(max, instrument) =>
+					!max || instrument.absorptionRatio > max.absorptionRatio
+						? instrument
+						: max,
+				null,
+			)?.id ?? "none";
+		const absorptionStressIndex = Math.max(
+			0,
+			...instruments.map((instrument) => instrument.absorptionRatio),
+		);
 		const closingDebtGbp = openingDebtGbp + interestCostGbp;
 		const debtGdpDeltaPp = (closingDebtGbp / nominalGdpGbp) * 100;
 		const psnbIncreaseGbp = primaryFinancingGbp + interestCostGbp;
@@ -280,6 +358,10 @@ export const projectBorrowingPath = (
 			debtInterestPctGdp: (interestCostGbp / nominalGdpGbp) * 100,
 			refinancingPctGdp: (refinancingGbp / nominalGdpGbp) * 100,
 			refinancingGbp,
+			absorptionPremium,
+			absorptionStressIndex,
+			absorptionBottleneck:
+				absorptionStressIndex > 1 ? absorptionBottleneck : "none",
 			instruments,
 		});
 		openingDebtGbp = closingDebtGbp;
@@ -320,6 +402,22 @@ export const projectBorrowingMarketReactionPath = (
 			(sum, instrument) => sum + instrument.refinancingGbp,
 			0,
 		);
+		const absorptionPremium = instruments.reduce(
+			(sum, instrument) => sum + instrument.share * instrument.absorptionPremium,
+			0,
+		);
+		const absorptionBottleneck =
+			instruments.reduce<BorrowingInstrumentCost | null>(
+				(max, instrument) =>
+					!max || instrument.absorptionRatio > max.absorptionRatio
+						? instrument
+						: max,
+				null,
+			)?.id ?? "none";
+		const absorptionStressIndex = Math.max(
+			0,
+			...instruments.map((instrument) => instrument.absorptionRatio),
+		);
 		const closingDebtGbp = openingDebtGbp + interestCostGbp;
 		const debtGdpDeltaPp = (closingDebtGbp / nominalGdpGbp) * 100;
 		const psnbIncreaseGbp = primaryFinancingGbp + interestCostGbp;
@@ -345,6 +443,10 @@ export const projectBorrowingMarketReactionPath = (
 			debtInterestPctGdp: (interestCostGbp / nominalGdpGbp) * 100,
 			refinancingPctGdp: (refinancingGbp / nominalGdpGbp) * 100,
 			refinancingGbp,
+			absorptionPremium,
+			absorptionStressIndex,
+			absorptionBottleneck:
+				absorptionStressIndex > 1 ? absorptionBottleneck : "none",
 			instruments,
 			marketReactionPremium,
 			marketReactionTrigger,

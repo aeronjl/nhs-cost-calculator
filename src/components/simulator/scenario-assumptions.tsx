@@ -306,6 +306,21 @@ function BorrowingModelBlock({
 					</dd>
 				</div>
 				<div className="contents">
+					<dt className="text-muted-foreground">Absorption concession</dt>
+					<dd className="tabular-nums text-right font-medium">
+						{(yearN.absorptionPremium * 10_000).toFixed(1)}bp
+					</dd>
+				</div>
+				{yearN.absorptionBottleneck !== "none" && (
+					<div className="contents">
+						<dt className="text-muted-foreground">Market bottleneck</dt>
+						<dd className="tabular-nums text-right font-medium">
+							{yearN.absorptionStressIndex.toFixed(1)}x{" "}
+							{yearN.absorptionBottleneck.replaceAll("-", " ")}
+						</dd>
+					</div>
+				)}
+				<div className="contents">
 					<dt className="text-muted-foreground">r - g</dt>
 					<dd className="tabular-nums text-right font-medium">
 						{formatSignedPct(yearN.rMinusG)}
