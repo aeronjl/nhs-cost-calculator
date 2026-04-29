@@ -46,6 +46,62 @@ describe("borrowing stress regime model", () => {
 		expect(probabilityTotal).toBeCloseTo(1);
 	});
 
+	it("uses explicit borrowing context as regime priors", () => {
+		const inferred = estimateBorrowingStressRegime(43_500_000_000, 5);
+		const scored = estimateBorrowingStressRegime(43_500_000_000, 5, {
+			context: { fiscalEvent: "obr-scored", duration: "temporary" },
+		});
+		const unscoredPersistent = estimateBorrowingStressRegime(
+			43_500_000_000,
+			5,
+			{
+				context: { fiscalEvent: "unscored", duration: "persistent" },
+			},
+		);
+		const backstopped = estimateBorrowingStressRegime(43_500_000_000, 5, {
+			context: {
+				fiscalEvent: "emergency",
+				monetaryBackstop: "qe-backstopped",
+				duration: "temporary",
+			},
+		});
+		const pandemicInferred = estimateBorrowingStressRegime(300_000_000_000, 5);
+		const pandemicNoBackstop = estimateBorrowingStressRegime(
+			300_000_000_000,
+			5,
+			{
+				context: {
+					monetaryBackstop: "none",
+					duration: "persistent",
+				},
+			},
+		);
+		const probability = (
+			estimate: ReturnType<typeof estimateBorrowingStressRegime>,
+			id: "normal" | "credibility-shock" | "monetary-backstop",
+		) => estimate.probabilities.find((item) => item.id === id)!.probability;
+
+		expect(probability(scored, "normal")).toBeGreaterThan(
+			probability(inferred, "normal"),
+		);
+		expect(scored.expectedOverlayBp).toBeLessThan(inferred.expectedOverlayBp);
+		expect(probability(unscoredPersistent, "credibility-shock")).toBeGreaterThan(
+			probability(inferred, "credibility-shock"),
+		);
+		expect(unscoredPersistent.expectedOverlayBp).toBeGreaterThan(
+			inferred.expectedOverlayBp,
+		);
+		expect(probability(backstopped, "monetary-backstop")).toBeGreaterThan(
+			probability(inferred, "monetary-backstop"),
+		);
+		expect(backstopped.expectedOverlayBp).toBeLessThan(
+			inferred.expectedOverlayBp,
+		);
+		expect(pandemicNoBackstop.expectedOverlayBp).toBeGreaterThan(
+			pandemicInferred.expectedOverlayBp,
+		);
+	});
+
 	it("adds regime switching to borrowing fan tails", () => {
 		const base = projectBorrowingFan(43_500_000_000, 5, {}, 400, 12);
 		const switched = projectBorrowingRegimeFan(

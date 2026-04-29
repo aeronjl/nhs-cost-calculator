@@ -263,4 +263,38 @@ describe("projectFiscalRuleFan", () => {
 		expect(switched.headroomBand).not.toEqual(continuousOnly.headroomBand);
 		expect(switched.centralHeadroomGbp).toBe(continuousOnly.centralHeadroomGbp);
 	});
+
+	it("uses borrowing context inside the fiscal-rule regime fan", () => {
+		const scored = evaluateScenario([
+			{
+				id: "borrow",
+				type: "borrow",
+				leverId: "",
+				magnitude: 43_500_000_000,
+				borrowingContext: {
+					fiscalEvent: "obr-scored",
+					duration: "temporary",
+				},
+			},
+		]);
+		const unscored = evaluateScenario([
+			{
+				id: "borrow",
+				type: "borrow",
+				leverId: "",
+				magnitude: 43_500_000_000,
+				borrowingContext: {
+					fiscalEvent: "unscored",
+					duration: "persistent",
+				},
+			},
+		]);
+		const scoredFan = projectFiscalRuleFan(scored, TEST_BASELINE, 300, 7);
+		const unscoredFan = projectFiscalRuleFan(unscored, TEST_BASELINE, 300, 7);
+		expect(unscoredFan.breachProbability).toBeGreaterThanOrEqual(
+			scoredFan.breachProbability,
+		);
+		expect(unscoredFan.headroomBand.p5).toBeLessThan(scoredFan.headroomBand.p5);
+		expect(unscoredFan.centralHeadroomGbp).toBe(scoredFan.centralHeadroomGbp);
+	});
 });

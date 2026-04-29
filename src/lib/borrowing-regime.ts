@@ -8,6 +8,7 @@ import {
 	projectBorrowingPath,
 	projectBorrowingMarketReactionPath,
 } from "@/lib/borrowing";
+import type { BorrowingScenarioContext } from "@/lib/borrowing-context";
 import {
 	computeBand,
 	sampleNormal,
@@ -46,6 +47,8 @@ export interface BorrowingRegimeProbability {
 
 export interface BorrowingRegimeEstimate {
 	features: BorrowingRegimeFeatures;
+	context: BorrowingScenarioContext;
+	contextLogitAdjustments: Record<BorrowingStressRegimeId, number>;
 	probabilities: readonly BorrowingRegimeProbability[];
 	topRegime: BorrowingRegimeProbability;
 	expectedOverlayBp: number;
@@ -81,6 +84,11 @@ export interface BorrowingFanDecomposition {
 	regimeFan: BorrowingFanYear[];
 	years: BorrowingFanDecompositionYear[];
 	finalYear: BorrowingFanDecompositionYear;
+}
+
+export interface BorrowingRegimeAssumptions
+	extends Partial<BorrowingPathAssumptions> {
+	context?: BorrowingScenarioContext;
 }
 
 export const BORROWING_STRESS_REGIMES: readonly BorrowingStressRegimeDefinition[] =
@@ -133,6 +141,58 @@ const FEATURE_SCALE: Record<keyof BorrowingRegimeFeatures, number> = {
 };
 
 const SOFTMAX_TEMPERATURE = 0.4;
+
+const emptyLogitAdjustments = (): Record<BorrowingStressRegimeId, number> => ({
+	normal: 0,
+	"credibility-shock": 0,
+	"monetary-backstop": 0,
+});
+
+const contextLogitAdjustmentsFor = (
+	context: BorrowingScenarioContext = {},
+): Record<BorrowingStressRegimeId, number> => {
+	const adjustment = emptyLogitAdjustments();
+	switch (context.fiscalEvent) {
+		case "obr-scored":
+			adjustment.normal += 1.2;
+			adjustment["credibility-shock"] -= 1.3;
+			adjustment["monetary-backstop"] -= 0.3;
+			break;
+		case "unscored":
+			adjustment["credibility-shock"] += 1.4;
+			adjustment.normal -= 0.5;
+			adjustment["monetary-backstop"] -= 0.3;
+			break;
+		case "emergency":
+			adjustment["monetary-backstop"] += 0.8;
+			adjustment["credibility-shock"] += 0.3;
+			adjustment.normal -= 0.6;
+			break;
+	}
+	switch (context.monetaryBackstop) {
+		case "qe-backstopped":
+			adjustment["monetary-backstop"] += 3.5;
+			adjustment["credibility-shock"] -= 1.2;
+			adjustment.normal -= 0.8;
+			break;
+		case "none":
+			adjustment["monetary-backstop"] -= 1.4;
+			break;
+	}
+	switch (context.duration) {
+		case "temporary":
+			adjustment["monetary-backstop"] += 0.4;
+			adjustment.normal += 0.25;
+			adjustment["credibility-shock"] -= 0.25;
+			break;
+		case "persistent":
+			adjustment["credibility-shock"] += 0.55;
+			adjustment.normal -= 0.15;
+			adjustment["monetary-backstop"] -= 0.55;
+			break;
+	}
+	return adjustment;
+};
 
 const centralPeakPressureBp = (
 	path: readonly BorrowingMarketReactionYear[],
@@ -222,18 +282,26 @@ const stressRatingFor = (
 export const estimateBorrowingStressRegime = (
 	amountGbp: number,
 	years: number,
-	assumptions: { strategyId?: BorrowingStrategyId } = {},
+	assumptions: {
+		strategyId?: BorrowingStrategyId;
+		context?: BorrowingScenarioContext;
+	} = {},
 ): BorrowingRegimeEstimate => {
 	const path = projectBorrowingMarketReactionPath(amountGbp, years, {
 		strategyId: assumptions.strategyId ?? "dmo-remit",
 	});
 	const features = featuresForPath(amountGbp, path);
+	const context = assumptions.context ?? {};
+	const contextLogitAdjustments = contextLogitAdjustmentsFor(context);
 	const calibration = labelledEpisodeFeatures().map((item) => ({
 		...item,
 		distance: featureDistance(features, item.features),
 	}));
 	const weights = calibration.map((item) =>
-		Math.exp(-item.distance / SOFTMAX_TEMPERATURE),
+		Math.exp(
+			-item.distance / SOFTMAX_TEMPERATURE +
+				contextLogitAdjustments[item.episode.regime],
+		),
 	);
 	const weightTotal = weights.reduce((sum, value) => sum + value, 0);
 	const probabilities = calibration
@@ -260,6 +328,8 @@ export const estimateBorrowingStressRegime = (
 
 	return {
 		features,
+		context,
+		contextLogitAdjustments,
 		probabilities,
 		topRegime,
 		expectedOverlayBp,
@@ -302,13 +372,14 @@ export const sampleBorrowingRegimeOverlayBp = (
 export const projectBorrowingRegimeFan = (
 	amount: number,
 	years: number,
-	assumptions: Partial<BorrowingPathAssumptions> = {},
+	assumptions: BorrowingRegimeAssumptions = {},
 	samples = 1000,
 	seed = 73,
 ): BorrowingFanYear[] => {
 	const centralPath = projectBorrowingPath(amount, years, assumptions);
 	const regimeEstimate = estimateBorrowingStressRegime(amount, years, {
 		strategyId: assumptions.strategyId,
+		context: assumptions.context,
 	});
 	const rng = seededRng(seed);
 	const regimeRng = seededRng(seed + 7_919);
@@ -368,7 +439,7 @@ export const projectBorrowingRegimeFan = (
 export const decomposeBorrowingFan = (
 	amount: number,
 	years: number,
-	assumptions: Partial<BorrowingPathAssumptions> = {},
+	assumptions: BorrowingRegimeAssumptions = {},
 	samples = 1000,
 	seed = 73,
 ): BorrowingFanDecomposition => {

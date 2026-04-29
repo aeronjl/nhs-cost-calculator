@@ -17,6 +17,10 @@ import {
 	estimateBorrowingStressRegime,
 } from "@/lib/borrowing-regime";
 import {
+	describeBorrowingContext,
+	isBorrowingContextEmpty,
+} from "@/lib/borrowing-context";
+import {
 	type BehaviouralModelSummary,
 	describeBehaviouralModel,
 } from "@/lib/elasticity";
@@ -105,7 +109,10 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 			? decomposeBorrowingFan(
 					line.magnitude,
 					5,
-					{ strategyId: line.borrowingStrategyId },
+					{
+						strategyId: line.borrowingStrategyId,
+						context: line.borrowingContext,
+					},
 					500,
 				)
 			: null;
@@ -120,6 +127,7 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 		line.type === "borrow"
 			? estimateBorrowingStressRegime(line.magnitude, 5, {
 					strategyId: line.borrowingStrategyId,
+					context: line.borrowingContext,
 				})
 			: null;
 	const adjustmentPct = Math.round(dynamic.behaviouralAdjustmentFraction * 100);
@@ -202,6 +210,7 @@ function AssumptionItem({ evaluation }: { evaluation: LineEvaluation }) {
 						fanDecomposition={borrowingFanDecomposition}
 						marketReaction={borrowingMarketReaction}
 						regime={borrowingRegime}
+						context={line.borrowingContext}
 					/>
 				</MethodologyPopover>
 			</div>
@@ -258,6 +267,7 @@ function BorrowingModelBlock({
 	fanDecomposition,
 	marketReaction,
 	regime,
+	context,
 }: {
 	strategyId: Parameters<typeof getBorrowingStrategy>[0];
 	path: ReturnType<typeof projectBorrowingPath> | null;
@@ -269,6 +279,7 @@ function BorrowingModelBlock({
 	fanDecomposition: ReturnType<typeof decomposeBorrowingFan> | null;
 	marketReaction: ReturnType<typeof projectBorrowingMarketReactionPath> | null;
 	regime: ReturnType<typeof estimateBorrowingStressRegime> | null;
+	context: Parameters<typeof describeBorrowingContext>[0];
 }) {
 	if (!path || path.length === 0) return null;
 	const year1 = path[0]!;
@@ -575,6 +586,14 @@ function BorrowingModelBlock({
 						Regime classifier
 					</div>
 					<dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs">
+						{!isBorrowingContextEmpty(context) && (
+							<div className="contents">
+								<dt className="text-muted-foreground">Context override</dt>
+								<dd className="tabular-nums text-right font-medium">
+									{describeBorrowingContext(context)}
+								</dd>
+							</div>
+						)}
 						<div className="contents">
 							<dt className="text-muted-foreground">Top regime</dt>
 							<dd className="tabular-nums text-right font-medium">

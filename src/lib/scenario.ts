@@ -92,6 +92,13 @@ import {
 	FUTURE_DEBT_SERVICE_INCIDENCE,
 	projectBorrowingPath,
 } from "@/lib/borrowing";
+import {
+	describeBorrowingContext,
+	deserializeBorrowingContext,
+	isBorrowingContextEmpty,
+	serializeBorrowingContext,
+	type BorrowingScenarioContext,
+} from "@/lib/borrowing-context";
 
 // A scenario is a stack of fiscal-lever adjustments. Each line independently
 // produces a £ delta (positive = freed, negative = required). The scenario's
@@ -105,6 +112,7 @@ export interface ScenarioLine {
 	leverId: string; // programme id, tax id, or "" for borrow
 	magnitude: number; // % for programme, pp for tax, GBP for borrow
 	borrowingStrategyId?: BorrowingStrategyId;
+	borrowingContext?: BorrowingScenarioContext;
 	// "Break the rules" flag: when set, the lever has been forced through
 	// despite a statutory protection or pre-introduction status. The
 	// evaluator applies a yield haircut (markets/avoidance) and a fixed
@@ -271,13 +279,17 @@ export function evaluateLine(
 		line.type === "borrow" && line.borrowingStrategyId
 			? getBorrowingStrategy(line.borrowingStrategyId)
 			: null;
+	const strategySuffix = strategy ? ` (${strategy.label})` : "";
+	const contextSuffix = isBorrowingContextEmpty(line.borrowingContext)
+		? ""
+		: ` · ${describeBorrowingContext(line.borrowingContext)}`;
 	return {
 		line,
 		deltaGbp: amount,
 		description:
 			amount >= 0
-				? `Borrow £${(amount / 1_000_000_000).toFixed(1)}bn${strategy ? ` (${strategy.label})` : ""}`
-				: `Repay £${(Math.abs(amount) / 1_000_000_000).toFixed(1)}bn of debt${strategy ? ` (${strategy.label})` : ""}`,
+				? `Borrow £${(amount / 1_000_000_000).toFixed(1)}bn${strategySuffix}${contextSuffix}`
+				: `Repay £${(Math.abs(amount) / 1_000_000_000).toFixed(1)}bn of debt${strategySuffix}${contextSuffix}`,
 		methodology: BORROWING.methodology,
 		source: BORROWING.source,
 	};
@@ -348,7 +360,9 @@ export function serializeScenario(lines: ScenarioLine[]): string {
 				const strategySuffix = line.borrowingStrategyId
 					? `:${line.borrowingStrategyId}`
 					: "";
-				return `${code}:${line.magnitude}${strategySuffix}${suffix}`;
+				const context = serializeBorrowingContext(line.borrowingContext);
+				const contextSuffix = context ? `:ctx=${context}` : "";
+				return `${code}:${line.magnitude}${strategySuffix}${contextSuffix}${suffix}`;
 			}
 			return `${code}:${line.leverId}:${line.magnitude}${suffix}`;
 		})
@@ -373,20 +387,27 @@ export function deserializeScenario(s: string): ScenarioLine[] {
 			const overridden = parts[parts.length - 1] === "o";
 			const dataParts = overridden ? parts.slice(0, -1) : parts;
 			if (type === "borrow") {
-				if (dataParts.length !== 2 && dataParts.length !== 3) return null;
+				if (dataParts.length < 2) return null;
 				const mag = Number(dataParts[1]);
 				if (!Number.isFinite(mag)) return null;
-				const strategyId = dataParts[2];
-				const borrowingStrategyId =
-					strategyId && getBorrowingStrategy(strategyId).id === strategyId
-						? (strategyId as BorrowingStrategyId)
-						: undefined;
+				let borrowingStrategyId: BorrowingStrategyId | undefined;
+				let borrowingContext: BorrowingScenarioContext | undefined;
+				for (const token of dataParts.slice(2)) {
+					if (token.startsWith("ctx=")) {
+						borrowingContext = deserializeBorrowingContext(token.slice(4));
+						continue;
+					}
+					if (getBorrowingStrategy(token).id === token) {
+						borrowingStrategyId = token as BorrowingStrategyId;
+					}
+				}
 				return {
 					id: newId(),
 					type,
 					leverId: "",
 					magnitude: mag,
 					...(borrowingStrategyId && { borrowingStrategyId }),
+					...(borrowingContext && { borrowingContext }),
 					...(overridden && { overridden: true }),
 				};
 			}
@@ -513,6 +534,13 @@ export interface ScenarioDiff {
 
 const lineKey = (l: ScenarioLine): string =>
 	l.type === "borrow" ? "borrow" : `${l.type}:${l.leverId}`;
+
+const lineChanged = (a: ScenarioLine, b: ScenarioLine): boolean =>
+	a.magnitude !== b.magnitude ||
+	!!a.overridden !== !!b.overridden ||
+	a.borrowingStrategyId !== b.borrowingStrategyId ||
+	serializeBorrowingContext(a.borrowingContext) !==
+		serializeBorrowingContext(b.borrowingContext);
 
 // ---------------------------------------------------------------------------
 // Distributional evaluation: per-line and per-scenario £ impact by income
@@ -1490,7 +1518,7 @@ export function diffScenarios(
 		const other = incomingByKey.get(key);
 		if (!other) {
 			removed.push(line);
-		} else if (line.magnitude !== other.magnitude) {
+		} else if (lineChanged(line, other)) {
 			modified.push({ from: line, to: other });
 		} else {
 			unchanged.push(line);

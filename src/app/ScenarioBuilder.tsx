@@ -15,6 +15,13 @@ import { TAX_LEVERS } from "@/data/levers/tax-rates";
 import { UK_SPENDING_PROGRAMMES } from "@/data/levers/uk-spending";
 import { comparisonsCovered } from "@/lib/counterfactual";
 import {
+	BORROWING_DURATION_OPTIONS,
+	BORROWING_FISCAL_EVENT_OPTIONS,
+	BORROWING_MONETARY_BACKSTOP_OPTIONS,
+	isBorrowingContextEmpty,
+	type BorrowingScenarioContext,
+} from "@/lib/borrowing-context";
+import {
 	type LineEvaluation,
 	type ScenarioLine,
 	deserializeScenario,
@@ -544,6 +551,12 @@ function BorrowLineControls({
 	onUpdate: (patch: Partial<ScenarioLine>) => void;
 }) {
 	const billions = line.magnitude / 1_000_000_000;
+	const updateContext = (patch: Partial<BorrowingScenarioContext>) => {
+		const next = { ...line.borrowingContext, ...patch };
+		onUpdate({
+			borrowingContext: isBorrowingContextEmpty(next) ? undefined : next,
+		});
+	};
 	return (
 		<>
 			<span className="text-sm font-medium">Borrow</span>
@@ -579,6 +592,68 @@ function BorrowLineControls({
 					</option>
 				))}
 			</select>
+			<div className="basis-full flex flex-wrap items-center gap-2 pl-7 pt-1">
+				<span className="text-xs font-medium text-muted-foreground">
+					Context
+				</span>
+				<select
+					value={line.borrowingContext?.fiscalEvent ?? ""}
+					onChange={(e) =>
+						updateContext({
+							fiscalEvent:
+								(e.target.value as BorrowingScenarioContext["fiscalEvent"]) ||
+								undefined,
+						})
+					}
+					className="rounded border border-input bg-background px-2 py-1 text-xs"
+					aria-label="Borrowing fiscal event context"
+				>
+					<option value="">Inferred event</option>
+					{BORROWING_FISCAL_EVENT_OPTIONS.map((option) => (
+						<option key={option.id} value={option.id}>
+							{option.label}
+						</option>
+					))}
+				</select>
+				<select
+					value={line.borrowingContext?.monetaryBackstop ?? ""}
+					onChange={(e) =>
+						updateContext({
+							monetaryBackstop:
+								(e.target.value as BorrowingScenarioContext["monetaryBackstop"]) ||
+								undefined,
+						})
+					}
+					className="rounded border border-input bg-background px-2 py-1 text-xs"
+					aria-label="Borrowing monetary backstop context"
+				>
+					<option value="">Backstop inferred</option>
+					{BORROWING_MONETARY_BACKSTOP_OPTIONS.map((option) => (
+						<option key={option.id} value={option.id}>
+							{option.label}
+						</option>
+					))}
+				</select>
+				<select
+					value={line.borrowingContext?.duration ?? ""}
+					onChange={(e) =>
+						updateContext({
+							duration:
+								(e.target.value as BorrowingScenarioContext["duration"]) ||
+								undefined,
+						})
+					}
+					className="rounded border border-input bg-background px-2 py-1 text-xs"
+					aria-label="Borrowing duration context"
+				>
+					<option value="">Duration inferred</option>
+					{BORROWING_DURATION_OPTIONS.map((option) => (
+						<option key={option.id} value={option.id}>
+							{option.label}
+						</option>
+					))}
+				</select>
+			</div>
 		</>
 	);
 }

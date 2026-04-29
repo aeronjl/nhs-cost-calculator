@@ -163,6 +163,28 @@ describe("serializeScenario / deserializeScenario", () => {
 		expect(back[0]?.borrowingStrategyId).toBe("long-funded");
 	});
 
+	it("round-trips borrowing context in compact URLs", () => {
+		const lines: ScenarioLine[] = [
+			{
+				id: "b",
+				type: "borrow",
+				leverId: "",
+				magnitude: 43_500_000_000,
+				borrowingStrategyId: "long-funded",
+				borrowingContext: {
+					fiscalEvent: "unscored",
+					monetaryBackstop: "qe-backstopped",
+					duration: "persistent",
+				},
+			},
+		];
+		const s = serializeScenario(lines);
+		expect(s).toBe("b:43500000000:long-funded:ctx=uqp");
+		const back = deserializeScenario(s);
+		expect(back[0]?.borrowingStrategyId).toBe("long-funded");
+		expect(back[0]?.borrowingContext).toEqual(lines[0]?.borrowingContext);
+	});
+
 	it("ignores invalid lines", () => {
 		const r = deserializeScenario(
 			"p:not-a-programme:5,t:basic-rate-income-tax:1,garbage,p::5",
@@ -464,6 +486,24 @@ describe("diffScenarios", () => {
 		const b = [borrow(20_000_000_000)];
 		const diff = diffScenarios(a, b);
 		expect(diff.modified).toHaveLength(1);
+	});
+
+	it("treats borrowing context changes as scenario modifications", () => {
+		const a = [borrow(43_500_000_000)];
+		const b: ScenarioLine[] = [
+			{
+				...borrow(43_500_000_000),
+				borrowingContext: {
+					fiscalEvent: "obr-scored",
+					duration: "temporary",
+				},
+			},
+		];
+		const diff = diffScenarios(a, b);
+		expect(diff.modified).toHaveLength(1);
+		expect(diff.modified[0]?.to.borrowingContext?.fiscalEvent).toBe(
+			"obr-scored",
+		);
 	});
 
 	it("handles a complex diff with all categories", () => {
