@@ -60,6 +60,11 @@ describe("ModelAuditPanel report quality checklist", () => {
 
 		expect(html).toContain("Report quality checklist");
 		expect(html).toContain("10 present");
+		expect(html).toContain("MD");
+		expect(html).toContain("JSON");
+		expect(html).toContain("evidence pack");
+		expect(html).not.toContain("Downloaded");
+		expect(html).not.toContain("Failed");
 		for (const label of [
 			"Scenario summary",
 			"Baseline &amp; fiscal rule",

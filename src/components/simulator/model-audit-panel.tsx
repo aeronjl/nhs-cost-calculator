@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	Check,
 	CheckCircle2,
@@ -24,6 +24,12 @@ interface Props {
 }
 
 type ChecklistStatus = "present" | "missing" | "not-applicable";
+type AuditExportKind = "md" | "json";
+type AuditExportStatus = "success" | "error";
+type AuditExportFeedback = {
+	kind: AuditExportKind;
+	status: AuditExportStatus;
+} | null;
 
 interface ChecklistItem {
 	label: string;
@@ -78,6 +84,32 @@ const formatBp = (n: number | null): string =>
 
 const exportFilename = (kind: "md" | "json", generatedAt: string): string =>
 	`model-audit-${generatedAt.slice(0, 10)}.${kind}`;
+
+const AUDIT_EXPORT_FEEDBACK_MS = 1800;
+
+const auditExportDefaultLabel = (kind: AuditExportKind): string =>
+	kind === "md" ? "MD" : "JSON";
+
+const auditExportButtonLabel = (
+	kind: AuditExportKind,
+	feedback: AuditExportFeedback,
+): string => {
+	if (feedback?.kind !== kind) return auditExportDefaultLabel(kind);
+	return feedback.status === "success" ? "Downloaded" : "Failed";
+};
+
+const auditExportButtonClassName = (
+	kind: AuditExportKind,
+	feedback: AuditExportFeedback,
+): string =>
+	cn(
+		"h-7 px-2 text-[10px]",
+		feedback?.kind === kind && feedback.status === "success"
+			? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50 hover:text-blue-700"
+			: feedback?.kind === kind && feedback.status === "error"
+				? "border-red-200 bg-red-50 text-red-700 hover:bg-red-50 hover:text-red-700"
+				: null,
+	);
 
 const hasBacktestCoverage = (audit: ModelAuditEvidencePack): boolean =>
 	Boolean(
@@ -236,23 +268,56 @@ export function ModelAuditPanel({ audit }: Props) {
 		limitations,
 	} = audit;
 	const [copied, setCopied] = useState(false);
+	const [exportFeedback, setExportFeedback] =
+		useState<AuditExportFeedback>(null);
+	const exportFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(
+		null,
+	);
 	const generatedAt = useMemo(() => new Date().toISOString(), [audit]);
 	const qualityChecklist = useMemo(() => buildQualityChecklist(audit), [audit]);
+
+	const showExportFeedback = (
+		kind: AuditExportKind,
+		status: AuditExportStatus,
+	) => {
+		if (exportFeedbackTimer.current) {
+			clearTimeout(exportFeedbackTimer.current);
+		}
+		setExportFeedback({ kind, status });
+		exportFeedbackTimer.current = setTimeout(() => {
+			setExportFeedback(null);
+			exportFeedbackTimer.current = null;
+		}, AUDIT_EXPORT_FEEDBACK_MS);
+	};
+
+	useEffect(
+		() => () => {
+			if (exportFeedbackTimer.current) {
+				clearTimeout(exportFeedbackTimer.current);
+			}
+		},
+		[],
+	);
 
 	const currentShareUrl = () =>
 		typeof window === "undefined" ? undefined : window.location.href;
 
-	const downloadAppendix = (kind: "md" | "json") => {
-		const shareUrl = currentShareUrl();
-		const body =
-			kind === "md"
-				? buildModelAuditMarkdownAppendix(audit, { generatedAt, shareUrl })
-				: buildModelAuditJsonExport(audit, { generatedAt, shareUrl });
-		downloadTextFile(
-			exportFilename(kind, generatedAt),
-			body,
-			kind === "md" ? "text/markdown;charset=utf-8" : "application/json",
-		);
+	const downloadAppendix = (kind: AuditExportKind) => {
+		try {
+			const shareUrl = currentShareUrl();
+			const body =
+				kind === "md"
+					? buildModelAuditMarkdownAppendix(audit, { generatedAt, shareUrl })
+					: buildModelAuditJsonExport(audit, { generatedAt, shareUrl });
+			downloadTextFile(
+				exportFilename(kind, generatedAt),
+				body,
+				kind === "md" ? "text/markdown;charset=utf-8" : "application/json",
+			);
+			showExportFeedback(kind, "success");
+		} catch {
+			showExportFeedback(kind, "error");
+		}
 	};
 
 	const copyShareUrl = async () => {
@@ -284,26 +349,31 @@ export function ModelAuditPanel({ audit }: Props) {
 						{copied ? <Check aria-hidden="true" /> : <LinkIcon aria-hidden="true" />}
 						{copied ? "Copied" : "Link"}
 					</Button>
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						className="h-7 px-2 text-[10px]"
-						onClick={() => downloadAppendix("md")}
-					>
-						<FileText aria-hidden="true" />
-						MD
-					</Button>
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						className="h-7 px-2 text-[10px]"
-						onClick={() => downloadAppendix("json")}
-					>
-						<FileJson aria-hidden="true" />
-						JSON
-					</Button>
+					{(["md", "json"] as const).map((kind) => {
+						const activeFeedback =
+							exportFeedback?.kind === kind ? exportFeedback : null;
+						const Icon =
+							activeFeedback?.status === "success"
+								? Check
+								: activeFeedback?.status === "error"
+									? TriangleAlert
+									: kind === "md"
+										? FileText
+										: FileJson;
+						return (
+							<Button
+								key={kind}
+								type="button"
+								variant="outline"
+								size="sm"
+								className={auditExportButtonClassName(kind, exportFeedback)}
+								onClick={() => downloadAppendix(kind)}
+							>
+								<Icon aria-hidden="true" />
+								{auditExportButtonLabel(kind, exportFeedback)}
+							</Button>
+						);
+					})}
 					<span className="inline-flex h-7 items-center gap-1 text-[10px] text-muted-foreground">
 						<Download aria-hidden="true" className="size-3" />
 						evidence pack
