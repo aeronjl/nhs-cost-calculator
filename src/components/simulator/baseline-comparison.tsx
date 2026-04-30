@@ -259,7 +259,13 @@ export function BaselineComparisonPanel({
 				</div>
 			</div>
 
-			<FiscalCounterfactualChart comparison={comparison} />
+			<FiscalCounterfactualChart
+				comparison={comparison}
+				fiscalRuleFan={fiscalRuleFan}
+				fiscalRuleUncertaintyDecomposition={
+					fiscalRuleUncertaintyDecomposition
+				}
+			/>
 
 			<div className="rounded-md border bg-background/60 p-3 space-y-3">
 				<div>
@@ -828,8 +834,12 @@ export function BaselineComparisonPanel({
 
 function FiscalCounterfactualChart({
 	comparison,
+	fiscalRuleFan,
+	fiscalRuleUncertaintyDecomposition,
 }: {
 	comparison: BaselineComparison;
+	fiscalRuleFan?: FiscalRuleFan;
+	fiscalRuleUncertaintyDecomposition?: FiscalRuleUncertaintyDecomposition;
 }) {
 	const { years, baseline, policyReactionPath } = comparison;
 	if (years.length === 0) return null;
@@ -842,6 +852,10 @@ function FiscalCounterfactualChart({
 		policyReactionPath.map((year) => [year.fiscalYear, year]),
 	);
 	const hasReactionPath = policyReactionPath.length > 0;
+	const hasPostReactionFan =
+		!!fiscalRuleFan &&
+		fiscalRuleFan.policyReactionTriggeredProbability > 0 &&
+		fiscalRuleFan.pathBands.length === years.length;
 	const psnbSeries = [
 		{
 			label: "current-policy baseline",
@@ -917,6 +931,20 @@ function FiscalCounterfactualChart({
 							dashed
 						/>
 					)}
+					{fiscalRuleFan && (
+						<ChartLegendItem
+							color={scenarioColour}
+							label="90% pre-reaction fan"
+							filled
+						/>
+					)}
+					{hasPostReactionFan && (
+						<ChartLegendItem
+							color="#dc2626"
+							label="90% post-reaction fan"
+							filled
+						/>
+					)}
 					<span className="inline-flex items-center gap-1">
 						<span className="h-3 border-l border-dashed border-foreground/50" />
 						rule year
@@ -932,6 +960,15 @@ function FiscalCounterfactualChart({
 					ruleFiscalYear={baseline.stabilityRuleAt}
 					series={psnbSeries}
 					gapColor={scenarioColour}
+					fanBand={fiscalRuleFan?.pathBands.map((year) => year.psnbBand)}
+					postReactionFanBand={
+						hasPostReactionFan
+							? fiscalRuleFan?.pathBands.map(
+									(year) => year.postReactionPsnbBand,
+								)
+							: undefined
+					}
+					fanColor={scenarioColour}
 					formatValue={formatAxisBn}
 				/>
 				<CounterfactualPathChart
@@ -942,9 +979,23 @@ function FiscalCounterfactualChart({
 					ruleFiscalYear={baseline.stabilityRuleAt}
 					series={debtSeries}
 					gapColor={scenarioColour}
+					fanBand={fiscalRuleFan?.pathBands.map((year) => year.debtGdpBand)}
+					postReactionFanBand={
+						hasPostReactionFan
+							? fiscalRuleFan?.pathBands.map(
+									(year) => year.postReactionDebtGdpBand,
+								)
+							: undefined
+					}
+					fanColor={scenarioColour}
 					formatValue={formatPct}
 				/>
 			</div>
+			{fiscalRuleUncertaintyDecomposition && (
+				<RuleYearUncertaintyLayers
+					decomposition={fiscalRuleUncertaintyDecomposition}
+				/>
+			)}
 		</div>
 	);
 }
@@ -953,18 +1004,25 @@ function ChartLegendItem({
 	color,
 	label,
 	dashed = false,
+	filled = false,
 }: {
 	color: string;
 	label: string;
 	dashed?: boolean;
+	filled?: boolean;
 }) {
 	return (
 		<span className="inline-flex items-center gap-1">
 			<span
-				className="inline-block h-0 w-4 border-t-2"
+				className={cn(
+					"inline-block w-4",
+					filled ? "h-2 rounded-sm border" : "h-0 border-t-2",
+				)}
 				style={{
+					backgroundColor: filled ? color : undefined,
 					borderColor: color,
 					borderTopStyle: dashed ? "dashed" : "solid",
+					opacity: filled ? 0.18 : 1,
 				}}
 			/>
 			{label}
@@ -979,6 +1037,14 @@ type CounterfactualPathSeries = {
 	dashed?: boolean;
 };
 
+type CounterfactualPathBand = {
+	p5: number;
+	p25: number;
+	p50: number;
+	p75: number;
+	p95: number;
+};
+
 function CounterfactualPathChart({
 	title,
 	subtitle,
@@ -987,6 +1053,9 @@ function CounterfactualPathChart({
 	ruleFiscalYear,
 	series,
 	gapColor,
+	fanBand,
+	postReactionFanBand,
+	fanColor,
 	formatValue,
 }: {
 	title: string;
@@ -996,6 +1065,9 @@ function CounterfactualPathChart({
 	ruleFiscalYear: string;
 	series: readonly CounterfactualPathSeries[];
 	gapColor: string;
+	fanBand?: readonly CounterfactualPathBand[];
+	postReactionFanBand?: readonly CounterfactualPathBand[];
+	fanColor: string;
 	formatValue: (value: number) => string;
 }) {
 	if (years.length === 0 || series.length === 0) return null;
@@ -1006,7 +1078,12 @@ function CounterfactualPathChart({
 	const padY = 10;
 	const innerWidth = width - padX * 2;
 	const innerHeight = height - padY * 2;
-	const allValues = series.flatMap((item) => [...item.values]);
+	const bandValues = [...(fanBand ?? []), ...(postReactionFanBand ?? [])]
+		.flatMap((band) => [band.p5, band.p25, band.p50, band.p75, band.p95]);
+	const allValues = [
+		...series.flatMap((item) => [...item.values]),
+		...bandValues,
+	];
 	const rawMin = Math.min(...allValues);
 	const rawMax = Math.max(...allValues);
 	const rawRange = rawMax - rawMin;
@@ -1028,14 +1105,34 @@ function CounterfactualPathChart({
 			.join(" ");
 	const linePath = (values: readonly number[]): string =>
 		values
-			.map((value, index) => `${index === 0 ? "M" : "L"} ${xAt(index)} ${yAt(value)}`)
+			.map(
+				(value, index) =>
+					`${index === 0 ? "M" : "L"} ${xAt(index)} ${yAt(value)}`,
+			)
 			.join(" ");
+	const bandPolygon = (
+		band: readonly CounterfactualPathBand[] | undefined,
+		high: keyof CounterfactualPathBand,
+		low: keyof CounterfactualPathBand,
+	): string =>
+		band && band.length === years.length
+			? `${pointsFor(band.map((year) => year[high]))} ${reversePointsFor(
+					band.map((year) => year[low]),
+				)}`
+			: "";
 	const baselineValues = series[0]?.values ?? [];
 	const scenarioValues = series[1]?.values ?? [];
 	const gapPolygon =
 		baselineValues.length === scenarioValues.length
 			? `${pointsFor(baselineValues)} ${reversePointsFor(scenarioValues)}`
 			: "";
+	const fan90Polygon = bandPolygon(fanBand, "p95", "p5");
+	const fan50Polygon = bandPolygon(fanBand, "p75", "p25");
+	const postReactionFan90Polygon = bandPolygon(
+		postReactionFanBand,
+		"p95",
+		"p5",
+	);
 	const ruleIndex = years.findIndex((year) => year === ruleFiscalYear);
 
 	return (
@@ -1081,6 +1178,25 @@ function CounterfactualPathChart({
 				/>
 				{gapPolygon && (
 					<polygon points={gapPolygon} fill={gapColor} opacity="0.1" />
+				)}
+				{fan90Polygon && (
+					<polygon points={fan90Polygon} fill={fanColor} opacity="0.08">
+						<title>90% pre-reaction fan</title>
+					</polygon>
+				)}
+				{fan50Polygon && (
+					<polygon points={fan50Polygon} fill={fanColor} opacity="0.14">
+						<title>50% pre-reaction fan</title>
+					</polygon>
+				)}
+				{postReactionFan90Polygon && (
+					<polygon
+						points={postReactionFan90Polygon}
+						fill="#dc2626"
+						opacity="0.08"
+					>
+						<title>90% post-reaction fan</title>
+					</polygon>
 				)}
 				{ruleIndex >= 0 && (
 					<line
@@ -1144,6 +1260,112 @@ function CounterfactualPathChart({
 						{year}
 					</span>
 				))}
+			</div>
+		</div>
+	);
+}
+
+function RuleYearUncertaintyLayers({
+	decomposition,
+}: {
+	decomposition: FiscalRuleUncertaintyDecomposition;
+}) {
+	if (decomposition.layers.length === 0) return null;
+
+	const values = decomposition.layers.flatMap((layer) => [
+		layer.headroomBand.p5,
+		layer.headroomBand.p50,
+		layer.headroomBand.p95,
+		0,
+	]);
+	const min = Math.min(...values);
+	const max = Math.max(...values);
+	const range = max - min || 1;
+	const xPct = (value: number): number => ((value - min) / range) * 100;
+	const zeroPct = xPct(0);
+
+	return (
+		<div className="mt-3 rounded-sm border bg-muted/20 p-2">
+			<div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+				<div>
+					<div className="text-xs font-medium">
+						Rule-year uncertainty layers
+					</div>
+					<p className="text-[10px] leading-snug text-muted-foreground">
+						Sequential headroom bands: central estimate, baseline forecast
+						error, macro shocks, borrowing-regime tails, and post-reaction
+						outcomes.
+					</p>
+				</div>
+				<div className="text-[10px] tabular-nums text-muted-foreground">
+					{decomposition.samples} draws
+				</div>
+			</div>
+			<div
+				className="mt-2 space-y-2"
+				aria-label="Rule-year uncertainty layers by fiscal headroom"
+			>
+				{decomposition.layers.map((layer) => {
+					const left = xPct(layer.headroomBand.p5);
+					const right = xPct(layer.headroomBand.p95);
+					const median = xPct(layer.headroomBand.p50);
+					const tone =
+						layer.id === "policy-reaction"
+							? "bg-blue-500"
+							: layer.id === "borrowing-regime"
+								? "bg-red-500"
+								: layer.id === "macro-shocks"
+									? "bg-amber-500"
+									: layer.id === "baseline-forecast-error"
+										? "bg-slate-500"
+										: "bg-muted-foreground";
+					return (
+						<div
+							key={layer.id}
+							className="grid gap-1 sm:grid-cols-[150px_minmax(0,1fr)_80px] sm:items-center"
+							title={layer.description}
+						>
+							<div className="flex items-baseline justify-between gap-2 sm:block">
+								<div className="truncate text-[10px] font-medium text-foreground">
+									{layer.label}
+								</div>
+								<div className="text-[9px] tabular-nums text-muted-foreground sm:hidden">
+									{formatProbability(layer.breachProbability)}
+								</div>
+							</div>
+							<div className="relative h-4 rounded-sm bg-background/80">
+								<div
+									className="absolute inset-y-0 border-l border-dashed border-foreground/40"
+									style={{ left: `${zeroPct}%` }}
+									aria-hidden="true"
+								/>
+								<div
+									className={cn("absolute top-1 h-2 rounded-full", tone)}
+									style={{
+										left: `${left}%`,
+										width: `${Math.max(1, right - left)}%`,
+										opacity: 0.18,
+									}}
+								/>
+								<div
+									className={cn(
+										"absolute top-0.5 h-3 w-1 -translate-x-1/2 rounded-full",
+										tone,
+									)}
+									style={{ left: `${median}%` }}
+								/>
+							</div>
+							<div className="hidden text-right text-[10px] tabular-nums text-muted-foreground sm:block">
+								{formatProbability(layer.breachProbability)} breach
+							</div>
+						</div>
+					);
+				})}
+			</div>
+			<div className="mt-2 flex justify-between text-[9px] tabular-nums text-muted-foreground">
+				<span>{formatBn(min)} headroom</span>
+				<span>£0 rule line</span>
+				<span>{formatBn(max)} headroom</span>
 			</div>
 		</div>
 	);

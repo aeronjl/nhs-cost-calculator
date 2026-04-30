@@ -294,6 +294,14 @@ describe("projectFiscalRuleFan", () => {
 		const b = projectFiscalRuleFan(result, TEST_BASELINE, 200, 99);
 		expect(a).toEqual(b);
 		expect(a.samples).toBe(200);
+		expect(a.pathBands).toHaveLength(TEST_BASELINE.years.length);
+		expect(a.pathBands[0]?.fiscalYear).toBe("Y1");
+		expect(a.pathBands[0]?.psnbBand.p5).toBeLessThan(
+			a.pathBands[0]!.psnbBand.p95,
+		);
+		expect(a.pathBands[0]?.debtGdpBand.p5).toBeLessThan(
+			a.pathBands[0]!.debtGdpBand.p95,
+		);
 		expect(a.headroomBand.p5).toBeLessThan(a.headroomBand.p95);
 		expect(a.ruleYearPsnbBand.p5).toBeLessThan(a.ruleYearPsnbBand.p95);
 		expect(a.breachProbability).toBeGreaterThanOrEqual(0);
@@ -376,6 +384,9 @@ describe("projectFiscalRuleFan", () => {
 		expect(fan.endogenousReactionGrossBand.p95).toBeGreaterThan(0);
 		expect(fan.postReactionHeadroomBand.p50).toBeGreaterThan(
 			fan.headroomBand.p50,
+		);
+		expect(fan.pathBands.at(-1)?.postReactionPsnbBand.p50).toBeLessThanOrEqual(
+			fan.pathBands.at(-1)!.psnbBand.p50,
 		);
 		expect(fan.postReactionBreachProbability).toBeLessThanOrEqual(
 			fan.breachProbability,

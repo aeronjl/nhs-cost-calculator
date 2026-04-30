@@ -136,6 +136,7 @@ export interface FiscalRuleFan {
 	breachProbability: number;
 	tightOrBreachProbability: number;
 	debtRisingProbability: number;
+	pathBands: readonly FiscalRulePathFanYear[];
 	headroomBand: PercentileBand;
 	ruleYearPsnbBand: PercentileBand;
 	ruleYearDebtGdpBand: PercentileBand;
@@ -159,6 +160,15 @@ export interface FiscalRuleFan {
 	}[];
 	centralHeadroomGbp: number;
 	centralRiskRating: FiscalRiskRating;
+}
+
+export interface FiscalRulePathFanYear {
+	year: number;
+	fiscalYear: string;
+	psnbBand: PercentileBand;
+	debtGdpBand: PercentileBand;
+	postReactionPsnbBand: PercentileBand;
+	postReactionDebtGdpBand: PercentileBand;
 }
 
 export interface FiscalRulePriorSensitivityRow {
@@ -628,6 +638,12 @@ export const projectFiscalRuleFan = (
 	const endogenousReactionGrossSamples: number[] = [];
 	const endogenousReactionGdpDragSamples: number[] = [];
 	const endogenousReactionResidualGapSamples: number[] = [];
+	const psnbPathSamples: number[][] = baseline.years.map(() => []);
+	const debtGdpPathSamples: number[][] = baseline.years.map(() => []);
+	const postReactionPsnbPathSamples: number[][] = baseline.years.map(() => []);
+	const postReactionDebtGdpPathSamples: number[][] = baseline.years.map(
+		() => [],
+	);
 	const reactionPackageCounts: Record<PolicyReactionOptionId, number> = {
 		balanced: 0,
 		"tax-led": 0,
@@ -670,6 +686,10 @@ export const projectFiscalRuleFan = (
 		).withFeedback;
 		const comparison = projectAgainstBaseline(projection, sampled);
 		const ruleYear = comparison.ruleYear ?? comparison.years.at(-1);
+		comparison.years.forEach((year, index) => {
+			psnbPathSamples[index]?.push(year.adjustedPsnb);
+			debtGdpPathSamples[index]?.push(year.adjustedDebtGdp);
+		});
 		headroomSamples.push(comparison.adjustedStabilityHeadroom);
 		ruleYearPsnbSamples.push(ruleYear?.adjustedPsnb ?? 0);
 		ruleYearDebtGdpSamples.push(ruleYear?.adjustedDebtGdp ?? 0);
@@ -744,6 +764,10 @@ export const projectFiscalRuleFan = (
 		}
 		const postReactionRuleYear =
 			postReactionComparison.ruleYear ?? postReactionComparison.years.at(-1);
+		postReactionComparison.years.forEach((year, index) => {
+			postReactionPsnbPathSamples[index]?.push(year.adjustedPsnb);
+			postReactionDebtGdpPathSamples[index]?.push(year.adjustedDebtGdp);
+		});
 		postReactionHeadroomSamples.push(
 			postReactionComparison.adjustedStabilityHeadroom,
 		);
@@ -778,6 +802,18 @@ export const projectFiscalRuleFan = (
 		breachProbability: breachCount / samples,
 		tightOrBreachProbability: tightOrBreachCount / samples,
 		debtRisingProbability: debtRisingCount / samples,
+		pathBands: baseline.years.map((year, index) => ({
+			year: index + 1,
+			fiscalYear: year.fiscalYear,
+			psnbBand: computeBand(psnbPathSamples[index] ?? []),
+			debtGdpBand: computeBand(debtGdpPathSamples[index] ?? []),
+			postReactionPsnbBand: computeBand(
+				postReactionPsnbPathSamples[index] ?? [],
+			),
+			postReactionDebtGdpBand: computeBand(
+				postReactionDebtGdpPathSamples[index] ?? [],
+			),
+		})),
 		headroomBand: computeBand(headroomSamples),
 		ruleYearPsnbBand: computeBand(ruleYearPsnbSamples),
 		ruleYearDebtGdpBand: computeBand(ruleYearDebtGdpSamples),
