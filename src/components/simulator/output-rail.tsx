@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+	AlertCircle,
 	Check,
 	Download,
 	FileJson,
@@ -34,6 +35,7 @@ import {
 	type MicrosimAggregate,
 } from "@/lib/microsim/impact";
 import { generatePopulation } from "@/lib/microsim/population";
+import { cn } from "@/lib/utils";
 import {
 	buildModelAuditEvidencePack,
 	buildModelAuditJsonExport,
@@ -90,8 +92,15 @@ const SECTION_IDS = [
 	"audit",
 ] as const;
 type SectionId = (typeof SECTION_IDS)[number];
+type AppendixExportKind = "md" | "json";
+type AppendixExportStatus = "success" | "error";
+type AppendixExportFeedback = {
+	kind: AppendixExportKind;
+	status: AppendixExportStatus;
+} | null;
 
 const STORAGE_KEY = "simulator-rail-sections";
+const APPENDIX_FEEDBACK_MS = 1800;
 
 const SECTION_NAV: readonly {
 	id: SectionId;
@@ -107,8 +116,35 @@ const SECTION_NAV: readonly {
 
 const sectionHash = (id: SectionId | "summary") => `report-${id}`;
 
-const appendixFilename = (kind: "md" | "json", generatedAt: string): string =>
+const appendixFilename = (
+	kind: AppendixExportKind,
+	generatedAt: string,
+): string =>
 	`research-appendix-${generatedAt.slice(0, 10)}.${kind}`;
+
+const appendixDefaultLabel = (kind: AppendixExportKind): string =>
+	kind === "md" ? "Appendix MD" : "JSON";
+
+const appendixButtonLabel = (
+	kind: AppendixExportKind,
+	feedback: AppendixExportFeedback,
+): string => {
+	if (feedback?.kind !== kind) return appendixDefaultLabel(kind);
+	return feedback.status === "success" ? "Downloaded" : "Failed";
+};
+
+const appendixButtonClassName = (
+	kind: AppendixExportKind,
+	feedback: AppendixExportFeedback,
+): string =>
+	cn(
+		"inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs hover:text-foreground",
+		feedback?.kind === kind && feedback.status === "success"
+			? "border-blue-200 bg-blue-50 text-blue-700"
+			: feedback?.kind === kind && feedback.status === "error"
+				? "border-red-200 bg-red-50 text-red-700"
+				: "text-muted-foreground",
+	);
 
 const downloadTextFile = (
 	filename: string,
@@ -144,6 +180,25 @@ export function OutputRail({
 		audit: false,
 	});
 	const [copied, setCopied] = useState(false);
+	const [appendixFeedback, setAppendixFeedback] =
+		useState<AppendixExportFeedback>(null);
+	const appendixFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(
+		null,
+	);
+
+	const showAppendixFeedback = (
+		kind: AppendixExportKind,
+		status: AppendixExportStatus,
+	) => {
+		if (appendixFeedbackTimer.current) {
+			clearTimeout(appendixFeedbackTimer.current);
+		}
+		setAppendixFeedback({ kind, status });
+		appendixFeedbackTimer.current = setTimeout(() => {
+			setAppendixFeedback(null);
+			appendixFeedbackTimer.current = null;
+		}, APPENDIX_FEEDBACK_MS);
+	};
 
 	useEffect(() => {
 		try {
@@ -175,6 +230,15 @@ export function OutputRail({
 			// ignore
 		}
 	}, [openMap]);
+
+	useEffect(
+		() => () => {
+			if (appendixFeedbackTimer.current) {
+				clearTimeout(appendixFeedbackTimer.current);
+			}
+		},
+		[],
+	);
 
 	const toggle = (id: SectionId) =>
 		setOpenMap((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -305,23 +369,28 @@ export function OutputRail({
 			fiscalRulePriorSensitivity,
 			fiscalRuleUncertaintyDecomposition,
 		});
-	const downloadResearchAppendix = (kind: "md" | "json") => {
-		const generatedAt = new Date().toISOString();
-		const audit = buildResearchAppendixAudit();
-		const shareUrl = currentReportUrl();
-		const body =
-			kind === "md"
-				? buildModelAuditMarkdownAppendix(audit, {
-						generatedAt,
-						shareUrl,
-						title: "Research Appendix",
-					})
-				: buildModelAuditJsonExport(audit, { generatedAt, shareUrl });
-		downloadTextFile(
-			appendixFilename(kind, generatedAt),
-			body,
-			kind === "md" ? "text/markdown;charset=utf-8" : "application/json",
-		);
+	const downloadResearchAppendix = (kind: AppendixExportKind) => {
+		try {
+			const generatedAt = new Date().toISOString();
+			const audit = buildResearchAppendixAudit();
+			const shareUrl = currentReportUrl();
+			const body =
+				kind === "md"
+					? buildModelAuditMarkdownAppendix(audit, {
+							generatedAt,
+							shareUrl,
+							title: "Research Appendix",
+						})
+					: buildModelAuditJsonExport(audit, { generatedAt, shareUrl });
+			downloadTextFile(
+				appendixFilename(kind, generatedAt),
+				body,
+				kind === "md" ? "text/markdown;charset=utf-8" : "application/json",
+			);
+			showAppendixFeedback(kind, "success");
+		} catch {
+			showAppendixFeedback(kind, "error");
+		}
 	};
 	const geYear1 = ge.withFeedback[0]?.net ?? 0;
 	const macroYear1 = ge.noFeedback[0]?.net ?? 0;
@@ -409,22 +478,29 @@ export function OutputRail({
 							)}
 							{copied ? "Copied" : "Copy link"}
 						</button>
-						<button
-							type="button"
-							onClick={() => downloadResearchAppendix("md")}
-							className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
-						>
-							<FileText aria-hidden="true" className="size-3" />
-							Appendix MD
-						</button>
-						<button
-							type="button"
-							onClick={() => downloadResearchAppendix("json")}
-							className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
-						>
-							<FileJson aria-hidden="true" className="size-3" />
-							JSON
-						</button>
+						{(["md", "json"] as const).map((kind) => {
+							const activeFeedback =
+								appendixFeedback?.kind === kind ? appendixFeedback : null;
+							const Icon =
+								activeFeedback?.status === "success"
+									? Check
+									: activeFeedback?.status === "error"
+										? AlertCircle
+										: kind === "md"
+											? FileText
+											: FileJson;
+							return (
+								<button
+									key={kind}
+									type="button"
+									onClick={() => downloadResearchAppendix(kind)}
+									className={appendixButtonClassName(kind, appendixFeedback)}
+								>
+									<Icon aria-hidden="true" className="size-3" />
+									{appendixButtonLabel(kind, appendixFeedback)}
+								</button>
+							);
+						})}
 						<button
 							type="button"
 							onClick={() => goToSection("audit")}
