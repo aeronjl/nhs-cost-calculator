@@ -1152,6 +1152,47 @@ export const evaluateScenarioBand = (
 	return { ...band, central: result.net };
 };
 
+export interface ScenarioBandContribution {
+	lineId: string;
+	description: string;
+	variance: number; // £² — independent-normal variance of this line's net
+	sd: number; // £ — sd of this line's net
+	share: number; // 0..1 share of the total scenario variance
+}
+
+// Per-line variance decomposition of the scenario's parameter-uncertainty
+// band. Independent-normal assumption matches `evaluateScenarioBand`'s
+// sampling: for a `pp`-tax line with magnitude m and per-pp distribution
+// (mean μ, sd σ), the line contributes Var = (m × σ)². Lines without a
+// per-pp distribution (programmes, borrow, non-pp tax) are deterministic
+// and contribute zero variance — they're returned with share = 0 so the
+// caller can still surface them as "no fan contribution".
+export const evaluateScenarioBandContributions = (
+	result: ScenarioResult,
+): ScenarioBandContribution[] => {
+	const rows: ScenarioBandContribution[] = [];
+	let totalVariance = 0;
+	for (const ev of result.lines) {
+		const dist = distributionForLine(ev.line);
+		const sd = dist ? Math.abs(ev.line.magnitude) * dist.sd : 0;
+		const variance = sd * sd;
+		totalVariance += variance;
+		rows.push({
+			lineId: ev.line.id,
+			description: ev.description,
+			variance,
+			sd,
+			share: 0,
+		});
+	}
+	if (totalVariance > 0) {
+		for (const row of rows) {
+			row.share = row.variance / totalVariance;
+		}
+	}
+	return rows;
+};
+
 // Multi-year version: same sampling approach but with the full projection
 // machinery applied per draw. Each draw samples each lever's per-pp yield
 // once, then projects across the full horizon using the existing growth +

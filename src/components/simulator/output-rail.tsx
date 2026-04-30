@@ -24,6 +24,7 @@ import {
 	type ScenarioResult,
 	evaluateScenario,
 	evaluateScenarioBand,
+	evaluateScenarioBandContributions,
 	evaluateScenarioDistribution,
 	evaluateScenarioDynamic,
 	evaluateScenarioMacro,
@@ -467,6 +468,10 @@ export function OutputRail({
 		Math.abs(dynamic.dynamicNet) > 0 &&
 		Math.abs(macro.macroFeedbackGbp) / Math.abs(dynamic.dynamicNet) > 0.05;
 	const band = evaluateScenarioBand(result);
+	const bandContributions = useMemo(
+		() => evaluateScenarioBandContributions(result),
+		[result],
+	);
 	const bandWidthSignificant =
 		Math.abs(result.net) > 0 &&
 		Math.abs(band.p95 - band.p5) / Math.abs(result.net) > 0.05;
@@ -830,6 +835,7 @@ export function OutputRail({
 													projection={projection}
 													bands={projectionBands}
 													lineProjections={lineProjections}
+													bandContributions={bandContributions}
 												/>
 											</div>
 											{mode !== "headline" && (

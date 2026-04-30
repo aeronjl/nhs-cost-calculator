@@ -10,6 +10,7 @@ import type {
 } from "@/lib/baseline-projection";
 import { policyReactionPackageSummary } from "@/lib/policy-reaction-packages";
 import { pointerToYearIndex, useYearFocus } from "@/lib/year-focus";
+import { FiscalRiskGauge } from "./fiscal-risk-gauge";
 
 // Renders the scenario's impact against OBR's "do-nothing" baseline.
 //
@@ -263,6 +264,15 @@ export function BaselineComparisonPanel({
 					</div>
 				</div>
 			</div>
+
+			{fiscalRuleFan && (
+				<FiscalRiskGauge
+					fiscalRuleFan={fiscalRuleFan}
+					fiscalRuleUncertaintyDecomposition={
+						fiscalRuleUncertaintyDecomposition
+					}
+				/>
+			)}
 
 			<FiscalCounterfactualChart
 				comparison={comparison}

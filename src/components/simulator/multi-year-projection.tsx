@@ -3,7 +3,11 @@
 import { type PointerEvent, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { PercentileBand } from "@/lib/uncertainty";
-import type { LineEvaluation, YearProjection } from "@/lib/scenario";
+import type {
+	LineEvaluation,
+	ScenarioBandContribution,
+	YearProjection,
+} from "@/lib/scenario";
 import { pointerToYearIndex, useYearFocus } from "@/lib/year-focus";
 import { PerLeverComposition } from "./per-lever-composition";
 
@@ -23,6 +27,7 @@ interface Props {
 		line: LineEvaluation;
 		values: readonly number[];
 	}[];
+	bandContributions?: readonly ScenarioBandContribution[];
 }
 
 const formatBn = (n: number): string => {
@@ -45,6 +50,31 @@ const formatPp = (n: number): string => {
 	return `${sign}${Math.abs(n).toFixed(2)}pp`;
 };
 
+// Linear-interpolate the probability that the year's net falls below zero,
+// given a 5/25/50/75/95 percentile band. Conservative when zero falls
+// outside [p5, p95]: returns 0 if zero is below p5, 1 if above p95.
+const probBelowZero = (band: PercentileBand): number => {
+	if (band.p95 < 0) return 1;
+	if (band.p5 > 0) return 0;
+	const points: readonly { p: number; v: number }[] = [
+		{ p: 0.05, v: band.p5 },
+		{ p: 0.25, v: band.p25 },
+		{ p: 0.5, v: band.p50 },
+		{ p: 0.75, v: band.p75 },
+		{ p: 0.95, v: band.p95 },
+	];
+	for (let i = 0; i < points.length - 1; i++) {
+		const a = points[i]!;
+		const b = points[i + 1]!;
+		if (a.v <= 0 && b.v >= 0) {
+			if (b.v === a.v) return a.p;
+			const t = (0 - a.v) / (b.v - a.v);
+			return a.p + t * (b.p - a.p);
+		}
+	}
+	return band.p50 < 0 ? 0.5 : 0;
+};
+
 const valueToneClassName = (n: number): string =>
 	n > 0 ? "text-blue-700" : n < 0 ? "text-amber-700" : "text-muted-foreground";
 
@@ -52,6 +82,7 @@ export function MultiYearProjection({
 	projection,
 	bands,
 	lineProjections,
+	bandContributions,
 }: Props) {
 	if (projection.length === 0) return null;
 
@@ -194,6 +225,9 @@ export function MultiYearProjection({
 						tone={yearNBand ? "blue" : "muted"}
 					/>
 				</div>
+				{bandContributions && bandContributions.length > 0 && (
+					<BandContributionsBar contributions={bandContributions} />
+				)}
 			</div>
 
 			<p className="text-[10px] text-muted-foreground leading-snug">
@@ -419,7 +453,7 @@ function ProjectionFanChart({
 				})}
 			</div>
 			{focusedProjection ? (
-				<div className="mt-1 flex items-baseline justify-between gap-2 text-[9px] tabular-nums">
+				<div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-[9px] tabular-nums">
 					<span className="text-muted-foreground">
 						Y{focusedProjection.year} central{" "}
 						<span className="font-medium text-foreground">
@@ -427,9 +461,25 @@ function ProjectionFanChart({
 						</span>
 					</span>
 					{focusedBand ? (
-						<span className="text-muted-foreground">
-							90% {formatBn(focusedBand.p5)} – {formatBn(focusedBand.p95)}
-						</span>
+						<>
+							<span className="text-muted-foreground">
+								90% {formatBn(focusedBand.p5)} – {formatBn(focusedBand.p95)}
+							</span>
+							{(() => {
+								const pBelow = probBelowZero(focusedBand);
+								if (pBelow <= 0.01 || pBelow >= 0.99) return null;
+								return (
+									<span
+										className={cn(
+											"text-muted-foreground",
+											pBelow > 0.25 && "text-amber-700",
+										)}
+									>
+										P(&lt;0) {Math.round(pBelow * 100)}%
+									</span>
+								);
+							})()}
+						</>
 					) : (
 						<span className="text-muted-foreground">central only</span>
 					)}
@@ -500,6 +550,89 @@ function ProjectionMetric({
 			</div>
 			<div className="truncate text-[9px] text-muted-foreground">
 				{detail}
+			</div>
+		</div>
+	);
+}
+
+const BAND_CONTRIB_PALETTE: readonly string[] = [
+	"#2563eb", // blue-600
+	"#d97706", // amber-600
+	"#0891b2", // cyan-600
+	"#be185d", // pink-700
+	"#7c3aed", // violet-600
+	"#15803d", // green-700
+	"#c2410c", // orange-700
+	"#4f46e5", // indigo-600
+];
+
+const formatStylePct = (n: number): string =>
+	`${Math.max(0, Math.min(100, n)).toFixed(3)}%`;
+
+function BandContributionsBar({
+	contributions,
+}: {
+	contributions: readonly ScenarioBandContribution[];
+}) {
+	const stochastic = contributions.filter((c) => c.share > 0);
+	if (stochastic.length === 0) return null;
+
+	const sorted = [...stochastic].sort((a, b) => b.share - a.share);
+
+	return (
+		<div className="border-t pt-2">
+			<div className="flex items-baseline justify-between gap-2">
+				<span className="text-[9px] uppercase tracking-wider text-muted-foreground">
+					Where the band comes from
+				</span>
+				<span className="text-[9px] text-muted-foreground">
+					independent-normal variance share
+				</span>
+			</div>
+			<div
+				className="mt-1.5 flex h-2 overflow-hidden rounded-sm bg-muted"
+				role="img"
+				aria-label="Per-lever variance contribution to the scenario fan"
+			>
+				{sorted.map((row, idx) => {
+					const color =
+						BAND_CONTRIB_PALETTE[idx % BAND_CONTRIB_PALETTE.length] ?? "#475569";
+					return (
+						<span
+							key={row.lineId}
+							className="block h-full"
+							style={{
+								width: formatStylePct(row.share * 100),
+								backgroundColor: color,
+							}}
+							title={`${row.description}: ${Math.round(row.share * 100)}% of variance`}
+						/>
+					);
+				})}
+			</div>
+			<div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[9px]">
+				{sorted.map((row, idx) => {
+					const color =
+						BAND_CONTRIB_PALETTE[idx % BAND_CONTRIB_PALETTE.length] ?? "#475569";
+					return (
+						<span
+							key={row.lineId}
+							className="inline-flex items-center gap-1 text-muted-foreground"
+						>
+							<span
+								aria-hidden="true"
+								className="inline-block h-2 w-2 rounded-sm"
+								style={{ backgroundColor: color }}
+							/>
+							<span className="truncate max-w-[14rem]">
+								{row.description}{" "}
+								<span className="tabular-nums text-foreground">
+									{Math.round(row.share * 100)}%
+								</span>
+							</span>
+						</span>
+					);
+				})}
 			</div>
 		</div>
 	);
