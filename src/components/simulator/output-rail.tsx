@@ -63,6 +63,7 @@ import { ModelAuditPanel } from "./model-audit-panel";
 import { MultiYearProjection } from "./multi-year-projection";
 import { ScenarioAssumptions } from "./scenario-assumptions";
 import { TopZone } from "./top-zone";
+import { WhoPaysOverview } from "./who-pays-overview";
 
 // Output rail with progressive disclosure:
 //
@@ -729,30 +730,37 @@ export function OutputRail({
 									)}
 
 									{activeSection === "who-pays" && (
-										<div className="grid gap-3 xl:grid-cols-[minmax(300px,0.82fr)_minmax(0,1.18fr)] xl:items-start">
-											<div className="min-w-0 space-y-3">
-												<DistributionalImpact
-													distribution={distribution}
-												/>
-												{items.length > 0 && (
-													<div className="rounded-md border bg-background/60 p-3">
-														<ComparisonsAffordedList
-															items={items}
-															caption={
-																result.net > 0
-																	? "Full list — what the net surplus could fund:"
-																	: result.net < 0
-																		? "Full list — equivalent costs:"
-																		: undefined
-															}
-															emptyMessage={null}
-														/>
-													</div>
-												)}
-											</div>
-											<div className="min-w-0 space-y-3">
-												<MicrosimulationPanel result={result} />
-												<HouseholdImpactPanel result={result} />
+										<div className="space-y-3">
+											<WhoPaysOverview
+												distribution={distribution}
+												microsim={microsim}
+												result={result}
+											/>
+											<div className="grid gap-3 xl:grid-cols-[minmax(300px,0.82fr)_minmax(0,1.18fr)] xl:items-start">
+												<div className="min-w-0 space-y-3">
+													<DistributionalImpact
+														distribution={distribution}
+													/>
+													{items.length > 0 && (
+														<div className="rounded-md border bg-background/60 p-3">
+															<ComparisonsAffordedList
+																items={items}
+																caption={
+																	result.net > 0
+																		? "Full list — what the net surplus could fund:"
+																		: result.net < 0
+																			? "Full list — equivalent costs:"
+																			: undefined
+																}
+																emptyMessage={null}
+															/>
+														</div>
+													)}
+												</div>
+												<div className="min-w-0 space-y-3">
+													<MicrosimulationPanel result={result} />
+													<HouseholdImpactPanel result={result} />
+												</div>
 											</div>
 										</div>
 									)}

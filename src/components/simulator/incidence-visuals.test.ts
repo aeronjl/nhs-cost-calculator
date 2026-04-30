@@ -6,9 +6,12 @@ import {
 	evaluateScenarioDistribution,
 	type ScenarioLine,
 } from "@/lib/scenario";
+import { evaluateMicrosim } from "@/lib/microsim/impact";
+import { generatePopulation } from "@/lib/microsim/population";
 import { DistributionalImpact } from "./distributional-impact";
 import { HouseholdImpactPanel } from "./household-impact";
 import { MicrosimulationPanel } from "./microsimulation-panel";
+import { WhoPaysOverview } from "./who-pays-overview";
 
 const scenario: ScenarioLine[] = [
 	{
@@ -22,6 +25,30 @@ const scenario: ScenarioLine[] = [
 const result = evaluateScenario(scenario);
 
 describe("incidence visual baselines", () => {
+	it("summarizes who-pays counterfactuals before detailed panels", () => {
+		const microsim = evaluateMicrosim(generatePopulation(1000, 42), result).agg;
+		const html = renderToStaticMarkup(
+			React.createElement(WhoPaysOverview, {
+				distribution: evaluateScenarioDistribution(result),
+				microsim,
+				result,
+			}),
+		);
+
+		expect(html).toContain("Who pays overview");
+		expect(html).toContain("Current-policy baseline = £0/yr");
+		expect(html).toContain(
+			"Decile incidence path versus current-policy baseline",
+		);
+		expect(html).toContain(
+			"Synthetic household split versus current-policy baseline",
+		);
+		expect(html).toContain(
+			"Representative household counterfactuals versus baseline",
+		);
+		expect(html).toContain("Modelled incidence coverage");
+	});
+
 	it("labels the decile chart against the current-policy baseline", () => {
 		const html = renderToStaticMarkup(
 			React.createElement(DistributionalImpact, {
