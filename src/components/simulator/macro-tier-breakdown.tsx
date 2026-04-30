@@ -176,134 +176,195 @@ function MacroBridgeChart({
 	macroNet: number;
 	geNet: number;
 }) {
-	const rows = [
+	const stages = [
 		{
 			id: "static",
 			label: "Ready-reckoner",
 			detail: "linear static score",
-			from: 0,
-			to: staticNet,
 			value: staticNet,
-			delta: staticNet,
-			absolute: true,
 		},
 		{
 			id: "dynamic",
 			label: "Behavioural response",
 			detail: "marginal-rate elasticities",
-			from: staticNet,
-			to: dynamicNet,
 			value: dynamicNet,
-			delta: dynamicNet - staticNet,
 		},
 		{
 			id: "macro",
 			label: "Scope B macro",
-			detail: "GDP, CPI, rates, debt path",
-			from: dynamicNet,
-			to: macroNet,
+			detail: "GDP, CPI, rates, debt",
 			value: macroNet,
-			delta: macroNet - dynamicNet,
 		},
 		{
 			id: "ge",
 			label: "Scope C GE",
-			detail: "feedback into yields/costs",
-			from: macroNet,
-			to: geNet,
+			detail: "feedback loop",
 			value: geNet,
-			delta: geNet - macroNet,
 		},
 	] as const;
-	const values = rows.flatMap((row) => [row.from, row.to, 0]);
-	const min = Math.min(...values);
-	const max = Math.max(...values);
-	const range = max - min || 1;
-	const pct = (value: number): number => ((value - min) / range) * 100;
-	const zeroPct = pct(0);
+
+	const values = stages.flatMap((s) => [s.value, 0]);
+	const minVal = Math.min(...values);
+	const maxVal = Math.max(...values);
+	const range = maxVal - minVal || 1;
+
+	// SVG layout: stages distributed along the x-axis, value mapped to y.
+	// Connectors between adjacent stages are filled regions whose top
+	// edge follows the value path — readers see flow direction (down =
+	// loss, up = gain) and magnitude (steepness × width) at a glance.
+	const width = 320;
+	const height = 110;
+	const padX = 24;
+	const padY = 18;
+	const innerWidth = width - padX * 2;
+	const innerHeight = height - padY * 2;
+	const xAt = (idx: number): number =>
+		padX + (innerWidth * idx) / (stages.length - 1);
+	const yAt = (value: number): number =>
+		padY + innerHeight - ((value - minVal) / range) * innerHeight;
+	const zeroY = yAt(0);
+
+	// Build a connector polygon between stage i and stage i+1: fills from
+	// the value path down to the zero line, coloured by direction of the
+	// transition (gain = blue, loss = amber).
+	const connectors = stages.slice(0, -1).map((stage, i) => {
+		const next = stages[i + 1]!;
+		const xLeft = xAt(i);
+		const xRight = xAt(i + 1);
+		const yLeft = yAt(stage.value);
+		const yRight = yAt(next.value);
+		const points = `${xLeft},${yLeft} ${xRight},${yRight} ${xRight},${zeroY} ${xLeft},${zeroY}`;
+		const delta = next.value - stage.value;
+		const tone =
+			Math.abs(delta) < 1
+				? "neutral"
+				: delta > 0
+					? "blue"
+					: "amber";
+		return { id: `${stage.id}-${next.id}`, points, tone, delta };
+	});
 
 	return (
 		<div
 			className="rounded-md border bg-background/60 p-3"
 			aria-label="Macro scoring bridge from static estimate to GE-adjusted result"
 		>
-			<div className="space-y-2">
-				{rows.map((row) => {
-					const isAbsolute = row.id === "static";
-					const left = pct(Math.min(row.from, row.to));
-					const right = pct(Math.max(row.from, row.to));
-					const width = Math.max(1, right - left);
-					const deltaTone = isAbsolute
-						? row.value >= 0
-							? "bg-blue-500"
-							: "bg-amber-500"
-						: row.delta >= 0
-							? "bg-blue-500"
-							: "bg-amber-500";
-					return (
-						<div
-							key={row.id}
-							className="grid gap-1 sm:grid-cols-[130px_minmax(0,1fr)_98px] sm:items-center"
+			<svg
+				viewBox={`0 0 ${width} ${height}`}
+				className="w-full h-28"
+				role="img"
+				aria-label="Macro scoring bridge flow"
+				preserveAspectRatio="none"
+			>
+				<title>Macro scoring bridge: ready-reckoner to GE-adjusted</title>
+				{/* Zero-line baseline */}
+				<line
+					x1={padX}
+					x2={width - padX}
+					y1={zeroY}
+					y2={zeroY}
+					stroke="currentColor"
+					strokeWidth="0.6"
+					strokeDasharray="3 3"
+					vectorEffect="non-scaling-stroke"
+					className="text-foreground/40"
+				/>
+				{/* Connectors */}
+				{connectors.map((c) => (
+					<polygon
+						key={c.id}
+						points={c.points}
+						fill={
+							c.tone === "blue"
+								? "#2563eb"
+								: c.tone === "amber"
+									? "#d97706"
+									: "#94a3b8"
+						}
+						opacity={c.tone === "neutral" ? 0.15 : 0.35}
+					>
+						<title>{`${fmtSignedBn(c.delta)} flow`}</title>
+					</polygon>
+				))}
+				{/* Stage value path on top of connectors */}
+				<polyline
+					points={stages.map((s, i) => `${xAt(i)},${yAt(s.value)}`).join(" ")}
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="1.6"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					vectorEffect="non-scaling-stroke"
+					className="text-foreground/70"
+				/>
+				{/* Stage nodes */}
+				{stages.map((stage, i) => (
+					<g key={stage.id}>
+						<circle
+							cx={xAt(i)}
+							cy={yAt(stage.value)}
+							r="3.4"
+							fill={
+								stage.value >= 0 ? "#2563eb" : "#d97706"
+							}
+							stroke="white"
+							strokeWidth="1"
 						>
-							<div className="min-w-0">
-								<div className="truncate text-[10px] font-medium text-foreground">
-									{row.label}
-								</div>
-								<div className="truncate text-[9px] text-muted-foreground">
-									{row.detail}
-								</div>
-							</div>
-							<div className="relative h-7 rounded-sm bg-muted/30">
-								<div
-									className="absolute inset-y-0 border-l border-dashed border-foreground/40"
-									style={{ left: formatStylePct(zeroPct) }}
-									aria-hidden="true"
-								/>
-								<div
-									className={cn(
-										"absolute top-2 h-3 rounded-sm",
-										deltaTone,
-									)}
-									style={{
-										left: formatStylePct(left),
-										width: formatStylePct(width),
-										opacity: isAbsolute ? 0.35 : 0.75,
-									}}
-								>
-									<span className="sr-only">
-										{row.label}: {fmtBn(row.value)}
-										{!isAbsolute && `, ${fmtSignedBn(row.delta)} change`}
-									</span>
-								</div>
-								<div
-									className="absolute top-1 h-5 w-px bg-foreground/50"
-									style={{ left: formatStylePct(pct(row.to)) }}
-									aria-hidden="true"
-								/>
-							</div>
-							<div className="flex items-baseline justify-between gap-2 text-[10px] tabular-nums sm:block sm:text-right">
-								<span className={cn("font-semibold", valueToneClassName(row.value))}>
-									{fmtBn(row.value)}
-								</span>
-								{!isAbsolute && (
-									<span
-										className={cn(
-											"sm:block",
-											row.delta >= 0 ? "text-blue-700" : "text-amber-700",
-										)}
-									>
-										{fmtSignedBn(row.delta)}
-									</span>
-								)}
-							</div>
+							<title>{`${stage.label}: ${fmtBn(stage.value)}`}</title>
+						</circle>
+					</g>
+				))}
+			</svg>
+			<div
+				className="mt-1 grid gap-1 text-[9px] tabular-nums"
+				style={{
+					gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))`,
+				}}
+			>
+				{stages.map((stage, idx) => (
+					<div
+						key={stage.id}
+						className={cn(
+							"min-w-0 truncate",
+							idx === 0
+								? "text-left"
+								: idx === stages.length - 1
+									? "text-right"
+									: "text-center",
+						)}
+					>
+						<div className="truncate font-medium text-foreground">
+							{stage.label}
 						</div>
-					);
-				})}
+						<div
+							className={cn(
+								"truncate font-semibold tabular-nums",
+								valueToneClassName(stage.value),
+							)}
+						>
+							{fmtBn(stage.value)}
+						</div>
+						<div className="truncate text-muted-foreground">
+							{stage.detail}
+						</div>
+					</div>
+				))}
 			</div>
-			<div className="mt-2 flex justify-between text-[9px] tabular-nums text-muted-foreground">
-				<span>{fmtBn(min)}</span>
-				<span>£0</span>
-				<span>{fmtBn(max)}</span>
+			<div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[9px] text-muted-foreground">
+				<span className="inline-flex items-center gap-1">
+					<span
+						aria-hidden="true"
+						className="inline-block h-2 w-3 rounded-sm bg-blue-500/35"
+					/>
+					gain between stages
+				</span>
+				<span className="inline-flex items-center gap-1">
+					<span
+						aria-hidden="true"
+						className="inline-block h-2 w-3 rounded-sm bg-amber-500/35"
+					/>
+					loss between stages
+				</span>
 			</div>
 		</div>
 	);

@@ -49,5 +49,12 @@ describe("MacroTierBreakdown", () => {
 		expect(html).toContain("Scope C GE");
 		expect(html).toContain("Total adjustment");
 		expect(html).toContain("GE feedback");
+
+		// New flow chart shape: connectors + tone legend.
+		expect(html).toContain("Macro scoring bridge flow");
+		expect(html).toContain("gain between stages");
+		expect(html).toContain("loss between stages");
+		// Three stage-to-stage connector polygons.
+		expect(html.match(/<polygon /g)?.length).toBe(3);
 	});
 });
