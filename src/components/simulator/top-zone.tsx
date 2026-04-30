@@ -12,7 +12,9 @@ import type {
 } from "@/lib/scenario";
 import type { MicrosimAggregate } from "@/lib/microsim/impact";
 import { composeScenarioNarrative } from "@/lib/scenario-narrative";
+import { computeScenarioSignature } from "@/lib/scenario-signature";
 import { formatCount } from "@/app/utils/formatters";
+import { ScenarioSignatureRadar } from "./scenario-signature";
 
 // "Top zone" — the always-visible essential-info summary at the top of the
 // output rail. ~6 lines. Anyone scanning the page should be able to answer
@@ -95,6 +97,13 @@ export function TopZone({
 		microsim,
 	});
 
+	const signature = computeScenarioSignature({
+		result,
+		distribution,
+		year1: year1Projection,
+		year5: year5Projection,
+	});
+
 	return (
 		<section className="rounded-lg border bg-background shadow-sm overflow-hidden">
 			<div className="grid lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)]">
@@ -175,6 +184,7 @@ export function TopZone({
 
 				<div className="border-t bg-muted/10 p-4 sm:p-5 lg:border-l lg:border-t-0">
 					<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+						{signature && <ScenarioSignatureRadar signature={signature} />}
 						{items.length > 0 && (
 							<div className="space-y-2">
 								<div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
