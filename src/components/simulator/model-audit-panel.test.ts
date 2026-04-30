@@ -74,5 +74,20 @@ describe("ModelAuditPanel report quality checklist", () => {
 		]) {
 			expect(html).toContain(label);
 		}
+		for (const targetId of [
+			"audit-scenario-summary",
+			"audit-baseline-fiscal-rule",
+			"audit-provenance-ledger",
+			"audit-macro-stress-lab",
+			"audit-borrowing-matrix",
+			"audit-borrowing-regime",
+			"audit-fiscal-rule-risk",
+			"audit-prior-sensitivity",
+			"audit-uncertainty-layers",
+			"audit-calibration-backtests",
+		]) {
+			expect(html).toContain(`href="#${targetId}"`);
+			expect(html).toContain(`id="${targetId}"`);
+		}
 	});
 });

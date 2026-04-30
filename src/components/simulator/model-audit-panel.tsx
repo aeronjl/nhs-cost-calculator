@@ -29,7 +29,21 @@ interface ChecklistItem {
 	label: string;
 	detail: string;
 	status: ChecklistStatus;
+	targetId?: string;
 }
+
+const AUDIT_TARGETS = {
+	scenario: "audit-scenario-summary",
+	baseline: "audit-baseline-fiscal-rule",
+	provenance: "audit-provenance-ledger",
+	macroStress: "audit-macro-stress-lab",
+	borrowingMatrix: "audit-borrowing-matrix",
+	borrowingRegime: "audit-borrowing-regime",
+	fiscalRisk: "audit-fiscal-rule-risk",
+	priorSensitivity: "audit-prior-sensitivity",
+	uncertainty: "audit-uncertainty-layers",
+	calibration: "audit-calibration-backtests",
+} as const;
 
 const formatBn = (n: number): string => {
 	const abs = Math.abs(n);
@@ -82,6 +96,7 @@ const buildQualityChecklist = (
 			label: "Scenario summary",
 			detail: `${audit.scenario.lineCount} modelled line${audit.scenario.lineCount === 1 ? "" : "s"}`,
 			status: audit.scenario.lineCount > 0 ? "present" : "missing",
+			targetId: AUDIT_TARGETS.scenario,
 		},
 		{
 			label: "Baseline & fiscal rule",
@@ -89,6 +104,7 @@ const buildQualityChecklist = (
 				? `${audit.baselineComparison.years.length} years; ${audit.baselineComparison.rule.riskRating} risk`
 				: "No baseline comparison",
 			status: audit.baselineComparison ? "present" : "missing",
+			targetId: audit.baselineComparison ? AUDIT_TARGETS.baseline : undefined,
 		},
 		{
 			label: "Provenance ledger",
@@ -98,6 +114,10 @@ const buildQualityChecklist = (
 				audit.provenanceLedger.sourceLinkedRows > 0
 					? "present"
 					: "missing",
+			targetId:
+				audit.provenanceLedger.rows.length > 0
+					? AUDIT_TARGETS.provenance
+					: undefined,
 		},
 		{
 			label: "Macro stress lab",
@@ -105,6 +125,7 @@ const buildQualityChecklist = (
 				? `${audit.macroStressLab.parameters.length} sensitivities`
 				: "No stress grid",
 			status: audit.macroStressLab ? "present" : "missing",
+			targetId: audit.macroStressLab ? AUDIT_TARGETS.macroStress : undefined,
 		},
 		{
 			label: "Borrowing matrix",
@@ -116,6 +137,10 @@ const buildQualityChecklist = (
 					? "present"
 					: "missing"
 				: "not-applicable",
+			targetId:
+				hasBorrowing && audit.borrowingScenarioComparison
+					? AUDIT_TARGETS.borrowingMatrix
+					: undefined,
 		},
 		{
 			label: "Borrowing regime",
@@ -127,6 +152,10 @@ const buildQualityChecklist = (
 					? "present"
 					: "missing"
 				: "not-applicable",
+			targetId:
+				hasBorrowing && audit.liveRisk.regimeProbabilities.length > 0
+					? AUDIT_TARGETS.borrowingRegime
+					: undefined,
 		},
 		{
 			label: "Fiscal-rule risk",
@@ -136,6 +165,7 @@ const buildQualityChecklist = (
 					: `${formatProbability(audit.liveRisk.breachProbability)} raw breach`,
 			status:
 				audit.liveRisk.breachProbability === null ? "missing" : "present",
+			targetId: AUDIT_TARGETS.fiscalRisk,
 		},
 		{
 			label: "Prior sensitivity",
@@ -147,6 +177,10 @@ const buildQualityChecklist = (
 				audit.liveRisk.priorSensitivityRows.length > 0
 					? "present"
 					: "not-applicable",
+			targetId:
+				audit.liveRisk.priorSensitivityRows.length > 0
+					? AUDIT_TARGETS.priorSensitivity
+					: undefined,
 		},
 		{
 			label: "Uncertainty layers",
@@ -156,6 +190,10 @@ const buildQualityChecklist = (
 					: "No decomposition",
 			status:
 				audit.liveRisk.uncertaintyLayers.length > 0 ? "present" : "missing",
+			targetId:
+				audit.liveRisk.uncertaintyLayers.length > 0
+					? AUDIT_TARGETS.uncertainty
+					: undefined,
 		},
 		{
 			label: "Calibration & backtests",
@@ -164,6 +202,7 @@ const buildQualityChecklist = (
 				audit.calibration.length > 0 && hasBacktestCoverage(audit)
 					? "present"
 					: "missing",
+			targetId: AUDIT_TARGETS.calibration,
 		},
 	];
 };
@@ -189,6 +228,7 @@ export function ModelAuditPanel({ audit }: Props) {
 		scenario,
 		baselineComparison,
 		borrowingScenarioComparison,
+		macroStressLab,
 		provenanceLedger,
 		calibration,
 		backtests,
@@ -274,7 +314,10 @@ export function ModelAuditPanel({ audit }: Props) {
 			<ReportQualityChecklist items={qualityChecklist} />
 
 			<div className="rounded-md border bg-background/60 p-3 space-y-3 text-[10px]">
-				<div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+				<div
+					id={AUDIT_TARGETS.scenario}
+					className="scroll-mt-24 grid grid-cols-2 gap-2 sm:grid-cols-4"
+				>
 					<Metric label="Scenario lines" value={String(scenario.lineCount)} />
 					<Metric
 						label="Composition"
@@ -304,7 +347,10 @@ export function ModelAuditPanel({ audit }: Props) {
 					/>
 				</div>
 
-				<div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+				<div
+					id={AUDIT_TARGETS.fiscalRisk}
+					className="scroll-mt-24 grid grid-cols-1 gap-2 sm:grid-cols-3"
+				>
 					<Metric
 						label="Raw breach risk"
 						value={formatProbability(liveRisk.breachProbability)}
@@ -323,7 +369,10 @@ export function ModelAuditPanel({ audit }: Props) {
 				</div>
 
 				{baselineComparison && (
-					<div className="rounded-sm border bg-muted/20 p-2 space-y-2">
+					<div
+						id={AUDIT_TARGETS.baseline}
+						className="scroll-mt-24 rounded-sm border bg-muted/20 p-2 space-y-2"
+					>
 						<div className="flex items-baseline justify-between gap-2">
 							<span className="font-medium text-foreground">
 								Baseline vs scenario
@@ -420,7 +469,10 @@ export function ModelAuditPanel({ audit }: Props) {
 				)}
 
 				{borrowingScenarioComparison && (
-					<div className="rounded-sm border bg-muted/20 p-2 space-y-2">
+					<div
+						id={AUDIT_TARGETS.borrowingMatrix}
+						className="scroll-mt-24 rounded-sm border bg-muted/20 p-2 space-y-2"
+					>
 						<div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
 							<span className="font-medium text-foreground">
 								Borrowing scenario matrix
@@ -521,8 +573,91 @@ export function ModelAuditPanel({ audit }: Props) {
 					</div>
 				)}
 
+				{macroStressLab && (
+					<div
+						id={AUDIT_TARGETS.macroStress}
+						className="scroll-mt-24 rounded-sm border bg-muted/20 p-2 space-y-2"
+					>
+						<div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+							<span className="font-medium text-foreground">
+								Macro stress lab
+							</span>
+							<span className="text-muted-foreground">
+								Rule year {macroStressLab.ruleYear}
+							</span>
+						</div>
+						<div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+							<Metric
+								label="Central headroom"
+								value={formatBn(macroStressLab.central.adjustedHeadroomGbp)}
+							/>
+							<Metric
+								label="Largest downside"
+								value={macroStressLab.largestDownsideParameterLabel}
+							/>
+							<Metric
+								label="Largest swing"
+								value={macroStressLab.largestSwingParameterLabel}
+							/>
+						</div>
+						<div className="overflow-x-auto rounded-sm border bg-background/70">
+							<table className="w-full min-w-[760px] tabular-nums">
+								<thead className="text-muted-foreground">
+									<tr className="text-left">
+										<th className="px-2 py-1 font-medium">Assumption</th>
+										<th className="px-2 py-1 font-medium">Low case</th>
+										<th className="px-2 py-1 font-medium">High case</th>
+										<th className="px-2 py-1 font-medium">Worst headroom</th>
+										<th className="px-2 py-1 font-medium">Y5 interest move</th>
+									</tr>
+								</thead>
+								<tbody>
+									{macroStressLab.parameters.map((parameter) => (
+										<tr
+											key={parameter.id}
+											className="border-t border-border/60"
+										>
+											<td className="px-2 py-1 font-medium text-foreground">
+												{parameter.label}
+											</td>
+											<td className="px-2 py-1">
+												{parameter.lowCase.label}
+											</td>
+											<td className="px-2 py-1">
+												{parameter.highCase.label}
+											</td>
+											<td className="px-2 py-1">
+												{formatBn(
+													parameter.downsideCase.adjustedHeadroomGbp,
+												)}
+											</td>
+											<td
+												className={cn(
+													"px-2 py-1",
+													parameter.downsideCase
+														.finalDebtInterestDeltaGbp > 0
+														? "text-amber-700"
+														: "text-muted-foreground",
+												)}
+											>
+												{formatBnDelta(
+													parameter.downsideCase
+														.finalDebtInterestDeltaGbp,
+												)}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				)}
+
 				{provenanceLedger.rows.length > 0 && (
-					<div className="rounded-sm border bg-muted/20 p-2 space-y-2">
+					<div
+						id={AUDIT_TARGETS.provenance}
+						className="scroll-mt-24 rounded-sm border bg-muted/20 p-2 space-y-2"
+					>
 						<div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
 							<span className="font-medium text-foreground">
 								Scenario provenance ledger
@@ -636,56 +771,61 @@ export function ModelAuditPanel({ audit }: Props) {
 					</div>
 				)}
 
-				<div className="overflow-x-auto rounded-sm border bg-muted/20">
-					<table className="w-full min-w-[620px] tabular-nums">
-						<thead className="text-muted-foreground">
-							<tr className="text-left">
-								<th className="px-2 py-1 font-medium">Calibration</th>
-								<th className="px-2 py-1 font-medium">As of</th>
-								<th className="px-2 py-1 font-medium">Coverage</th>
-								<th className="px-2 py-1 font-medium">Source</th>
-							</tr>
-						</thead>
-						<tbody>
-							{calibration.map((item) => (
-								<tr key={item.label} className="border-t border-border/60">
-									<td className="px-2 py-1 font-medium text-foreground">
-										{item.label}
-									</td>
-									<td className="px-2 py-1">{item.asOf}</td>
-									<td className="px-2 py-1">{item.coverage}</td>
-									<td className="px-2 py-1">{item.sourceLabel}</td>
+				<div id={AUDIT_TARGETS.calibration} className="scroll-mt-24 space-y-2">
+					<div className="overflow-x-auto rounded-sm border bg-muted/20">
+						<table className="w-full min-w-[620px] tabular-nums">
+							<thead className="text-muted-foreground">
+								<tr className="text-left">
+									<th className="px-2 py-1 font-medium">Calibration</th>
+									<th className="px-2 py-1 font-medium">As of</th>
+									<th className="px-2 py-1 font-medium">Coverage</th>
+									<th className="px-2 py-1 font-medium">Source</th>
 								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
+							</thead>
+							<tbody>
+								{calibration.map((item) => (
+									<tr key={item.label} className="border-t border-border/60">
+										<td className="px-2 py-1 font-medium text-foreground">
+											{item.label}
+										</td>
+										<td className="px-2 py-1">{item.asOf}</td>
+										<td className="px-2 py-1">{item.coverage}</td>
+										<td className="px-2 py-1">{item.sourceLabel}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
 
-				<div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-					<Metric
-						label="Borrowing central fit"
-						value={backtests.borrowingCentralFit}
-					/>
-					<Metric
-						label="Borrowing overlay fit"
-						value={`${backtests.borrowingOverlayFit} (${formatBp(
-							backtests.borrowingMeanOverlayMissBp,
-						)} mean miss)`}
-					/>
-					<Metric
-						label="Regime classifier"
-						value={`${backtests.borrowingRegimeClassifierFit} (${formatProbability(
-							backtests.borrowingRegimeMeanLabelProbability,
-						)})`}
-					/>
-					<Metric
-						label="Fiscal reaction fit"
-						value={`${backtests.fiscalReactionPriorFit} vs ${backtests.fiscalReactionRuleOnlyFit} rule-only`}
-					/>
+					<div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+						<Metric
+							label="Borrowing central fit"
+							value={backtests.borrowingCentralFit}
+						/>
+						<Metric
+							label="Borrowing overlay fit"
+							value={`${backtests.borrowingOverlayFit} (${formatBp(
+								backtests.borrowingMeanOverlayMissBp,
+							)} mean miss)`}
+						/>
+						<Metric
+							label="Regime classifier"
+							value={`${backtests.borrowingRegimeClassifierFit} (${formatProbability(
+								backtests.borrowingRegimeMeanLabelProbability,
+							)})`}
+						/>
+						<Metric
+							label="Fiscal reaction fit"
+							value={`${backtests.fiscalReactionPriorFit} vs ${backtests.fiscalReactionRuleOnlyFit} rule-only`}
+						/>
+					</div>
 				</div>
 
 				{liveRisk.regimeProbabilities.length > 0 && (
-					<div className="rounded-sm border bg-muted/20 p-2">
+					<div
+						id={AUDIT_TARGETS.borrowingRegime}
+						className="scroll-mt-24 rounded-sm border bg-muted/20 p-2"
+					>
 						<div className="flex items-baseline justify-between gap-2">
 							<span className="font-medium text-foreground">
 								Current borrowing regime
@@ -724,7 +864,10 @@ export function ModelAuditPanel({ audit }: Props) {
 				)}
 
 				{liveRisk.uncertaintyLayers.length > 0 && (
-					<div className="overflow-x-auto rounded-sm border bg-muted/20">
+					<div
+						id={AUDIT_TARGETS.uncertainty}
+						className="scroll-mt-24 overflow-x-auto rounded-sm border bg-muted/20"
+					>
 						<table className="w-full min-w-[560px] tabular-nums">
 							<thead className="text-muted-foreground">
 								<tr className="text-left">
@@ -776,7 +919,10 @@ export function ModelAuditPanel({ audit }: Props) {
 				)}
 
 				{liveRisk.priorSensitivityRows.length > 0 && (
-					<div className="overflow-x-auto rounded-sm border bg-muted/20">
+					<div
+						id={AUDIT_TARGETS.priorSensitivity}
+						className="scroll-mt-24 overflow-x-auto rounded-sm border bg-muted/20"
+					>
 						<table className="w-full min-w-[560px] tabular-nums">
 							<thead className="text-muted-foreground">
 								<tr className="text-left">
@@ -894,18 +1040,8 @@ function ReportQualityChecklist({ items }: { items: readonly ChecklistItem[] }) 
 							: item.status === "missing"
 								? TriangleAlert
 								: CircleSlash;
-					return (
-						<div
-							key={item.label}
-							className={cn(
-								"flex items-start gap-2 rounded-sm border px-2 py-1.5",
-								item.status === "present"
-									? "border-blue-100 bg-blue-50/70 text-blue-900"
-									: item.status === "missing"
-										? "border-amber-200 bg-amber-50 text-amber-950"
-										: "border-border bg-muted/20 text-muted-foreground",
-							)}
-						>
+					const body = (
+						<>
 							<Icon
 								aria-hidden="true"
 								className={cn(
@@ -923,6 +1059,35 @@ function ReportQualityChecklist({ items }: { items: readonly ChecklistItem[] }) 
 									{item.detail}
 								</div>
 							</div>
+						</>
+					);
+					const className = cn(
+						"flex items-start gap-2 rounded-sm border px-2 py-1.5",
+						item.targetId &&
+							"transition-colors hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+						item.status === "present"
+							? "border-blue-100 bg-blue-50/70 text-blue-900"
+							: item.status === "missing"
+								? "border-amber-200 bg-amber-50 text-amber-950"
+								: "border-border bg-muted/20 text-muted-foreground",
+					);
+					if (item.targetId) {
+						return (
+							<a
+								key={item.label}
+								href={`#${item.targetId}`}
+								className={className}
+							>
+								{body}
+							</a>
+						);
+					}
+					return (
+						<div
+							key={item.label}
+							className={className}
+						>
+							{body}
 						</div>
 					);
 				})}
