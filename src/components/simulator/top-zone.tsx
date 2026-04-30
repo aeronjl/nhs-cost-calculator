@@ -78,131 +78,168 @@ export function TopZone({
 	const psnbDiverges =
 		year1Projection &&
 		Math.abs(year1Projection.psnbShift - year1Projection.net) > 1_000_000;
+	const topComparison = items[0];
+	const trend =
+		year5Projection && year1Projection
+			? year5Projection.net > year1Projection.net
+				? "growing"
+				: year5Projection.net < year1Projection.net
+					? "fading"
+					: "steady"
+			: null;
 
 	return (
-		<div className="space-y-3">
-			{/* Net effect headline */}
-			<div className="rounded-lg border bg-background p-3 space-y-1.5">
-				<div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-					Net effect
-				</div>
-				<div
-					className={cn(
-						"text-3xl font-semibold tabular-nums leading-tight",
-						colour,
-					)}
-				>
-					£<AnimatedNumber value={Math.abs(Math.round(result.net))} />
-					<span className="text-sm font-normal text-muted-foreground ml-2">
-						{direction}
-					</span>
-				</div>
-				{dynamicGapSignificant && (
-					<div className="text-[10px] text-muted-foreground">
-						after marginal-rate response: £
-						{Math.round(dynamic.dynamicNet).toLocaleString()}
-					</div>
-				)}
-				{psnbDiverges && year1Projection && (
-					<div className="text-[10px] text-muted-foreground">
-						PSNB shift: {formatDelta(year1Projection.psnbShift)}
-					</div>
-				)}
-				{year5Projection && year1Projection && (
-					<div className="text-[10px] text-muted-foreground">
-						by year 5: {formatBn(year5Projection.net)}{" "}
-						<span className="opacity-70">
-							(
-							{year5Projection.net > year1Projection.net
-								? "growing"
-								: year5Projection.net < year1Projection.net
-									? "fading"
-									: "steady"}
-							)
+		<section className="rounded-lg border bg-background shadow-sm overflow-hidden">
+			<div className="grid lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)]">
+				<div className="p-4 sm:p-5 space-y-3">
+					<div className="flex flex-wrap items-center gap-2">
+						<span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+							Executive summary
+						</span>
+						<span
+							className={cn(
+								"rounded-full border px-2 py-0.5 text-[10px] capitalize",
+								result.net > 0
+									? "border-blue-200 bg-blue-50 text-blue-700"
+									: result.net < 0
+										? "border-amber-200 bg-amber-50 text-amber-800"
+										: "border-input bg-muted/40 text-muted-foreground",
+							)}
+						>
+							{direction}
 						</span>
 					</div>
-				)}
-			</div>
-
-			{/* Top 3 comparisons */}
-			{items.length > 0 && (
-				<div className="rounded-md border bg-background/40 p-3 space-y-1.5">
-					<div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-						{result.net > 0 ? "What this could fund" : "What this would cost"}
+					<div
+						className={cn(
+							"text-4xl sm:text-5xl font-semibold tabular-nums leading-none",
+							colour,
+						)}
+					>
+						£<AnimatedNumber value={Math.abs(Math.round(result.net))} />
 					</div>
-					<ul className="space-y-1">
-						{items.slice(0, 3).map(({ comparison, count }) => (
-							<li
-								key={comparison.id}
-								className="flex items-center text-xs gap-2"
-							>
-								<span aria-hidden="true">{comparison.emoji}</span>
-								<span className="font-semibold tabular-nums">
-									{formatCount(count)}
-								</span>
-								<span className="text-muted-foreground">
-									{count === 1 ? comparison.name : comparison.pluralName}
-								</span>
-							</li>
-						))}
-					</ul>
-				</div>
-			)}
-
-			{/* Distributional + household one-liners */}
-			{(distrSignificant || microsim) && (
-				<div className="rounded-md border bg-background/40 p-3 space-y-1">
-					<div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-						Who pays
-					</div>
-					{distrSignificant && (
-						<div className="text-xs">
-							<span className="text-muted-foreground">Bottom 10%: </span>
-							<span
-								className={cn(
-									"tabular-nums font-medium",
-									bottomPerHh > 0
-										? "text-amber-700"
-										: bottomPerHh < 0
-											? "text-blue-700"
-											: "",
-								)}
-							>
-								{bottomPerHh > 0 ? "−" : "+"}£
-								{Math.round(Math.abs(bottomPerHh)).toLocaleString()}
-							</span>
-							<span className="text-muted-foreground"> · Top 10%: </span>
-							<span
-								className={cn(
-									"tabular-nums font-medium",
-									topPerHh > 0
-										? "text-amber-700"
-										: topPerHh < 0
-											? "text-blue-700"
-											: "",
-								)}
-							>
-								{topPerHh > 0 ? "−" : "+"}£
-								{Math.round(Math.abs(topPerHh)).toLocaleString()}
-							</span>
-							<span className="text-muted-foreground"> per household, per year</span>
-						</div>
-					)}
-					{microsim &&
-						microsim.winners + microsim.losers + microsim.unaffected > 0 && (
-							<div className="text-xs text-muted-foreground">
-								<span className="text-blue-700 font-medium">
-									{formatPct(microsim.winners)}
+					<div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+						{dynamicGapSignificant && (
+							<div>
+								<span className="font-medium text-foreground">
+									{formatDelta(dynamic.dynamicNet)}
 								</span>{" "}
-								better off ·{" "}
-								<span className="text-amber-700 font-medium">
-									{formatPct(microsim.losers)}
-								</span>{" "}
-								worse off · {formatPct(microsim.unaffected)} unaffected
+								after behavioural response
 							</div>
 						)}
+						{psnbDiverges && year1Projection && (
+							<div>
+								<span className="font-medium text-foreground">
+									{formatDelta(year1Projection.psnbShift)}
+								</span>{" "}
+								PSNB shift in year 1
+							</div>
+						)}
+						{year5Projection && (
+							<div>
+								<span className="font-medium text-foreground">
+									{formatBn(year5Projection.net)}
+								</span>{" "}
+								by year 5{trend ? `, ${trend}` : ""}
+							</div>
+						)}
+						{topComparison && (
+							<div>
+								<span aria-hidden="true" className="mr-1">
+									{topComparison.comparison.emoji}
+								</span>
+								<span className="font-medium text-foreground tabular-nums">
+									{formatCount(topComparison.count)}
+								</span>{" "}
+								{topComparison.count === 1
+									? topComparison.comparison.name
+									: topComparison.comparison.pluralName}
+							</div>
+						)}
+					</div>
 				</div>
-			)}
-		</div>
+
+				<div className="border-t bg-muted/10 p-4 sm:p-5 lg:border-l lg:border-t-0">
+					<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+						{items.length > 0 && (
+							<div className="space-y-2">
+								<div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+									{result.net > 0 ? "Could fund" : "Equivalent cost"}
+								</div>
+								<ul className="space-y-1.5">
+									{items.slice(0, 3).map(({ comparison, count }) => (
+										<li
+											key={comparison.id}
+											className="flex items-center text-xs gap-2"
+										>
+											<span aria-hidden="true">{comparison.emoji}</span>
+											<span className="font-semibold tabular-nums">
+												{formatCount(count)}
+											</span>
+											<span className="text-muted-foreground">
+												{count === 1 ? comparison.name : comparison.pluralName}
+											</span>
+										</li>
+									))}
+								</ul>
+							</div>
+						)}
+
+						{(distrSignificant || microsim) && (
+							<div className="space-y-2">
+								<div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+									Household effect
+								</div>
+								{distrSignificant && (
+									<div className="text-xs leading-snug">
+										<span className="text-muted-foreground">Bottom 10% </span>
+										<span
+											className={cn(
+												"tabular-nums font-medium",
+												bottomPerHh > 0
+													? "text-amber-700"
+													: bottomPerHh < 0
+														? "text-blue-700"
+														: "",
+											)}
+										>
+											{bottomPerHh > 0 ? "−" : "+"}£
+											{Math.round(Math.abs(bottomPerHh)).toLocaleString()}
+										</span>
+										<span className="text-muted-foreground"> · Top 10% </span>
+										<span
+											className={cn(
+												"tabular-nums font-medium",
+												topPerHh > 0
+													? "text-amber-700"
+													: topPerHh < 0
+														? "text-blue-700"
+														: "",
+											)}
+										>
+											{topPerHh > 0 ? "−" : "+"}£
+											{Math.round(Math.abs(topPerHh)).toLocaleString()}
+										</span>
+									</div>
+								)}
+								{microsim &&
+									microsim.winners + microsim.losers + microsim.unaffected >
+										0 && (
+										<div className="text-xs text-muted-foreground leading-snug">
+											<span className="text-blue-700 font-medium">
+												{formatPct(microsim.winners)}
+											</span>{" "}
+											better off ·{" "}
+											<span className="text-amber-700 font-medium">
+												{formatPct(microsim.losers)}
+											</span>{" "}
+											worse off · {formatPct(microsim.unaffected)} unaffected
+										</div>
+									)}
+							</div>
+						)}
+					</div>
+				</div>
+			</div>
+		</section>
 	);
 }

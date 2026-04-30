@@ -1353,21 +1353,48 @@ export function StepResult({
 
 	const choiceCount = fullScenario.length;
 	const hasChoices = choiceCount > 0;
+	const editableCount = state.committedScenario.length;
 
 	return (
-		<div className="space-y-4">
-			<div>
-				<div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
-					Step 6 of 6 · Report
+		<div className="space-y-5">
+			<header className="border-b pb-4">
+				<div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+					<span>Step 6 of 6</span>
+					<span aria-hidden="true">·</span>
+					<span>Report</span>
+					{goalDef && (
+						<>
+							<span aria-hidden="true">·</span>
+							<span>{goalDef.label}</span>
+						</>
+					)}
 				</div>
-				<h1 className="text-2xl font-light">Your fiscal report</h1>
-				<p className="text-sm text-muted-foreground mt-1">
-					{goalDef ? `Goal: ${goalDef.label}. ` : ""}
-					{hasChoices
-						? `${choiceCount} fiscal ${choiceCount === 1 ? "decision" : "decisions"}${goalLine ? " (including the goal's implicit action)" : ""}. Below: distributional incidence, household-level microsimulation, macro feedback at all four scoring tiers, multi-year fan-chart projection vs the era baseline, and per-line methodology.`
-						: "No decisions yet. Step back to pick some choices."}
-				</p>
-			</div>
+				<div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+					<div>
+						<h1 className="text-3xl font-light tracking-normal">
+							Fiscal report
+						</h1>
+						<p className="text-sm text-muted-foreground mt-1">
+							{hasChoices
+								? `${choiceCount} ${choiceCount === 1 ? "decision" : "decisions"}${goalLine ? ", including the goal action" : ""}.`
+								: "No decisions yet."}
+						</p>
+					</div>
+					<div className="flex flex-wrap gap-1.5">
+						<span className="rounded-full border bg-background px-2 py-0.5 text-[10px] text-muted-foreground">
+							{editableCount} editable
+						</span>
+						<span className="rounded-full border bg-background px-2 py-0.5 text-[10px] text-muted-foreground">
+							{baseline.stabilityRuleAt}
+						</span>
+						{!isCurrent && (
+							<span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] text-amber-900">
+								{era.year} era
+							</span>
+						)}
+					</div>
+				</div>
+			</header>
 
 			{!isCurrent && hasChoices && (
 				<div className="rounded-md border border-amber-200 bg-amber-50 p-2.5 text-[11px] leading-snug text-amber-900">

@@ -233,10 +233,7 @@ export function OutputRail({
 
 	if (scenario.length === 0) {
 		return (
-			<div className="flex flex-col gap-3 text-sm text-muted-foreground py-6 text-center">
-				<div className="text-4xl" aria-hidden="true">
-					📐
-				</div>
+			<div className="rounded-lg border border-dashed bg-background px-4 py-8 text-center text-sm text-muted-foreground">
 				<p>{emptyMessage}</p>
 			</div>
 		);
@@ -246,7 +243,7 @@ export function OutputRail({
 	const year5 = projection[projection.length - 1];
 
 	return (
-		<div className="space-y-3">
+		<div className="space-y-4">
 			{/* Top zone: always-visible essential summary */}
 			<TopZone
 				result={result}
@@ -260,12 +257,17 @@ export function OutputRail({
 			/>
 
 			{/* Header strip with "Expand all / Collapse all" toggle */}
-			<div className="flex items-center justify-between text-[10px] text-muted-foreground px-1">
-				<span>More detail</span>
+			<div className="flex items-center justify-between gap-3 border-t pt-3">
+				<div>
+					<h2 className="text-sm font-semibold">Detailed analysis</h2>
+					<p className="text-[11px] text-muted-foreground">
+						Trajectory, incidence, macro feedback, stress cases, assumptions, and audit evidence.
+					</p>
+				</div>
 				<button
 					type="button"
 					onClick={() => setAll(!allOpen)}
-					className="hover:text-foreground transition-colors"
+					className="shrink-0 rounded-md border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
 				>
 					{allOpen ? "Collapse all" : "Expand all"}
 				</button>
