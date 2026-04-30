@@ -685,6 +685,7 @@ export function OutputRail({
 													macroGapSignificant={
 														macroGapSignificant
 													}
+													macroYear1={macroYear1}
 													geYear1={geYear1}
 													geGap={geGap}
 													geGapSignificant={

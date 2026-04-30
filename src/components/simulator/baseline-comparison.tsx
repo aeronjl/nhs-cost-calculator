@@ -55,6 +55,9 @@ const formatAxisBn = (n: number): string => {
 	return `${sign}£${(abs / 1_000_000_000).toFixed(abs >= 100_000_000_000 ? 0 : 1)}bn`;
 };
 
+const formatStylePct = (n: number): string =>
+	`${Number.isFinite(n) ? n.toFixed(4) : "0.0000"}%`;
+
 const formatSignedPp = (n: number): string => {
 	const sign = n > 0 ? "+" : n < 0 ? "−" : "";
 	return `${sign}${Math.abs(n).toFixed(2)}pp`;
@@ -1427,14 +1430,14 @@ function RuleYearUncertaintyLayers({
 							<div className="relative h-4 rounded-sm bg-background/80">
 								<div
 									className="absolute inset-y-0 border-l border-dashed border-foreground/40"
-									style={{ left: `${zeroPct}%` }}
+									style={{ left: formatStylePct(zeroPct) }}
 									aria-hidden="true"
 								/>
 								<div
 									className={cn("absolute top-1 h-2 rounded-full", tone)}
 									style={{
-										left: `${left}%`,
-										width: `${Math.max(1, right - left)}%`,
+										left: formatStylePct(left),
+										width: formatStylePct(Math.max(1, right - left)),
 										opacity: 0.18,
 									}}
 								/>
@@ -1443,7 +1446,7 @@ function RuleYearUncertaintyLayers({
 										"absolute top-0.5 h-3 w-1 -translate-x-1/2 rounded-full",
 										tone,
 									)}
-									style={{ left: `${median}%` }}
+									style={{ left: formatStylePct(median) }}
 								/>
 							</div>
 							<div className="hidden text-right text-[10px] tabular-nums text-muted-foreground sm:block">
