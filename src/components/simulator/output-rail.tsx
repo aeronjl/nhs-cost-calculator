@@ -66,6 +66,7 @@ import { MicrosimulationPanel } from "./microsimulation-panel";
 import { ModelAuditPanel } from "./model-audit-panel";
 import { MultiYearProjection } from "./multi-year-projection";
 import { ScenarioAssumptions } from "./scenario-assumptions";
+import { ScenarioYearScrubber } from "./scenario-year-scrubber";
 import { TopZone } from "./top-zone";
 import { WhoPaysOverview } from "./who-pays-overview";
 import { YearFocusProvider } from "@/lib/year-focus";
@@ -732,6 +733,11 @@ export function OutputRail({
 					</div>
 				</div>
 			</div>
+
+			<ScenarioYearScrubber
+				yearCount={baseline.years.length}
+				yearLabels={baseline.years.map((y) => y.fiscalYear)}
+			/>
 
 			<ReportNarrativeMap
 				activeSection={activeSection}

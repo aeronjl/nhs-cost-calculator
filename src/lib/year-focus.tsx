@@ -15,32 +15,75 @@ import {
 // fan, the PSNB / debt:GDP counterfactual, and the five macro-state
 // sparklines into a single connected instrument.
 //
-// Year is 1-indexed to match `YearProjection.year` and `MacroState.year`. A
-// `null` value means "no focus" — charts render their default text/state.
+// Year is 1-indexed to match `YearProjection.year` and `MacroState.year`.
+//
+// Two-tier state lets a visible scrubber and ephemeral chart hover coexist:
+//
+//   - `lockedYear` is the user's deliberate selection (scrubber drag, click
+//     on a year tick). It persists until they explicitly release it via the
+//     scrubber's "Auto" button.
+//
+//   - `hoveredYear` is set by chart pointer-move and cleared on
+//     pointer-leave — strictly ephemeral so glance-and-leave doesn't strand
+//     a crosshair on the page.
+//
+//   - `year` is the *effective* focus surfaced to consumers: hovered wins
+//     over locked, both null means "no focus".
+//
+// Existing chart code calls `setYear` / `clear`; those continue to drive the
+// hovered slot so today's hover behaviour is preserved.
 
 type YearFocusValue = {
 	year: number | null;
+	hoveredYear: number | null;
+	lockedYear: number | null;
 	setYear: (year: number | null) => void;
 	clear: () => void;
+	setLocked: (year: number | null) => void;
+	clearLocked: () => void;
 };
 
 const noopValue: YearFocusValue = {
 	year: null,
+	hoveredYear: null,
+	lockedYear: null,
 	setYear: () => {},
 	clear: () => {},
+	setLocked: () => {},
+	clearLocked: () => {},
 };
 
 const YearFocusContext = createContext<YearFocusValue>(noopValue);
 
+const normaliseYear = (value: number | null): number | null =>
+	value === null ? null : Math.max(1, Math.round(value));
+
 export function YearFocusProvider({ children }: { children: ReactNode }) {
-	const [year, setYearState] = useState<number | null>(null);
+	const [hoveredYear, setHoveredState] = useState<number | null>(null);
+	const [lockedYear, setLockedState] = useState<number | null>(null);
+
 	const setYear = useCallback((next: number | null) => {
-		setYearState(next === null ? null : Math.max(1, Math.round(next)));
+		setHoveredState(normaliseYear(next));
 	}, []);
-	const clear = useCallback(() => setYearState(null), []);
+	const clear = useCallback(() => setHoveredState(null), []);
+	const setLocked = useCallback((next: number | null) => {
+		setLockedState(normaliseYear(next));
+	}, []);
+	const clearLocked = useCallback(() => setLockedState(null), []);
+
+	const effective = hoveredYear ?? lockedYear;
+
 	const value = useMemo(
-		() => ({ year, setYear, clear }),
-		[year, setYear, clear],
+		() => ({
+			year: effective,
+			hoveredYear,
+			lockedYear,
+			setYear,
+			clear,
+			setLocked,
+			clearLocked,
+		}),
+		[effective, hoveredYear, lockedYear, setYear, clear, setLocked, clearLocked],
 	);
 	return (
 		<YearFocusContext.Provider value={value}>

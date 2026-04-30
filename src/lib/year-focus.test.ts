@@ -1,5 +1,11 @@
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { pointerToYearIndex } from "./year-focus";
+import {
+	pointerToYearIndex,
+	useYearFocus,
+	YearFocusProvider,
+} from "./year-focus";
 
 const rect: DOMRect = {
 	x: 0,
@@ -130,5 +136,36 @@ describe("pointerToYearIndex", () => {
 				viewBoxWidth: 320,
 			}),
 		).toBeNull();
+	});
+});
+
+const FocusProbe = () => {
+	const focus = useYearFocus();
+	return React.createElement("div", {
+		"data-effective": String(focus.year ?? "null"),
+		"data-hovered": String(focus.hoveredYear ?? "null"),
+		"data-locked": String(focus.lockedYear ?? "null"),
+	});
+};
+
+describe("YearFocusProvider", () => {
+	it("starts with no effective focus", () => {
+		const html = renderToStaticMarkup(
+			React.createElement(
+				YearFocusProvider,
+				null,
+				React.createElement(FocusProbe),
+			),
+		);
+		expect(html).toContain('data-effective="null"');
+		expect(html).toContain('data-hovered="null"');
+		expect(html).toContain('data-locked="null"');
+	});
+
+	it("returns the noop default when no provider wraps the consumer", () => {
+		const html = renderToStaticMarkup(React.createElement(FocusProbe));
+		expect(html).toContain('data-effective="null"');
+		expect(html).toContain('data-hovered="null"');
+		expect(html).toContain('data-locked="null"');
 	});
 });
