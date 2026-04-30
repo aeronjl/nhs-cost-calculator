@@ -300,7 +300,7 @@ interface PendingSavedLoad {
 	diff: ScenarioDiff;
 }
 
-interface Props {
+export interface RefineScenarioPanelProps {
 	committedScenario: readonly ScenarioLine[];
 	onAdd: (line: ScenarioLine) => void;
 	onRemove: (id: string) => void;
@@ -314,7 +314,7 @@ export function RefineScenarioPanel({
 	onRemove,
 	onUpdate,
 	onReplace,
-}: Props) {
+}: RefineScenarioPanelProps) {
 	const [open, setOpen] = useState(committedScenario.length === 0);
 	const [saved, setSaved] = useState<SavedScenario[]>([]);
 	const [pendingLoad, setPendingLoad] = useState<PendingSavedLoad | null>(null);
@@ -328,6 +328,16 @@ export function RefineScenarioPanel({
 		[committedScenario],
 	);
 	const editableCount = committedScenario.length;
+	const lineCounts = useMemo(
+		() => ({
+			tax: committedScenario.filter((line) => line.type === "tax").length,
+			spending: committedScenario.filter((line) => line.type === "programme")
+				.length,
+			borrowing: committedScenario.filter((line) => line.type === "borrow")
+				.length,
+		}),
+		[committedScenario],
+	);
 	const serializedScenario = useMemo(
 		() => serializeScenario([...committedScenario]),
 		[committedScenario],
@@ -359,45 +369,53 @@ export function RefineScenarioPanel({
 	};
 
 	return (
-		<section className="rounded-md border bg-background/70 overflow-hidden">
-			<div className="flex flex-col gap-2 border-b px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+		<section className="rounded-lg border bg-background shadow-sm overflow-hidden">
+			<div className="flex flex-col gap-3 border-b px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
 				<button
 					type="button"
 					onClick={() => setOpen((o) => !o)}
 					aria-expanded={open}
-					className="min-w-0 flex items-center gap-2 text-left"
+					className="min-w-0 flex items-start gap-2 text-left"
 				>
 					<motion.span
 						aria-hidden="true"
-						className="text-muted-foreground text-sm shrink-0"
+						className="text-muted-foreground text-sm shrink-0 mt-0.5"
 						animate={{ rotate: open ? 90 : 0 }}
 						transition={{ duration: 0.15, ease: "easeOut" }}
 					>
 						▸
 					</motion.span>
 					<div className="min-w-0">
-						<div className="text-sm font-semibold leading-tight">
-							Scenario workspace
-						</div>
-						<div className="text-[10px] text-muted-foreground leading-snug mt-0.5">
-							{editableCount} editable {editableCount === 1 ? "line" : "lines"} ·{" "}
+						<div className="flex flex-wrap items-center gap-2">
+							<h2 className="text-sm font-semibold leading-tight">
+								Report inputs
+							</h2>
 							<span
 								className={cn(
-									"tabular-nums",
+									"rounded-full border px-2 py-0.5 text-[10px] tabular-nums",
 									result.net > 0
-										? "text-blue-700"
+										? "border-blue-200 bg-blue-50 text-blue-700"
 										: result.net < 0
-											? "text-amber-700"
-											: "text-muted-foreground",
+											? "border-amber-200 bg-amber-50 text-amber-800"
+											: "border-input bg-muted/40 text-muted-foreground",
 								)}
 							>
 								{result.net > 0 ? "+" : result.net < 0 ? "-" : ""}
 								{formatBn(Math.abs(result.net))}
 							</span>
 						</div>
+						<div className="mt-1 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
+							<span>{editableCount} editable</span>
+							<span aria-hidden="true">·</span>
+							<span>{lineCounts.tax} tax</span>
+							<span aria-hidden="true">·</span>
+							<span>{lineCounts.spending} spending</span>
+							<span aria-hidden="true">·</span>
+							<span>{lineCounts.borrowing} borrowing</span>
+						</div>
 					</div>
 				</button>
-				<div className="flex flex-wrap gap-1.5">
+				<div className="flex flex-wrap items-center gap-1.5">
 					<Button
 						type="button"
 						variant="outline"
@@ -431,6 +449,14 @@ export function RefineScenarioPanel({
 					>
 						Save
 					</Button>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={() => setOpen((value) => !value)}
+					>
+						{open ? "Close" : "Edit"}
+					</Button>
 				</div>
 			</div>
 
@@ -447,25 +473,30 @@ export function RefineScenarioPanel({
 						}}
 						className="overflow-hidden"
 					>
-						<div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-3 p-3">
-							<div className="space-y-3 min-w-0">
-								<div className="rounded-md border bg-background p-3 space-y-2">
+						<div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px]">
+							<div className="min-w-0 border-b xl:border-b-0 xl:border-r">
+								<div className="p-4 space-y-3">
 									<div className="flex items-center justify-between gap-2">
-										<div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-											Editable scenario
+										<h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+											Current package
+										</h3>
+										<div className="flex items-center gap-2">
+											<span className="text-[10px] text-muted-foreground">
+												{saved.length} saved
+											</span>
+											{editableCount > 0 && (
+												<button
+													type="button"
+													onClick={() => onReplace([])}
+													className="text-[10px] text-muted-foreground hover:text-foreground"
+												>
+													Clear
+												</button>
+											)}
 										</div>
-										{editableCount > 0 && (
-											<button
-												type="button"
-												onClick={() => onReplace([])}
-												className="text-[10px] text-muted-foreground hover:text-foreground"
-											>
-												Clear
-											</button>
-										)}
 									</div>
 									{result.lines.length === 0 ? (
-										<p className="text-xs text-muted-foreground py-6 text-center">
+										<p className="text-xs text-muted-foreground py-6 text-center border border-dashed rounded-md">
 											No editable lines yet.
 										</p>
 									) : (
@@ -482,66 +513,75 @@ export function RefineScenarioPanel({
 											))}
 										</ul>
 									)}
-								</div>
 
-								<div className="rounded-md border bg-background p-3 space-y-2">
-									<div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-										Saved scenarios
-									</div>
-									{saved.length === 0 ? (
-										<p className="text-xs text-muted-foreground">
-											No saved scenarios on this device.
-										</p>
-									) : (
-										<div className="flex flex-wrap gap-2">
-											{saved.map((entry) => (
-												<div
-													key={entry.id}
-													className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border bg-background px-2 py-1 text-xs"
-												>
-													<button
-														type="button"
-														onClick={() => loadSaved(entry)}
-														className="truncate max-w-[240px] hover:underline"
-														title={entry.name}
+									<div className="border-t pt-3 space-y-2">
+										<h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+											Saved scenarios
+										</h3>
+										{saved.length === 0 ? (
+											<p className="text-xs text-muted-foreground">
+												No saved scenarios on this device.
+											</p>
+										) : (
+											<div className="flex flex-wrap gap-2">
+												{saved.map((entry) => (
+													<div
+														key={entry.id}
+														className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border bg-muted/20 px-2 py-1 text-xs"
 													>
-														{entry.name}
-													</button>
-													{committedScenario.length > 0 && (
 														<button
 															type="button"
-															onClick={() =>
-																setPendingLoad({
-																	saved: entry,
-																	diff: diffScenarios(
-																		[...committedScenario],
-																		deserializeScenario(entry.scenario),
-																	),
-																})
-															}
-															aria-label={`Compare ${entry.name} with current`}
+															onClick={() => loadSaved(entry)}
+															className="truncate max-w-[240px] hover:underline"
+															title={entry.name}
+														>
+															{entry.name}
+														</button>
+														{committedScenario.length > 0 && (
+															<button
+																type="button"
+																onClick={() =>
+																	setPendingLoad({
+																		saved: entry,
+																		diff: diffScenarios(
+																			[...committedScenario],
+																			deserializeScenario(entry.scenario),
+																		),
+																	})
+																}
+																aria-label={`Compare ${entry.name} with current`}
+																className="text-muted-foreground hover:text-foreground rounded leading-none px-1"
+															>
+																⇄
+															</button>
+														)}
+														<button
+															type="button"
+															onClick={() => deleteSaved(entry.id)}
+															aria-label={`Delete ${entry.name}`}
 															className="text-muted-foreground hover:text-foreground rounded leading-none px-1"
 														>
-															⇄
+															×
 														</button>
-													)}
-													<button
-														type="button"
-														onClick={() => deleteSaved(entry.id)}
-														aria-label={`Delete ${entry.name}`}
-														className="text-muted-foreground hover:text-foreground rounded leading-none px-1"
-													>
-														×
-													</button>
-												</div>
-											))}
-										</div>
-									)}
+													</div>
+												))}
+											</div>
+										)}
+									</div>
 								</div>
 							</div>
 
-							<div className="rounded-md border bg-background overflow-hidden min-h-[320px] max-h-[64vh]">
-								<LeverRail onAdd={(lever) => onAdd(defaultLineForLever(lever))} />
+							<div className="min-h-[320px] max-h-[64vh] overflow-hidden">
+								<div className="border-b bg-muted/20 px-3 py-2">
+									<h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+										Add a lever
+									</h3>
+								</div>
+								<div className="h-[calc(64vh-37px)] min-h-[280px]">
+									<LeverRail
+										onAdd={(lever) => onAdd(defaultLineForLever(lever))}
+									/>
+								</div>
 							</div>
 						</div>
 					</motion.div>

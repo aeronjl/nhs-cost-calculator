@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,8 +35,50 @@ import {
 	wizardLineId,
 } from "@/lib/wizard-state";
 import { ChoiceCard } from "./choice-card";
-import { OutputRail } from "@/components/simulator/output-rail";
-import { RefineScenarioPanel } from "./refine-scenario-panel";
+import type { OutputRailProps } from "@/components/simulator/output-rail";
+import type { RefineScenarioPanelProps } from "./refine-scenario-panel";
+
+const RefineScenarioPanel = dynamic<RefineScenarioPanelProps>(
+	() =>
+		import("./refine-scenario-panel").then(
+			(mod) => mod.RefineScenarioPanel,
+		),
+	{
+		loading: () => <ScenarioWorkspaceSkeleton />,
+	},
+);
+
+const OutputRail = dynamic<OutputRailProps>(
+	() =>
+		import("@/components/simulator/output-rail").then((mod) => mod.OutputRail),
+	{
+		loading: () => <ReportSkeleton />,
+	},
+);
+
+function ScenarioWorkspaceSkeleton() {
+	return (
+		<div className="rounded-lg border bg-background shadow-sm px-4 py-3">
+			<div className="h-4 w-36 rounded bg-muted" />
+			<div className="mt-2 h-3 w-64 max-w-full rounded bg-muted/70" />
+		</div>
+	);
+}
+
+function ReportSkeleton() {
+	return (
+		<div className="space-y-3">
+			<div className="rounded-lg border bg-background p-4">
+				<div className="h-5 w-44 rounded bg-muted" />
+				<div className="mt-3 h-3 w-full rounded bg-muted/70" />
+				<div className="mt-2 h-3 w-2/3 rounded bg-muted/70" />
+			</div>
+			<div className="rounded-md border bg-background p-3">
+				<div className="h-4 w-28 rounded bg-muted" />
+			</div>
+		</div>
+	);
+}
 
 const getTaxLegislationForEra = (
 	leverId: string,

@@ -60,7 +60,7 @@ import { TopZone } from "./top-zone";
 // Mobile and desktop share the same structure. State persisted via
 // localStorage so a user's preferred depth survives reloads.
 
-interface Props {
+export interface OutputRailProps {
 	scenario: readonly ScenarioLine[];
 	comparisons: readonly ResolvedComparison[];
 	usdPerGbp: number;
@@ -88,7 +88,7 @@ export function OutputRail({
 	usdPerGbp,
 	baseline = OBR_BASELINE,
 	emptyMessage = "Add a lever to your scenario to see what it'd fund or cost.",
-}: Props) {
+}: OutputRailProps) {
 	// Open-state map for collapsible sections. Default closed; restored from
 	// localStorage on mount.
 	const [openMap, setOpenMap] = useState<Record<SectionId, boolean>>({
