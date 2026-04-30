@@ -935,6 +935,11 @@ function FiscalCounterfactualChart({
 				<div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
 					<ChartLegendItem color="#6b7280" label="current-policy baseline" />
 					<ChartLegendItem color={scenarioColour} label="policy scenario" />
+					<ChartLegendItem
+						color={scenarioColour}
+						label="scenario-vs-baseline gap"
+						filled
+					/>
 					{hasReactionPath && (
 						<ChartLegendItem
 							color="#dc2626"
@@ -1254,7 +1259,9 @@ function CounterfactualPathChart({
 					className="text-border"
 				/>
 				{gapPolygon && (
-					<polygon points={gapPolygon} fill={gapColor} opacity="0.1" />
+					<polygon points={gapPolygon} fill={gapColor} opacity="0.1">
+						<title>Scenario-vs-baseline gap</title>
+					</polygon>
 				)}
 				{fan90Polygon && (
 					<polygon points={fan90Polygon} fill={fanColor} opacity="0.08">
@@ -1355,6 +1362,75 @@ function CounterfactualPathChart({
 					</span>
 				))}
 			</div>
+			<CounterfactualEndpointLabels
+				title={title}
+				years={years}
+				series={series}
+				baselineValues={baselineValues}
+				formatValue={formatValue}
+				formatDeltaValue={formatDeltaValue}
+			/>
+		</div>
+	);
+}
+
+function CounterfactualEndpointLabels({
+	title,
+	years,
+	series,
+	baselineValues,
+	formatValue,
+	formatDeltaValue,
+}: {
+	title: string;
+	years: readonly string[];
+	series: readonly CounterfactualPathSeries[];
+	baselineValues: readonly number[];
+	formatValue: (value: number) => string;
+	formatDeltaValue: (value: number) => string;
+}) {
+	const finalYear = years.at(-1);
+	const baselineFinalValue = baselineValues.at(-1);
+	if (!finalYear || baselineFinalValue === undefined) return null;
+
+	return (
+		<div
+			className="mt-2 grid gap-1 text-[10px]"
+			aria-label={`${title} counterfactual endpoint labels for ${finalYear}`}
+		>
+			{series.map((item) => {
+				const finalValue = item.values.at(-1);
+				if (finalValue === undefined) return null;
+				const isBaseline = item.values === baselineValues;
+				const delta = isBaseline ? 0 : finalValue - baselineFinalValue;
+				return (
+					<div
+						key={`${item.label}-endpoint`}
+						className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-2"
+					>
+						<div className="min-w-0">
+							<span
+								className="mr-1 inline-block h-2 w-2 rounded-full"
+								style={{ backgroundColor: item.color }}
+								aria-hidden="true"
+							/>
+							<span className="truncate text-muted-foreground">
+								{item.label}
+							</span>
+						</div>
+						<div className="text-right tabular-nums">
+							<span className="font-medium text-foreground">
+								{formatValue(finalValue)}
+							</span>
+							{!isBaseline && (
+								<span className="ml-1 text-muted-foreground">
+									{formatDeltaValue(delta)} vs baseline
+								</span>
+							)}
+						</div>
+					</div>
+				);
+			})}
 		</div>
 	);
 }

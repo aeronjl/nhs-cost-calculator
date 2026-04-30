@@ -38,6 +38,9 @@ const formatPp = (n: number): string => {
 	return `${sign}${Math.abs(n).toFixed(2)}pp`;
 };
 
+const valueToneClassName = (n: number): string =>
+	n > 0 ? "text-blue-700" : n < 0 ? "text-amber-700" : "text-muted-foreground";
+
 export function MultiYearProjection({ projection, bands }: Props) {
 	if (projection.length === 0) return null;
 
@@ -81,7 +84,29 @@ export function MultiYearProjection({ projection, bands }: Props) {
 			</div>
 
 			<div className="rounded-md border bg-background/60 p-2 space-y-1.5">
-				<Sparkline projection={projection} bands={bands} maxAbs={maxAbs} />
+				<ProjectionFanChart
+					projection={projection}
+					bands={bands}
+					maxAbs={maxAbs}
+				/>
+				<div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-1.5 text-[10px] text-muted-foreground">
+					<ProjectionLegendItem color="#64748b" label="no-policy baseline" />
+					<ProjectionLegendItem color="#2563eb" label="central scenario path" />
+					{bands && (
+						<>
+							<ProjectionLegendItem
+								color="#93c5fd"
+								label="90% parameter fan"
+								filled
+							/>
+							<ProjectionLegendItem
+								color="#60a5fa"
+								label="50% parameter fan"
+								filled
+							/>
+						</>
+					)}
+				</div>
 				<div className="flex items-baseline justify-between text-[10px] tabular-nums">
 					<span>
 						<span className="text-muted-foreground">Year 1: </span>
@@ -128,6 +153,30 @@ export function MultiYearProjection({ projection, bands }: Props) {
 						{formatBn(yearNBand.p95)}
 					</div>
 				)}
+				<div className="grid grid-cols-3 gap-2 border-t pt-1.5 text-[10px]">
+					<ProjectionMetric
+						label="No-policy baseline"
+						value="£0"
+						detail="scenario effect"
+						tone="muted"
+					/>
+					<ProjectionMetric
+						label={`Year ${projection.length} central`}
+						value={formatBn(yearN.net)}
+						detail={`${formatDelta(trajectory)} from year 1`}
+						tone={yearN.net > 0 ? "blue" : yearN.net < 0 ? "amber" : "muted"}
+					/>
+					<ProjectionMetric
+						label="Fan width"
+						value={
+							yearNBand
+								? formatBn(yearNBand.p95 - yearNBand.p5)
+								: "not sampled"
+						}
+						detail={bands ? "90% parameter range" : "central only"}
+						tone={yearNBand ? "blue" : "muted"}
+					/>
+				</div>
 			</div>
 
 			<p className="text-[10px] text-muted-foreground leading-snug">
@@ -144,7 +193,7 @@ export function MultiYearProjection({ projection, bands }: Props) {
 	);
 }
 
-function Sparkline({
+function ProjectionFanChart({
 	projection,
 	bands,
 	maxAbs,
@@ -154,7 +203,7 @@ function Sparkline({
 	maxAbs: number;
 }) {
 	const width = 100; // arbitrary viewBox width
-	const height = 36; // taller to fit the band
+	const height = 48; // taller to fit baseline, fan, and central path
 	const baseY = height / 2;
 	const dx = width / Math.max(1, projection.length - 1);
 
@@ -192,52 +241,167 @@ function Sparkline({
 		.join(" ");
 
 	return (
-		<svg
-			viewBox={`0 0 ${width} ${height}`}
-			className="w-full h-10"
-			preserveAspectRatio="none"
-			role="img"
-			aria-label={`Net projection over ${projection.length} years${bands ? " with confidence bands" : ""}`}
-		>
-			{bands && band90Path && (
-				<polygon
-					points={band90Path}
-					className="fill-blue-200/40"
-				/>
-			)}
-			{bands && band50Path && (
-				<polygon
-					points={band50Path}
-					className="fill-blue-300/50"
-				/>
-			)}
-			<line
-				x1="0"
-				y1={baseY}
-				x2={width}
-				y2={baseY}
-				stroke="currentColor"
-				strokeWidth="0.3"
-				className="text-muted-foreground/40"
+		<div className="rounded-sm border bg-background/80 p-2">
+			<div className="flex items-baseline justify-between gap-2">
+				<div>
+					<div className="text-xs font-medium">Scenario effect fan</div>
+					<div className="text-[10px] text-muted-foreground">
+						Net effect versus the no-policy baseline.
+					</div>
+				</div>
+				<div
+					className={cn(
+						"text-right text-xs font-semibold tabular-nums",
+						valueToneClassName(projection.at(-1)?.net ?? 0),
+					)}
+				>
+					{formatBn(projection.at(-1)?.net ?? 0)}
+				</div>
+			</div>
+			<svg
+				viewBox={`0 0 ${width} ${height}`}
+				className="mt-2 h-16 w-full"
+				preserveAspectRatio="none"
+				role="img"
+				aria-label="Scenario effect fan chart versus no-policy baseline"
+			>
+				<title>Scenario effect fan chart versus no-policy baseline</title>
+				{bands && band90Path && (
+					<polygon points={band90Path} className="fill-blue-200/40">
+						<title>90% parameter fan</title>
+					</polygon>
+				)}
+				{bands && band50Path && (
+					<polygon points={band50Path} className="fill-blue-300/50">
+						<title>50% parameter fan</title>
+					</polygon>
+				)}
+				<line
+					x1="0"
+					y1={baseY}
+					x2={width}
+					y2={baseY}
+					stroke="currentColor"
+					strokeWidth="0.45"
+					vectorEffect="non-scaling-stroke"
+					className="text-slate-500/70"
+				>
+					<title>No-policy baseline: £0 scenario effect</title>
+				</line>
+				<polyline
+					points={points}
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="1.4"
+					strokeLinejoin="round"
+					strokeLinecap="round"
+					vectorEffect="non-scaling-stroke"
+					className="text-blue-600"
+				>
+					<title>central scenario path</title>
+				</polyline>
+				{projection.map((p, i) => (
+					<circle
+						key={p.year}
+						cx={i * dx}
+						cy={toY(p.net)}
+						r="1.4"
+						className={p.net >= 0 ? "fill-blue-600" : "fill-amber-600"}
+						vectorEffect="non-scaling-stroke"
+					>
+						<title>{`Year ${p.year}: ${formatBn(
+							p.net,
+						)} versus no-policy baseline`}</title>
+					</circle>
+				))}
+			</svg>
+			<div
+				className="mt-1 grid gap-1 text-[9px] tabular-nums text-muted-foreground"
+				style={{
+					gridTemplateColumns: `repeat(${projection.length}, minmax(0, 1fr))`,
+				}}
+			>
+				{projection.map((p, index) => (
+					<span
+						key={p.year}
+						className={cn(
+							"min-w-0 truncate",
+							index === 0
+								? "text-left"
+								: index === projection.length - 1
+									? "text-right"
+									: "text-center",
+						)}
+					>
+						Y{p.year}
+					</span>
+				))}
+			</div>
+			<div className="mt-1 text-[9px] text-muted-foreground">
+				baseline = £0
+			</div>
+		</div>
+	);
+}
+
+function ProjectionLegendItem({
+	color,
+	label,
+	filled = false,
+}: {
+	color: string;
+	label: string;
+	filled?: boolean;
+}) {
+	return (
+		<span className="inline-flex items-center gap-1">
+			<span
+				className={cn(
+					"inline-block w-4",
+					filled ? "h-2 rounded-sm border" : "h-0 border-t-2",
+				)}
+				style={{
+					backgroundColor: filled ? color : undefined,
+					borderColor: color,
+					opacity: filled ? 0.42 : 1,
+				}}
 			/>
-			<polyline
-				points={points}
-				fill="none"
-				stroke="currentColor"
-				strokeWidth="1.2"
-				strokeLinejoin="round"
-				strokeLinecap="round"
-				className="text-blue-600"
-			/>
-			{projection.map((p, i) => (
-				<circle
-					key={i}
-					cx={i * dx}
-					cy={toY(p.net)}
-					r="1.2"
-					className={p.net >= 0 ? "fill-blue-600" : "fill-amber-600"}
-				/>
-			))}
-		</svg>
+			{label}
+		</span>
+	);
+}
+
+function ProjectionMetric({
+	label,
+	value,
+	detail,
+	tone,
+}: {
+	label: string;
+	value: string;
+	detail: string;
+	tone: "blue" | "amber" | "muted";
+}) {
+	return (
+		<div className="min-w-0 rounded-sm bg-muted/30 p-1.5">
+			<div className="truncate text-[9px] uppercase tracking-wider text-muted-foreground">
+				{label}
+			</div>
+			<div
+				className={cn(
+					"mt-0.5 truncate text-xs font-semibold tabular-nums",
+					tone === "blue"
+						? "text-blue-700"
+						: tone === "amber"
+							? "text-amber-700"
+							: "text-muted-foreground",
+				)}
+			>
+				{value}
+			</div>
+			<div className="truncate text-[9px] text-muted-foreground">
+				{detail}
+			</div>
+		</div>
 	);
 }

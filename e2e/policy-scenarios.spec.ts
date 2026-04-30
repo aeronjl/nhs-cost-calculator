@@ -42,6 +42,16 @@ test.describe("policy scenario quick starts", () => {
 			"aria-selected",
 			"true",
 		);
+		await expect(
+			page.getByLabel("Scenario effect fan chart versus no-policy baseline"),
+		).toBeVisible();
+		await expect(page.getByText("No-policy baseline").first()).toBeVisible();
+		await expect(
+			page.getByText("scenario-vs-baseline gap", { exact: true }),
+		).toBeVisible();
+		await expect(
+			page.getByLabel(/PSNB path counterfactual endpoint labels/),
+		).toBeVisible();
 		await page.getByRole("tab", { name: "Who pays" }).click();
 		await expect(page.getByRole("tab", { name: "Who pays" })).toHaveAttribute(
 			"aria-selected",

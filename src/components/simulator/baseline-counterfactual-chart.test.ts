@@ -52,6 +52,7 @@ describe("BaselineComparisonPanel counterfactual chart", () => {
 		expect(html).toContain("PSNB delta");
 		expect(html).toContain("debt:GDP delta");
 		expect(html).toContain("scenario delta");
+		expect(html).toContain("scenario-vs-baseline gap");
 		expect(html).toContain("vs baseline");
 		expect(html).toContain("90% pre-reaction fan");
 		expect(html).toContain("90% post-reaction fan");
@@ -66,5 +67,7 @@ describe("BaselineComparisonPanel counterfactual chart", () => {
 		expect(html).toContain(
 			'aria-label="Debt to GDP baseline and scenario counterfactual path"',
 		);
+		expect(html).toContain("PSNB path counterfactual endpoint labels");
+		expect(html).toContain("Debt:GDP path counterfactual endpoint labels");
 	});
 });
