@@ -217,6 +217,7 @@ export function WizardShell({
 		onAdvance: advance,
 		onBack: back,
 		onApplyPolicyScenario: applyPolicyScenario,
+		onShowPolicyScenarios: showPolicyScenarios,
 	};
 
 	const isResultStep = state.step === 5;

@@ -123,6 +123,7 @@ interface StepProps {
 	onAdvance: () => void;
 	onBack: () => void;
 	onApplyPolicyScenario: (preset: PolicyScenarioPreset) => void;
+	onShowPolicyScenarios: () => void;
 }
 
 const formatBn = (n: number): string => {
@@ -1346,6 +1347,7 @@ export function StepResult({
 	comparisons,
 	usdPerGbp,
 	onBack,
+	onShowPolicyScenarios,
 }: StepProps) {
 	const goalDef = state.goal ? GOAL_DEFINITIONS[state.goal] : null;
 	const era = ERAS[state.era];
@@ -1406,18 +1408,33 @@ export function StepResult({
 				</div>
 				{policyScenario && (
 					<div className="mt-4 rounded-md border bg-muted/30 px-3 py-2">
-						<div className="flex flex-wrap items-center gap-2">
-							<span className="rounded-full border bg-background px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-								Policy quick start
-							</span>
-							<span className="text-sm font-medium">{policyScenario.label}</span>
-							<span className="text-[11px] text-muted-foreground">
-								{ERAS[policyScenario.era].year}
-							</span>
+						<div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+							<div>
+								<div className="flex flex-wrap items-center gap-2">
+									<span className="rounded-full border bg-background px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+										Policy quick start
+									</span>
+									<span className="text-sm font-medium">
+										{policyScenario.label}
+									</span>
+									<span className="text-[11px] text-muted-foreground">
+										{ERAS[policyScenario.era].year}
+									</span>
+								</div>
+								<p className="mt-1 text-xs leading-snug text-muted-foreground">
+									Started from this preset: {policyScenario.fiscalLogic}
+								</p>
+							</div>
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								className="h-7 shrink-0 text-[11px]"
+								onClick={onShowPolicyScenarios}
+							>
+								Change preset
+							</Button>
 						</div>
-						<p className="mt-1 text-xs leading-snug text-muted-foreground">
-							Started from this preset: {policyScenario.fiscalLogic}
-						</p>
 					</div>
 				)}
 			</header>

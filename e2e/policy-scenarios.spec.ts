@@ -84,5 +84,11 @@ test.describe("policy scenario quick starts", () => {
 		expect(wiz).toContain("p:education:5");
 		expect(wiz).toContain("p:nhs-england:5");
 		expect(wiz).toContain("b:30000000000:long-funded:ctx=onp");
+
+		await page.getByRole("button", { name: "Change preset" }).click();
+		await expect(
+			page.getByRole("heading", { name: "Policy scenarios for 2024" }),
+		).toBeVisible();
+		await expectSearchParam(() => page.url(), "wstep", "0");
 	});
 });
