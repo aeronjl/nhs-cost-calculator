@@ -3,6 +3,7 @@
 import { MethodologyPopover } from "@/components/ui/methodology-popover";
 import { getBorrowingStrategy } from "@/data/levers/borrowing";
 import { getTaxLever } from "@/data/levers/tax-rates";
+import { getProgramme } from "@/data/levers/uk-spending";
 import {
 	estimateMonetaryFiscalExposure,
 	optimiseBorrowingStrategy,
@@ -56,6 +57,8 @@ export function ScenarioAssumptions({ lines }: Props) {
 				</span>
 			</div>
 
+			<AssumptionsEvidenceDashboard lines={lines} />
+
 			<ul className="grid gap-2 xl:grid-cols-2 xl:items-start">
 				{lines.map((ev) => (
 					<AssumptionItem key={ev.line.id} evaluation={ev} />
@@ -68,6 +71,309 @@ export function ScenarioAssumptions({ lines }: Props) {
 				behavioural model are re-scored from their marginal tax wedge.
 			</p>
 		</div>
+	);
+}
+
+interface AssumptionEvidenceRow {
+	id: string;
+	label: string;
+	type: LineEvaluation["line"]["type"];
+	sourceLinked: boolean;
+	rangeBacked: boolean;
+	behavioural: boolean;
+	incidenceModelled: boolean;
+	borrowingModelled: boolean;
+	dynamicAdjustmentGbp: number;
+	dynamicAdjustmentFraction: number;
+	deltaGbp: number;
+}
+
+function AssumptionsEvidenceDashboard({
+	lines,
+}: {
+	lines: readonly LineEvaluation[];
+}) {
+	const rows = lines.map(assumptionEvidenceRow);
+	const total = Math.max(rows.length, 1);
+	const sourceRows = rows.filter((row) => row.sourceLinked).length;
+	const rangeRows = rows.filter((row) => row.rangeBacked).length;
+	const behaviouralRows = rows.filter((row) => row.behavioural).length;
+	const incidenceRows = rows.filter((row) => row.incidenceModelled).length;
+	const borrowingRows = rows.filter((row) => row.borrowingModelled).length;
+	const taxRows = rows.filter((row) => row.type === "tax").length;
+	const totalDynamicAdjustment = rows.reduce(
+		(sum, row) => sum + row.dynamicAdjustmentGbp,
+		0,
+	);
+	const largestDynamic = rows
+		.filter((row) => Math.abs(row.dynamicAdjustmentGbp) > 1_000_000)
+		.slice()
+		.sort(
+			(a, b) =>
+				Math.abs(b.dynamicAdjustmentGbp) - Math.abs(a.dynamicAdjustmentGbp),
+		)[0];
+	const evidenceScore = Math.round(
+		((sourceRows + rangeRows + incidenceRows + behaviouralRows + borrowingRows) /
+			(total * 3 + taxRows + borrowingRows)) *
+			100,
+	);
+	const scoreTone =
+		evidenceScore >= 75 ? "blue" : evidenceScore >= 45 ? "amber" : "muted";
+	const categories = [
+		{ label: "Source", count: sourceRows, total: rows.length, tone: "blue" as const },
+		{ label: "Range", count: rangeRows, total: rows.length, tone: "amber" as const },
+		{
+			label: "Incidence",
+			count: incidenceRows,
+			total: rows.length,
+			tone: "blue" as const,
+		},
+		...(taxRows > 0
+			? [
+					{
+						label: "Dynamic tax",
+						count: behaviouralRows,
+						total: taxRows,
+						tone: "amber" as const,
+					},
+				]
+			: []),
+		...(borrowingRows > 0
+			? [
+					{
+						label: "Borrowing",
+						count: borrowingRows,
+						total: borrowingRows,
+						tone: "muted" as const,
+					},
+				]
+			: []),
+	];
+
+	return (
+		<section
+			aria-label="Assumptions evidence dashboard"
+			className="rounded-md border bg-background/70 p-3 text-[10px]"
+		>
+			<div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+				<div>
+					<div className="font-medium text-foreground">
+						Assumptions evidence dashboard
+					</div>
+					<p className="mt-0.5 max-w-2xl text-muted-foreground leading-snug">
+						Audit treatment by scenario line before the full methodology
+						popovers: source traceability, range evidence, incidence coverage,
+						behavioural scoring, and borrowing-model overlays.
+					</p>
+				</div>
+				<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:w-[460px]">
+					<EvidenceMetric
+						label="Evidence score"
+						value={`${evidenceScore}%`}
+						tone={scoreTone}
+					/>
+					<EvidenceMetric
+						label="Dynamic adjustment"
+						value={formatSignedBn(totalDynamicAdjustment)}
+						tone={totalDynamicAdjustment < 0 ? "amber" : "blue"}
+					/>
+					<EvidenceMetric
+						label="Incidence coverage"
+						value={`${incidenceRows}/${rows.length}`}
+						tone={incidenceRows === rows.length ? "blue" : "amber"}
+					/>
+				</div>
+			</div>
+
+			<div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+				<div className="space-y-2">
+					<div
+						role="img"
+						aria-label="Assumption evidence coverage by modelling layer"
+						className="space-y-1.5"
+					>
+						{categories.map((category) => (
+							<EvidenceCoverageBar
+								key={category.label}
+								label={category.label}
+								count={category.count}
+								total={category.total}
+								tone={category.tone}
+							/>
+						))}
+					</div>
+					{largestDynamic && (
+						<div className="rounded-sm border bg-muted/20 p-2 leading-snug">
+							<div className="font-medium text-foreground">
+								Largest behavioural adjustment
+							</div>
+							<div className="mt-0.5 text-muted-foreground">
+								{largestDynamic.label}:{" "}
+								<span className="font-medium text-foreground tabular-nums">
+									{formatSignedBn(largestDynamic.dynamicAdjustmentGbp)}
+								</span>{" "}
+								({Math.round(largestDynamic.dynamicAdjustmentFraction * 100)}%)
+							</div>
+						</div>
+					)}
+				</div>
+
+				<div className="rounded-sm border bg-muted/20 p-2">
+					<div className="flex items-baseline justify-between gap-2">
+						<span className="font-medium text-foreground">
+							Line evidence matrix
+						</span>
+						<span className="text-muted-foreground tabular-nums">
+							{rows.length} line{rows.length === 1 ? "" : "s"}
+						</span>
+					</div>
+					<div className="mt-2 space-y-1">
+						{rows.map((row) => (
+							<div
+								key={row.id}
+								className="grid gap-1 rounded-sm bg-background/70 px-2 py-1.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+							>
+								<div className="min-w-0">
+									<div className="truncate font-medium text-foreground">
+										{row.label}
+									</div>
+									<div className="text-muted-foreground tabular-nums">
+										{row.type} · {formatSignedBn(row.deltaGbp)}
+									</div>
+								</div>
+								<div className="flex flex-wrap gap-1">
+									<EvidencePill label="Source" active={row.sourceLinked} />
+									<EvidencePill label="Range" active={row.rangeBacked} />
+									<EvidencePill
+										label="Incidence"
+										active={row.incidenceModelled}
+									/>
+									<EvidencePill label="Dynamic" active={row.behavioural} />
+									{row.borrowingModelled && (
+										<EvidencePill label="Borrowing" active />
+									)}
+								</div>
+							</div>
+						))}
+					</div>
+				</div>
+			</div>
+		</section>
+	);
+}
+
+function assumptionEvidenceRow(
+	evaluation: LineEvaluation,
+): AssumptionEvidenceRow {
+	const { line, description, methodology, source, deltaGbp } = evaluation;
+	const dynamic = evaluateLineDynamic(evaluation);
+	const taxLever = line.type === "tax" ? getTaxLever(line.leverId) : null;
+	const lever =
+		line.type === "tax"
+			? taxLever
+			: line.type === "programme"
+				? getProgramme(line.leverId)
+				: null;
+	return {
+		id: line.id,
+		label: description,
+		type: line.type,
+		sourceLinked: Boolean(source.url && source.label),
+		rangeBacked: Boolean(methodology.range),
+		behavioural: Boolean(taxLever?.behaviour),
+		incidenceModelled: line.type === "borrow" ? true : Boolean(lever?.incidence),
+		borrowingModelled: line.type === "borrow",
+		dynamicAdjustmentGbp: dynamic.behaviouralAdjustmentGbp,
+		dynamicAdjustmentFraction: dynamic.behaviouralAdjustmentFraction,
+		deltaGbp,
+	};
+}
+
+function EvidenceMetric({
+	label,
+	value,
+	tone,
+}: {
+	label: string;
+	value: string;
+	tone: "blue" | "amber" | "muted";
+}) {
+	return (
+		<div className="rounded-sm border bg-muted/20 p-2">
+			<div className="uppercase tracking-wider text-muted-foreground">
+				{label}
+			</div>
+			<div
+				className={cn(
+					"mt-0.5 text-sm font-semibold tabular-nums",
+					tone === "blue"
+						? "text-blue-700"
+						: tone === "amber"
+							? "text-amber-700"
+							: "text-muted-foreground",
+				)}
+			>
+				{value}
+			</div>
+		</div>
+	);
+}
+
+function EvidenceCoverageBar({
+	label,
+	count,
+	total,
+	tone,
+}: {
+	label: string;
+	count: number;
+	total: number;
+	tone: "blue" | "amber" | "muted";
+}) {
+	const widthPct = total > 0 ? (count / total) * 100 : 0;
+	return (
+		<div>
+			<div className="flex items-baseline justify-between gap-2">
+				<span className="font-medium text-foreground">{label}</span>
+				<span className="tabular-nums text-muted-foreground">
+					{count}/{total}
+				</span>
+			</div>
+			<div className="mt-1 h-2 overflow-hidden rounded-full bg-muted">
+				<span
+					className={cn(
+						"block h-full",
+						tone === "blue"
+							? "bg-blue-600"
+							: tone === "amber"
+								? "bg-amber-500"
+								: "bg-slate-400",
+					)}
+					style={{ width: `${widthPct.toFixed(2)}%` }}
+				/>
+			</div>
+		</div>
+	);
+}
+
+function EvidencePill({
+	label,
+	active,
+}: {
+	label: string;
+	active: boolean;
+}) {
+	return (
+		<span
+			className={cn(
+				"rounded-full border px-1.5 py-0.5 text-[9px]",
+				active
+					? "border-blue-200 bg-blue-50 text-blue-700"
+					: "border-border bg-muted/30 text-muted-foreground",
+			)}
+		>
+			{label}
+		</span>
 	);
 }
 
