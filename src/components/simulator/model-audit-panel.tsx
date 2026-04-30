@@ -88,6 +88,14 @@ const formatSignedPp = (n: number): string => {
 const formatBp = (n: number | null): string =>
 	n === null ? "n/a" : `${Math.round(n)}bp`;
 
+const clamp01 = (n: number): number => Math.min(1, Math.max(0, n));
+
+const formatVisualPercent = (n: number): string =>
+	`${Math.round(clamp01(n) * 100)}%`;
+
+const formatBarWidth = (n: number): string =>
+	`${(clamp01(n) * 100).toFixed(2)}%`;
+
 type AuditTone = "blue" | "amber" | "red" | "muted";
 
 const auditToneClassName = (tone: AuditTone): string =>
@@ -98,6 +106,48 @@ const auditToneClassName = (tone: AuditTone): string =>
 			: tone === "red"
 				? "text-red-700"
 				: "text-muted-foreground";
+
+const auditBarClassName = (tone: AuditTone): string =>
+	tone === "blue"
+		? "bg-blue-600"
+		: tone === "amber"
+			? "bg-amber-500"
+			: tone === "red"
+				? "bg-red-600"
+				: "bg-slate-400";
+
+const auditDotClassName = (tone: AuditTone): string =>
+	tone === "blue"
+		? "bg-blue-600"
+		: tone === "amber"
+			? "bg-amber-500"
+			: tone === "red"
+				? "bg-red-600"
+				: "bg-slate-400";
+
+const auditRiskTone = (probability: number | null): AuditTone =>
+	probability === null
+		? "muted"
+		: probability > 0.25
+			? "red"
+			: probability > 0.1
+				? "amber"
+				: "blue";
+
+const parseAuditRatio = (
+	value: string,
+): { numerator: number; denominator: number; ratio: number } | null => {
+	const match = /^(\d+)\/(\d+)$/.exec(value.trim());
+	if (!match) return null;
+	const numerator = Number(match[1]);
+	const denominator = Number(match[2]);
+	if (!Number.isFinite(numerator) || denominator <= 0) return null;
+	return {
+		numerator,
+		denominator,
+		ratio: clamp01(numerator / denominator),
+	};
+};
 
 const exportFilename = (kind: "md" | "json", generatedAt: string): string =>
 	`model-audit-${generatedAt.slice(0, 10)}.${kind}`;
@@ -399,6 +449,8 @@ export function ModelAuditPanel({ audit }: Props) {
 			</div>
 
 			<AuditExecutiveSummary audit={audit} items={qualityChecklist} />
+
+			<AuditRiskDashboard audit={audit} items={qualityChecklist} />
 
 			<ReportQualityChecklist items={qualityChecklist} />
 
@@ -1262,6 +1314,425 @@ function AuditHeadlineMetric({
 			</div>
 		</div>
 	);
+}
+
+function AuditRiskDashboard({
+	audit,
+	items,
+}: {
+	audit: ModelAuditEvidencePack;
+	items: readonly ChecklistItem[];
+}) {
+	const present = items.filter((item) => item.status === "present").length;
+	const missing = items.filter((item) => item.status === "missing").length;
+	const notApplicable = items.filter(
+		(item) => item.status === "not-applicable",
+	).length;
+	const readinessDenominator = Math.max(items.length - notApplicable, 1);
+	const readiness = present / readinessDenominator;
+	const baselineRule = audit.baselineComparison?.rule ?? null;
+	const regimeTotal = audit.liveRisk.regimeProbabilities.reduce(
+		(total, row) => total + row.probability,
+		0,
+	);
+	const uncertaintyLayers = audit.liveRisk.uncertaintyLayers;
+	const maxUncertaintyMove = Math.max(
+		1,
+		...uncertaintyLayers.map((row) => Math.abs(row.p5MoveGbp)),
+	);
+	const backtestRows = [
+		{
+			label: "Central borrowing path",
+			value: audit.backtests.borrowingCentralFit,
+		},
+		{
+			label: "Market overlay",
+			value: audit.backtests.borrowingOverlayFit,
+		},
+		{
+			label: "Regime classifier",
+			value: audit.backtests.borrowingRegimeClassifierFit,
+		},
+		{
+			label: "Fiscal reaction prior",
+			value: audit.backtests.fiscalReactionPriorFit,
+		},
+	].map((row) => ({
+		...row,
+		ratio: parseAuditRatio(row.value),
+	}));
+
+	return (
+		<section
+			aria-labelledby="audit-risk-dashboard-heading"
+			className="space-y-2 text-[10px]"
+		>
+			<div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+				<h4
+					id="audit-risk-dashboard-heading"
+					className="font-semibold uppercase tracking-wider text-muted-foreground"
+				>
+					Audit risk dashboard
+				</h4>
+				<span className="text-muted-foreground">
+					Visual triage for readiness, fiscal risk, borrowing regimes, and
+					calibration.
+				</span>
+			</div>
+
+			<div className="grid gap-2 lg:grid-cols-2">
+				<div className="rounded-md border bg-background/60 p-3">
+					<div className="flex items-start justify-between gap-3">
+						<div>
+							<div className="font-medium text-foreground">
+								Research readiness
+							</div>
+							<div className="mt-0.5 text-muted-foreground">
+								Present modules over applicable audit modules.
+							</div>
+						</div>
+						<div className="text-right text-sm font-semibold tabular-nums text-blue-700">
+							{formatVisualPercent(readiness)}
+						</div>
+					</div>
+					<div
+						role="img"
+						aria-label="Research readiness coverage"
+						className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-muted"
+					>
+						{[
+							{
+								label: "Present",
+								count: present,
+								tone: "blue" as AuditTone,
+							},
+							{
+								label: "Missing",
+								count: missing,
+								tone: "amber" as AuditTone,
+							},
+							{
+								label: "Not applicable",
+								count: notApplicable,
+								tone: "muted" as AuditTone,
+							},
+						]
+							.filter((segment) => segment.count > 0)
+							.map((segment) => (
+								<span
+									key={segment.label}
+									className={auditBarClassName(segment.tone)}
+									style={{
+										width: formatBarWidth(segment.count / items.length),
+									}}
+								/>
+							))}
+					</div>
+					<div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
+						<AuditLegendDot tone="blue" label={`${present} present`} />
+						{missing > 0 && (
+							<AuditLegendDot tone="amber" label={`${missing} missing`} />
+						)}
+						{notApplicable > 0 && (
+							<AuditLegendDot
+								tone="muted"
+								label={`${notApplicable} not applicable`}
+							/>
+						)}
+					</div>
+				</div>
+
+				<div className="rounded-md border bg-background/60 p-3">
+					<div className="flex items-start justify-between gap-3">
+						<div>
+							<div className="font-medium text-foreground">
+								Fiscal-rule risk visual
+							</div>
+							<div className="mt-0.5 text-muted-foreground">
+								Baseline/counterfactual breach risk before and after reaction.
+							</div>
+						</div>
+						<div
+							className={cn(
+								"text-right text-sm font-semibold tabular-nums",
+								auditToneClassName(
+									auditRiskTone(audit.liveRisk.postReactionBreachProbability),
+								),
+							)}
+						>
+							{formatProbability(
+								audit.liveRisk.postReactionBreachProbability,
+							)}
+						</div>
+					</div>
+					<div
+						aria-label="Fiscal-rule breach risk before and after reaction"
+						className="mt-3 space-y-2"
+					>
+						<AuditProbabilityBar
+							label="Raw breach"
+							value={audit.liveRisk.breachProbability}
+						/>
+						<AuditProbabilityBar
+							label="Post-reaction"
+							value={audit.liveRisk.postReactionBreachProbability}
+						/>
+					</div>
+					{baselineRule && (
+						<div className="mt-3 grid grid-cols-2 gap-3 border-t pt-2 tabular-nums">
+							<div>
+								<div className="text-muted-foreground">Baseline headroom</div>
+								<div className="font-medium text-foreground">
+									{formatBn(baselineRule.baselineHeadroomGbp)}
+								</div>
+							</div>
+							<div>
+								<div className="text-muted-foreground">Scenario headroom</div>
+								<div
+									className={cn(
+										"font-medium",
+										baselineRule.adjustedHeadroomGbp < 0
+											? "text-red-700"
+											: baselineRule.riskRating === "tight"
+												? "text-amber-700"
+												: "text-foreground",
+									)}
+								>
+									{formatBn(baselineRule.adjustedHeadroomGbp)}
+								</div>
+							</div>
+						</div>
+					)}
+				</div>
+
+				<div className="rounded-md border bg-background/60 p-3">
+					<div className="flex items-start justify-between gap-3">
+						<div>
+							<div className="font-medium text-foreground">
+								Borrowing regime mix
+							</div>
+							<div className="mt-0.5 text-muted-foreground">
+								Classifier probabilities for the current borrowing scenario.
+							</div>
+						</div>
+						<div
+							className={cn(
+								"text-right text-sm font-semibold tabular-nums",
+								audit.liveRisk.borrowingStressRating === "stress"
+									? "text-red-700"
+									: audit.liveRisk.borrowingStressRating === "watch"
+										? "text-amber-700"
+										: "text-blue-700",
+							)}
+						>
+							{audit.liveRisk.borrowingStressRating ?? "n/a"}
+						</div>
+					</div>
+					{audit.liveRisk.regimeProbabilities.length > 0 ? (
+						<>
+							<div
+								role="img"
+								aria-label="Borrowing regime probability mix"
+								className="mt-3 flex h-3 overflow-hidden rounded-full bg-muted"
+							>
+								{audit.liveRisk.regimeProbabilities.map((row) => {
+									const share =
+										regimeTotal > 0 ? row.probability / regimeTotal : 0;
+									return (
+										<span
+											key={row.id}
+											className={auditBarClassName(
+												borrowingRegimeTone(row.id),
+											)}
+											style={{ width: formatBarWidth(share) }}
+										/>
+									);
+								})}
+							</div>
+							<div className="mt-2 space-y-1">
+								{audit.liveRisk.regimeProbabilities.map((row) => (
+									<div
+										key={row.id}
+										className="flex items-baseline justify-between gap-2"
+									>
+										<AuditLegendDot
+											tone={borrowingRegimeTone(row.id)}
+											label={row.label}
+										/>
+										<span className="shrink-0 tabular-nums text-muted-foreground">
+											{formatProbability(row.probability)} ·{" "}
+											{formatBp(row.expectedOverlayBp)}
+										</span>
+									</div>
+								))}
+							</div>
+						</>
+					) : (
+						<div className="mt-3 rounded-sm bg-muted/40 p-2 text-muted-foreground">
+							No positive borrowing line in this scenario.
+						</div>
+					)}
+				</div>
+
+				<div className="rounded-md border bg-background/60 p-3">
+					<div className="flex items-start justify-between gap-3">
+						<div>
+							<div className="font-medium text-foreground">
+								Calibration coverage
+							</div>
+							<div className="mt-0.5 text-muted-foreground">
+								Backtest pass rates supporting the audit evidence.
+							</div>
+						</div>
+						<div className="text-right text-sm font-semibold tabular-nums text-blue-700">
+							{audit.calibration.length} sources
+						</div>
+					</div>
+					<div className="mt-3 space-y-2">
+						{backtestRows.map((row) => (
+							<div key={row.label}>
+								<div className="flex items-baseline justify-between gap-2">
+									<span className="text-foreground">{row.label}</span>
+									<span className="tabular-nums text-muted-foreground">
+										{row.value}
+									</span>
+								</div>
+								<div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
+									<span
+										className={cn(
+											"block h-full",
+											row.ratio && row.ratio.ratio < 0.75
+												? "bg-amber-500"
+												: "bg-blue-600",
+										)}
+										style={{
+											width: row.ratio
+												? formatBarWidth(row.ratio.ratio)
+												: "100%",
+										}}
+									/>
+								</div>
+							</div>
+						))}
+					</div>
+				</div>
+
+				{uncertaintyLayers.length > 0 && (
+					<div className="rounded-md border bg-background/60 p-3 lg:col-span-2">
+						<div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+							<div>
+								<div className="font-medium text-foreground">
+									Uncertainty movement
+								</div>
+								<div className="mt-0.5 text-muted-foreground">
+									Diverging p5 headroom movement by risk layer; left is downside.
+								</div>
+							</div>
+							{audit.liveRisk.largestDownsideLayerLabel && (
+								<span className="text-amber-700">
+									Largest downside:{" "}
+									{audit.liveRisk.largestDownsideLayerLabel}
+								</span>
+							)}
+						</div>
+						<div className="mt-3 grid gap-2 md:grid-cols-2">
+							{uncertaintyLayers.map((row) => {
+								const moveShare =
+									Math.abs(row.p5MoveGbp) / maxUncertaintyMove;
+								return (
+									<div key={row.label}>
+										<div className="flex items-baseline justify-between gap-2">
+											<span className="font-medium text-foreground">
+												{row.label}
+											</span>
+											<span className="tabular-nums text-muted-foreground">
+												{formatProbability(row.breachProbability)} · p5{" "}
+												{formatBn(row.p5HeadroomGbp)}
+											</span>
+										</div>
+										<div className="relative mt-1 h-2 rounded-full bg-muted">
+											<span className="absolute left-1/2 top-0 h-full w-px bg-border" />
+											{row.p5MoveGbp < 0 && (
+												<span
+													className="absolute right-1/2 top-0 h-full rounded-l-full bg-red-600"
+													style={{
+														width: formatBarWidth(moveShare / 2),
+													}}
+												/>
+											)}
+											{row.p5MoveGbp > 0 && (
+												<span
+													className="absolute left-1/2 top-0 h-full rounded-r-full bg-blue-600"
+													style={{
+														width: formatBarWidth(moveShare / 2),
+													}}
+												/>
+											)}
+										</div>
+										<div className="mt-1 text-right tabular-nums text-muted-foreground">
+											{row.label === "Central path"
+												? "base"
+												: formatBnDelta(row.p5MoveGbp)}
+										</div>
+									</div>
+								);
+							})}
+						</div>
+					</div>
+				)}
+			</div>
+		</section>
+	);
+}
+
+function AuditLegendDot({
+	tone,
+	label,
+}: {
+	tone: AuditTone;
+	label: string;
+}) {
+	return (
+		<span className="inline-flex min-w-0 items-center gap-1.5">
+			<span
+				aria-hidden="true"
+				className={cn("size-2 shrink-0 rounded-full", auditDotClassName(tone))}
+			/>
+			<span className="truncate">{label}</span>
+		</span>
+	);
+}
+
+function AuditProbabilityBar({
+	label,
+	value,
+}: {
+	label: string;
+	value: number | null;
+}) {
+	const tone = auditRiskTone(value);
+	return (
+		<div>
+			<div className="flex items-baseline justify-between gap-2">
+				<span className="text-foreground">{label}</span>
+				<span className={cn("tabular-nums", auditToneClassName(tone))}>
+					{formatProbability(value)}
+				</span>
+			</div>
+			<div className="mt-1 h-2 overflow-hidden rounded-full bg-muted">
+				<span
+					className={cn("block h-full", auditBarClassName(tone))}
+					style={{ width: value === null ? "100%" : formatBarWidth(value) }}
+				/>
+			</div>
+		</div>
+	);
+}
+
+function borrowingRegimeTone(id: string): AuditTone {
+	if (id === "credibility-shock") return "red";
+	if (id === "monetary-backstop") return "amber";
+	return "blue";
 }
 
 function AuditDisclosureSection({

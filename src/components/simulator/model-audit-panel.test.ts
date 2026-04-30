@@ -61,6 +61,19 @@ describe("ModelAuditPanel report quality checklist", () => {
 		expect(html).toContain("Report quality checklist");
 		expect(html).toContain("Executive audit summary");
 		expect(html).toContain("Evidence pack covers the core research modules");
+		expect(html).toContain("Audit risk dashboard");
+		expect(html).toContain("Research readiness");
+		expect(html).toContain("Fiscal-rule risk visual");
+		expect(html).toContain("Borrowing regime mix");
+		expect(html).toContain("Calibration coverage");
+		expect(html).toContain("Uncertainty movement");
+		expect(html).toContain("Research readiness coverage");
+		expect(html).toContain(
+			"Fiscal-rule breach risk before and after reaction",
+		);
+		expect(html).toContain("Borrowing regime probability mix");
+		expect(html).toContain("Baseline headroom");
+		expect(html).toContain("Scenario headroom");
 		expect(html).toContain("Evidence modules");
 		expect(html).toContain("Raw breach risk");
 		expect(html).toContain("Borrowing scenario matrix");
