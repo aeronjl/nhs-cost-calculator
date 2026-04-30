@@ -75,6 +75,7 @@ export function ModelAuditPanel({ audit }: Props) {
 		scenario,
 		baselineComparison,
 		borrowingScenarioComparison,
+		provenanceLedger,
 		calibration,
 		backtests,
 		liveRisk,
@@ -394,6 +395,121 @@ export function ModelAuditPanel({ audit }: Props) {
 												<div className="text-muted-foreground">
 													reaction {row.topReactionPackageLabel ?? "none"}
 												</div>
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				)}
+
+				{provenanceLedger.rows.length > 0 && (
+					<div className="rounded-sm border bg-muted/20 p-2 space-y-2">
+						<div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+							<span className="font-medium text-foreground">
+								Scenario provenance ledger
+							</span>
+							<span className="text-muted-foreground tabular-nums">
+								{provenanceLedger.sourceLinkedRows}/{provenanceLedger.rows.length}{" "}
+								source-linked · {provenanceLedger.rangeBackedRows} range-backed
+							</span>
+						</div>
+						<div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+							<Metric
+								label="Behavioural adjustment"
+								value={formatBnDelta(
+									provenanceLedger.totalBehaviouralAdjustmentGbp,
+								)}
+							/>
+							<Metric
+								label="Macro feedback"
+								value={formatBnDelta(provenanceLedger.totalMacroFeedbackGbp)}
+							/>
+							<Metric
+								label="Y5 debt interest"
+								value={formatBn(
+									provenanceLedger.totalFinalYearDebtInterestGbp,
+								)}
+							/>
+						</div>
+						<div className="overflow-x-auto rounded-sm border bg-background/70">
+							<table className="w-full min-w-[1040px] tabular-nums">
+								<thead className="text-muted-foreground">
+									<tr className="text-left">
+										<th className="px-2 py-1 font-medium">Line</th>
+										<th className="px-2 py-1 font-medium">Source</th>
+										<th className="px-2 py-1 font-medium">Static</th>
+										<th className="px-2 py-1 font-medium">Dynamic</th>
+										<th className="px-2 py-1 font-medium">Macro</th>
+										<th className="px-2 py-1 font-medium">Y5 GE</th>
+										<th className="px-2 py-1 font-medium">Uncertainty</th>
+										<th className="px-2 py-1 font-medium">Risk</th>
+									</tr>
+								</thead>
+								<tbody>
+									{provenanceLedger.rows.map((row) => (
+										<tr key={row.lineId} className="border-t border-border/60">
+											<td className="px-2 py-1 align-top">
+												<div className="font-medium text-foreground">
+													{row.description}
+												</div>
+												<div className="max-w-[240px] text-muted-foreground leading-snug">
+													{row.leverLabel} · {row.methodologyAsOf}
+													{row.borrowingStrategyLabel
+														? ` · ${row.borrowingStrategyLabel}`
+														: ""}
+												</div>
+											</td>
+											<td className="px-2 py-1 align-top">
+												<a
+													href={row.sourceUrl}
+													target="_blank"
+													rel="noopener noreferrer"
+													className="text-foreground hover:underline"
+												>
+													{row.sourceLabel}
+												</a>
+											</td>
+											<td className="px-2 py-1 align-top">
+												{formatBnDelta(row.staticDeltaGbp)}
+											</td>
+											<td className="px-2 py-1 align-top">
+												<div>{formatBnDelta(row.dynamicDeltaGbp)}</div>
+												<div className="text-muted-foreground">
+													{formatBnDelta(row.behaviouralAdjustmentGbp)}
+												</div>
+											</td>
+											<td className="px-2 py-1 align-top">
+												{formatBnDelta(row.macroFeedbackGbp)}
+											</td>
+											<td className="px-2 py-1 align-top">
+												<div>{formatBnDelta(row.finalYearGeNetGbp)}</div>
+												{Math.abs(row.finalYearDebtInterestGbp) > 0 && (
+													<div className="text-muted-foreground">
+														interest {formatBn(row.finalYearDebtInterestGbp)}
+													</div>
+												)}
+											</td>
+											<td className="px-2 py-1 align-top">
+												<div>{row.uncertaintyBasis}</div>
+												{row.methodologyRangeLowGbp !== null &&
+													row.methodologyRangeHighGbp !== null && (
+														<div className="text-muted-foreground">
+															{formatBn(row.methodologyRangeLowGbp)}-
+															{formatBn(row.methodologyRangeHighGbp)}
+														</div>
+													)}
+											</td>
+											<td className="px-2 py-1 align-top">
+												<div className="max-w-[220px] leading-snug">
+													{row.riskContributionLabel}
+												</div>
+												{row.borrowingContextLabel && (
+													<div className="text-muted-foreground">
+														{row.borrowingContextLabel}
+													</div>
+												)}
 											</td>
 										</tr>
 									))}

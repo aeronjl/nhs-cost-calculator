@@ -96,6 +96,11 @@ describe("model audit evidence pack", () => {
 			"tax-buoyancy",
 			"debt-risk-premium",
 		]);
+		expect(audit.provenanceLedger.rows).toHaveLength(1);
+		expect(audit.provenanceLedger.sourceLinkedRows).toBe(1);
+		expect(audit.provenanceLedger.rows[0]?.riskContributionLabel).toContain(
+			"pressure",
+		);
 		expect(audit.calibration.map((item) => item.label)).toContain(
 			"Borrowing balance-sheet calibration",
 		);
@@ -140,6 +145,7 @@ describe("model audit evidence pack", () => {
 		expect(markdown).toContain("Unscored persistent");
 		expect(markdown).toContain("## Macro Stress Lab");
 		expect(markdown).toContain("Gilt risk premium");
+		expect(markdown).toContain("## Scenario Provenance Ledger");
 		expect(markdown).toContain("## Calibration Evidence");
 		expect(markdown).toContain("### Uncertainty Decomposition");
 
@@ -153,5 +159,6 @@ describe("model audit evidence pack", () => {
 		);
 		expect(parsed.audit.borrowingScenarioComparison.rows).toHaveLength(6);
 		expect(parsed.audit.macroStressLab.parameters).toHaveLength(6);
+		expect(parsed.audit.provenanceLedger.rows).toHaveLength(1);
 	});
 });

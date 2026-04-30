@@ -37,6 +37,10 @@ import {
 	type BorrowingScenarioContext,
 } from "./borrowing-context";
 import type { MacroStressLab } from "./macro-stress-lab";
+import {
+	buildProvenanceLedger,
+	type ProvenanceLedger,
+} from "./provenance-ledger";
 
 export interface ModelAuditCalibrationItem {
 	label: string;
@@ -165,6 +169,7 @@ export interface ModelAuditEvidencePack {
 	baselineComparison: ModelAuditBaselineComparison | null;
 	borrowingScenarioComparison: ModelAuditBorrowingScenarioComparison | null;
 	macroStressLab: MacroStressLab | null;
+	provenanceLedger: ProvenanceLedger;
 	calibration: readonly ModelAuditCalibrationItem[];
 	backtests: ModelAuditBacktestSummary;
 	liveRisk: ModelAuditLiveRiskSummary;
@@ -518,6 +523,7 @@ export const buildModelAuditEvidencePack = ({
 	const borrowingAudit = auditBorrowingRegimeCalibration();
 	const fiscalReactionAudit = auditFiscalReactionBacktests();
 	const borrowingRegime = borrowingRegimeFor(result, baseline.years.length);
+	const provenanceLedger = buildProvenanceLedger(result, baseline.years.length);
 	const behaviouralTaxLines = result.lines.filter(
 		(line) =>
 			line.line.type === "tax" && Boolean(getTaxLever(line.line.leverId).behaviour),
@@ -556,6 +562,7 @@ export const buildModelAuditEvidencePack = ({
 			},
 		),
 		macroStressLab: macroStressLab ?? null,
+		provenanceLedger,
 		calibration: [
 			{
 				label: "Borrowing balance-sheet calibration",
@@ -866,6 +873,65 @@ export const buildModelAuditMarkdownAppendix = (
 					["Largest downside", lab.largestDownsideParameterLabel],
 					["Largest headroom range", lab.largestSwingParameterLabel],
 				],
+			),
+		);
+	}
+
+	if (audit.provenanceLedger.rows.length > 0) {
+		const ledger = audit.provenanceLedger;
+		sections.push(
+			"## Scenario Provenance Ledger",
+			markdownTable(
+				["Metric", "Value"],
+				[
+					[
+						"Source-linked rows",
+						`${ledger.sourceLinkedRows}/${ledger.rows.length}`,
+					],
+					[
+						"Range-backed rows",
+						`${ledger.rangeBackedRows}/${ledger.rows.length}`,
+					],
+					["Behavioural rows", ledger.behaviouralRows],
+					[
+						"Total behavioural adjustment",
+						formatSignedGbp(ledger.totalBehaviouralAdjustmentGbp),
+					],
+					[
+						"Total macro feedback",
+						formatSignedGbp(ledger.totalMacroFeedbackGbp),
+					],
+					[
+						"Total final-year debt interest",
+						formatGbp(ledger.totalFinalYearDebtInterestGbp),
+					],
+				],
+			),
+			markdownTable(
+				[
+					"Line",
+					"Source",
+					"As of",
+					"Static",
+					"Dynamic",
+					"Behavioural",
+					"Macro",
+					"Y5 GE net",
+					"Uncertainty",
+					"Risk contribution",
+				],
+				ledger.rows.map((row) => [
+					row.description,
+					row.sourceLabel,
+					row.methodologyAsOf,
+					formatSignedGbp(row.staticDeltaGbp),
+					formatSignedGbp(row.dynamicDeltaGbp),
+					formatSignedGbp(row.behaviouralAdjustmentGbp),
+					formatSignedGbp(row.macroFeedbackGbp),
+					formatSignedGbp(row.finalYearGeNetGbp),
+					row.uncertaintyBasis,
+					row.riskContributionLabel,
+				]),
 			),
 		);
 	}
