@@ -27,6 +27,7 @@ import {
 	type MicrosimAggregate,
 } from "@/lib/microsim/impact";
 import { generatePopulation } from "@/lib/microsim/population";
+import { buildModelAuditEvidencePack } from "@/lib/model-audit";
 import { BaselineComparisonPanel } from "./baseline-comparison";
 import { CollapsibleSection } from "./collapsible-section";
 import { DistributionalImpact } from "./distributional-impact";
@@ -34,6 +35,7 @@ import { HouseholdImpactPanel } from "./household-impact";
 import { MacroStatePanel } from "./macro-state-panel";
 import { MacroTierBreakdown } from "./macro-tier-breakdown";
 import { MicrosimulationPanel } from "./microsimulation-panel";
+import { ModelAuditPanel } from "./model-audit-panel";
 import { MultiYearProjection } from "./multi-year-projection";
 import { ScenarioAssumptions } from "./scenario-assumptions";
 import { TopZone } from "./top-zone";
@@ -43,11 +45,12 @@ import { TopZone } from "./top-zone";
 //   • Top zone (always visible): essential answer in ~6 lines —
 //     net effect, comparisons, 1-line distributional + household headlines.
 //
-//   • 4 collapsible sections (closed by default; state persisted):
+//   • 5 collapsible sections (closed by default; state persisted):
 //     - Trajectory: multi-year + vs OBR baseline
 //     - Who pays: distributional + microsim + household archetypes
 //     - Macro feedback: tier breakdown (reckoner→dynamic→macro→GE) + macro state
 //     - Assumptions: per-line caveats with full methodology
+//     - Model audit: calibration/backtest evidence pack
 //
 //   • "Expand all" toggle in rail header for power users.
 //
@@ -64,7 +67,13 @@ interface Props {
 	emptyMessage?: string;
 }
 
-const SECTION_IDS = ["trajectory", "who-pays", "macro", "assumptions"] as const;
+const SECTION_IDS = [
+	"trajectory",
+	"who-pays",
+	"macro",
+	"assumptions",
+	"audit",
+] as const;
 type SectionId = (typeof SECTION_IDS)[number];
 
 const STORAGE_KEY = "simulator-rail-sections";
@@ -83,6 +92,7 @@ export function OutputRail({
 		"who-pays": false,
 		macro: false,
 		assumptions: false,
+		audit: false,
 	});
 
 	useEffect(() => {
@@ -114,6 +124,7 @@ export function OutputRail({
 			"who-pays": v,
 			macro: v,
 			assumptions: v,
+			audit: v,
 		});
 
 	const result = useMemo(
@@ -159,6 +170,26 @@ export function OutputRail({
 				? projectFiscalRuleUncertaintyDecomposition(result, baseline, 300)
 				: undefined,
 		[baseline, result, scenario.length],
+	);
+	const modelAudit = useMemo(
+		() =>
+			scenario.length > 0
+				? buildModelAuditEvidencePack({
+						result,
+						baseline,
+						fiscalRuleFan,
+						fiscalRulePriorSensitivity,
+						fiscalRuleUncertaintyDecomposition,
+					})
+				: undefined,
+		[
+			baseline,
+			fiscalRuleFan,
+			fiscalRulePriorSensitivity,
+			fiscalRuleUncertaintyDecomposition,
+			result,
+			scenario.length,
+		],
 	);
 	const geYear1 = ge.withFeedback[0]?.net ?? 0;
 	const macroYear1 = ge.noFeedback[0]?.net ?? 0;
@@ -321,6 +352,16 @@ export function OutputRail({
 				onToggle={() => toggle("assumptions")}
 			>
 				<ScenarioAssumptions lines={result.lines} />
+			</CollapsibleSection>
+
+			<CollapsibleSection
+				id="audit"
+				title="Model audit"
+				subtitle="Calibration status, backtests, regimes, priors, and uncertainty layers"
+				open={openMap.audit}
+				onToggle={() => toggle("audit")}
+			>
+				{modelAudit && <ModelAuditPanel audit={modelAudit} />}
 			</CollapsibleSection>
 		</div>
 	);

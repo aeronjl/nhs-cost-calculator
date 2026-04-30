@@ -199,6 +199,8 @@ The live simulator also runs a prior-sensitivity comparison for scenarios that t
 
 The same draw set is also decomposed into sequential uncertainty layers. The report starts from the central headroom path, then adds baseline PSNB forecast error, correlated macro shocks, borrowing-regime overlays, and finally the endogenous policy-reaction branch. Each row reports cumulative breach probability, p5/p50 headroom, and the marginal p5 headroom move from the previous layer, so users can see whether downside risk is mainly ordinary forecast error, macro conditions, gilt-market regime risk, or residual policy-reaction uncertainty.
 
+The simulator report includes a model-audit evidence pack. It collects scenario composition, methodology range coverage, live borrowing-regime probabilities, calibration artifact status, historical backtest pass rates, prior sensitivity, uncertainty decomposition, and stated model limitations in one reviewable panel. The panel also exposes a compact JSON payload for external review.
+
 ## Market Reaction Loop
 
 Large borrowing packages also receive an endogenous market-reaction path. The central path applies the static debt/GDP and issuance risk premium. The market-reaction path then carries forward an additional credibility premium when debt/GDP, refinancing exposure, or the size of the issuance package cross risk thresholds:
