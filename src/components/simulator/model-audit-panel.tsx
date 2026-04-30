@@ -3,10 +3,13 @@
 import { useMemo, useState } from "react";
 import {
 	Check,
+	CheckCircle2,
+	CircleSlash,
 	Download,
 	FileJson,
 	FileText,
 	Link as LinkIcon,
+	TriangleAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +21,14 @@ import { cn } from "@/lib/utils";
 
 interface Props {
 	audit: ModelAuditEvidencePack;
+}
+
+type ChecklistStatus = "present" | "missing" | "not-applicable";
+
+interface ChecklistItem {
+	label: string;
+	detail: string;
+	status: ChecklistStatus;
 }
 
 const formatBn = (n: number): string => {
@@ -54,6 +65,109 @@ const formatBp = (n: number | null): string =>
 const exportFilename = (kind: "md" | "json", generatedAt: string): string =>
 	`model-audit-${generatedAt.slice(0, 10)}.${kind}`;
 
+const hasBacktestCoverage = (audit: ModelAuditEvidencePack): boolean =>
+	Boolean(
+		audit.backtests.borrowingCentralFit &&
+			audit.backtests.borrowingOverlayFit &&
+			audit.backtests.borrowingRegimeClassifierFit &&
+			audit.backtests.fiscalReactionPriorFit,
+	);
+
+const buildQualityChecklist = (
+	audit: ModelAuditEvidencePack,
+): readonly ChecklistItem[] => {
+	const hasBorrowing = audit.scenario.borrowingAmountGbp > 0;
+	return [
+		{
+			label: "Scenario summary",
+			detail: `${audit.scenario.lineCount} modelled line${audit.scenario.lineCount === 1 ? "" : "s"}`,
+			status: audit.scenario.lineCount > 0 ? "present" : "missing",
+		},
+		{
+			label: "Baseline & fiscal rule",
+			detail: audit.baselineComparison
+				? `${audit.baselineComparison.years.length} years; ${audit.baselineComparison.rule.riskRating} risk`
+				: "No baseline comparison",
+			status: audit.baselineComparison ? "present" : "missing",
+		},
+		{
+			label: "Provenance ledger",
+			detail: `${audit.provenanceLedger.sourceLinkedRows}/${audit.provenanceLedger.rows.length} source-linked`,
+			status:
+				audit.provenanceLedger.rows.length > 0 &&
+				audit.provenanceLedger.sourceLinkedRows > 0
+					? "present"
+					: "missing",
+		},
+		{
+			label: "Macro stress lab",
+			detail: audit.macroStressLab
+				? `${audit.macroStressLab.parameters.length} sensitivities`
+				: "No stress grid",
+			status: audit.macroStressLab ? "present" : "missing",
+		},
+		{
+			label: "Borrowing matrix",
+			detail: hasBorrowing
+				? `${audit.borrowingScenarioComparison?.rows.length ?? 0} variants`
+				: "No positive borrowing line",
+			status: hasBorrowing
+				? audit.borrowingScenarioComparison
+					? "present"
+					: "missing"
+				: "not-applicable",
+		},
+		{
+			label: "Borrowing regime",
+			detail: hasBorrowing
+				? audit.liveRisk.borrowingRegimeLabel ?? "No regime estimate"
+				: "No positive borrowing line",
+			status: hasBorrowing
+				? audit.liveRisk.regimeProbabilities.length > 0
+					? "present"
+					: "missing"
+				: "not-applicable",
+		},
+		{
+			label: "Fiscal-rule risk",
+			detail:
+				audit.liveRisk.breachProbability === null
+					? "No fan available"
+					: `${formatProbability(audit.liveRisk.breachProbability)} raw breach`,
+			status:
+				audit.liveRisk.breachProbability === null ? "missing" : "present",
+		},
+		{
+			label: "Prior sensitivity",
+			detail:
+				audit.liveRisk.priorSensitivityRows.length > 0
+					? `${audit.liveRisk.priorSensitivityRows.length} prior cases`
+					: "No reaction trigger",
+			status:
+				audit.liveRisk.priorSensitivityRows.length > 0
+					? "present"
+					: "not-applicable",
+		},
+		{
+			label: "Uncertainty layers",
+			detail:
+				audit.liveRisk.uncertaintyLayers.length > 0
+					? `${audit.liveRisk.uncertaintyLayers.length} layers`
+					: "No decomposition",
+			status:
+				audit.liveRisk.uncertaintyLayers.length > 0 ? "present" : "missing",
+		},
+		{
+			label: "Calibration & backtests",
+			detail: `${audit.calibration.length} calibrations; ${audit.backtests.fiscalReactionPriorFit} reaction fit`,
+			status:
+				audit.calibration.length > 0 && hasBacktestCoverage(audit)
+					? "present"
+					: "missing",
+		},
+	];
+};
+
 const downloadTextFile = (
 	filename: string,
 	body: string,
@@ -83,6 +197,7 @@ export function ModelAuditPanel({ audit }: Props) {
 	} = audit;
 	const [copied, setCopied] = useState(false);
 	const generatedAt = useMemo(() => new Date().toISOString(), [audit]);
+	const qualityChecklist = useMemo(() => buildQualityChecklist(audit), [audit]);
 
 	const currentShareUrl = () =>
 		typeof window === "undefined" ? undefined : window.location.href;
@@ -155,6 +270,8 @@ export function ModelAuditPanel({ audit }: Props) {
 					</span>
 				</div>
 			</div>
+
+			<ReportQualityChecklist items={qualityChecklist} />
 
 			<div className="rounded-md border bg-background/60 p-3 space-y-3 text-[10px]">
 				<div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -735,6 +852,80 @@ function Metric({
 				)}
 			>
 				{value}
+			</div>
+		</div>
+	);
+}
+
+function ReportQualityChecklist({ items }: { items: readonly ChecklistItem[] }) {
+	const present = items.filter((item) => item.status === "present").length;
+	const missing = items.filter((item) => item.status === "missing").length;
+	const notApplicable = items.filter(
+		(item) => item.status === "not-applicable",
+	).length;
+	const summary = [
+		`${present} present`,
+		missing > 0 ? `${missing} missing` : null,
+		notApplicable > 0 ? `${notApplicable} n/a` : null,
+	]
+		.filter(Boolean)
+		.join(" · ");
+
+	return (
+		<div className="rounded-md border bg-background/60 p-3 text-[10px]">
+			<div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+				<h4 className="font-semibold uppercase tracking-wider text-muted-foreground">
+					Report quality checklist
+				</h4>
+				<span
+					className={cn(
+						"tabular-nums",
+						missing > 0 ? "text-amber-700" : "text-blue-700",
+					)}
+				>
+					{summary}
+				</span>
+			</div>
+			<div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+				{items.map((item) => {
+					const Icon =
+						item.status === "present"
+							? CheckCircle2
+							: item.status === "missing"
+								? TriangleAlert
+								: CircleSlash;
+					return (
+						<div
+							key={item.label}
+							className={cn(
+								"flex items-start gap-2 rounded-sm border px-2 py-1.5",
+								item.status === "present"
+									? "border-blue-100 bg-blue-50/70 text-blue-900"
+									: item.status === "missing"
+										? "border-amber-200 bg-amber-50 text-amber-950"
+										: "border-border bg-muted/20 text-muted-foreground",
+							)}
+						>
+							<Icon
+								aria-hidden="true"
+								className={cn(
+									"mt-0.5 size-3 shrink-0",
+									item.status === "present"
+										? "text-blue-700"
+										: item.status === "missing"
+											? "text-amber-700"
+											: "text-muted-foreground",
+								)}
+							/>
+							<div className="min-w-0">
+								<div className="font-medium leading-tight">{item.label}</div>
+								<div className="mt-0.5 leading-snug opacity-80">
+									{item.detail}
+								</div>
+							</div>
+						</div>
+					);
+				})}
 			</div>
 		</div>
 	);
