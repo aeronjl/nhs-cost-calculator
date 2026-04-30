@@ -19,6 +19,11 @@ import { ANNOTATED_BUDGETS } from "@/data/budgets/annotated";
 import type { OBRBaseline } from "@/data/baseline/obr-baseline";
 import { policyReactionPackageSummary } from "@/lib/policy-reaction-packages";
 import { pointerToYearIndex, useYearFocus } from "@/lib/year-focus";
+import {
+	ChartCallout,
+	calloutAnchor,
+	calloutXPct,
+} from "./chart-callout";
 import { FiscalRiskGauge } from "./fiscal-risk-gauge";
 
 // Renders the scenario's impact against OBR's "do-nothing" baseline.
@@ -1411,10 +1416,53 @@ function CounterfactualPathChart({
 					{ruleCallout.detail}
 				</span>
 			</div>
+			<div className="relative mt-2">
+			{focusedFiscalYear && focusedIndex !== null && (
+				<ChartCallout
+					xPct={calloutXPct(focusedIndex, years.length)}
+					anchor={calloutAnchor(focusedIndex, years.length)}
+				>
+					<div className="font-semibold text-foreground">
+						{focusedFiscalYear}
+					</div>
+					<div className="mt-0.5 flex items-baseline gap-2 text-muted-foreground">
+						<span>
+							baseline{" "}
+							<span className="text-foreground">
+								{focusedBaseline !== null
+									? formatValue(focusedBaseline)
+									: "—"}
+							</span>
+						</span>
+						<span>
+							scenario{" "}
+							<span className="text-foreground">
+								{focusedScenario !== null
+									? formatValue(focusedScenario)
+									: "—"}
+							</span>
+						</span>
+					</div>
+					{focusedDelta !== null && Math.abs(focusedDelta) > 0 && (
+						<div
+							className={cn(
+								"mt-0.5 font-medium",
+								focusedDelta < 0
+									? "text-blue-700"
+									: focusedDelta > 0
+										? "text-amber-700"
+										: "text-muted-foreground",
+							)}
+						>
+							{formatDeltaValue(focusedDelta)} vs baseline
+						</div>
+					)}
+				</ChartCallout>
+			)}
 			<svg
 				ref={svgRef}
 				viewBox={`0 0 ${width} ${height}`}
-				className="mt-2 h-36 w-full touch-none"
+				className="h-36 w-full touch-none"
 				preserveAspectRatio="none"
 				role="img"
 				aria-label={ariaLabel}
@@ -1547,40 +1595,7 @@ function CounterfactualPathChart({
 					/>
 				)}
 			</svg>
-			{focusedFiscalYear && (
-				<div
-					className="mt-1 flex flex-wrap items-baseline justify-between gap-2 rounded-sm border bg-background/60 px-2 py-1 text-[10px]"
-					aria-live="polite"
-				>
-					<span className="text-[9px] uppercase tracking-wider text-muted-foreground">
-						{focusedFiscalYear}
-					</span>
-					<span className="tabular-nums">
-						<span className="text-muted-foreground">baseline </span>
-						<span className="font-medium text-foreground">
-							{focusedBaseline !== null ? formatValue(focusedBaseline) : "—"}
-						</span>
-						<span className="text-muted-foreground"> · scenario </span>
-						<span className="font-medium text-foreground">
-							{focusedScenario !== null ? formatValue(focusedScenario) : "—"}
-						</span>
-					</span>
-					{focusedDelta !== null && (
-						<span
-							className={cn(
-								"tabular-nums font-medium",
-								focusedDelta < 0
-									? "text-blue-700"
-									: focusedDelta > 0
-										? "text-amber-700"
-										: "text-muted-foreground",
-							)}
-						>
-							{formatDeltaValue(focusedDelta)}
-						</span>
-					)}
-				</div>
-			)}
+			</div>
 			<div
 				className="mt-1 grid gap-1 text-[9px] tabular-nums text-muted-foreground"
 				style={{ gridTemplateColumns: `repeat(${years.length}, minmax(0, 1fr))` }}

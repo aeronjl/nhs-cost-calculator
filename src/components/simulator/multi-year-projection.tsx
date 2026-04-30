@@ -10,6 +10,11 @@ import type {
 } from "@/lib/scenario";
 import { useAnimatedValues } from "@/lib/use-animated-values";
 import { pointerToYearIndex, useYearFocus } from "@/lib/year-focus";
+import {
+	ChartCallout,
+	calloutAnchor,
+	calloutXPct,
+} from "./chart-callout";
 import { PerLeverComposition } from "./per-lever-composition";
 
 // Compact multi-year projection display. Shows year-1 / year-N net + a
@@ -368,10 +373,52 @@ function ProjectionFanChart({
 					{formatBn(headlineYear?.net ?? 0)}
 				</div>
 			</div>
+			<div className="relative mt-2">
+			{focusedProjection && focusedIndex !== null && (
+				<ChartCallout
+					xPct={calloutXPct(focusedIndex, projection.length)}
+					anchor={calloutAnchor(focusedIndex, projection.length)}
+				>
+					<div className="font-semibold text-foreground">
+						Y{focusedProjection.year}{" "}
+						<span
+							className={cn(
+								"ml-1",
+								valueToneClassName(focusedProjection.net),
+							)}
+						>
+							{formatBn(focusedProjection.net)}
+						</span>
+					</div>
+					{focusedBand ? (
+						<div className="mt-0.5 text-muted-foreground">
+							90% {formatBn(focusedBand.p5)} – {formatBn(focusedBand.p95)}
+							{(() => {
+								const pBelow = probBelowZero(focusedBand);
+								if (pBelow <= 0.01 || pBelow >= 0.99) return null;
+								return (
+									<>
+										{" · "}
+										<span
+											className={
+												pBelow > 0.25 ? "text-amber-700" : ""
+											}
+										>
+											P(&lt;0) {Math.round(pBelow * 100)}%
+										</span>
+									</>
+								);
+							})()}
+						</div>
+					) : (
+						<div className="mt-0.5 text-muted-foreground">central only</div>
+					)}
+				</ChartCallout>
+			)}
 			<svg
 				ref={svgRef}
 				viewBox={`0 0 ${width} ${height}`}
-				className="mt-2 h-16 w-full touch-none"
+				className="h-16 w-full touch-none"
 				preserveAspectRatio="none"
 				role="img"
 				aria-label="Scenario effect fan chart versus no-policy baseline"
@@ -450,6 +497,7 @@ function ProjectionFanChart({
 					);
 				})}
 			</svg>
+			</div>
 			<div
 				className="mt-1 grid gap-1 text-[9px] tabular-nums text-muted-foreground"
 				style={{
@@ -476,39 +524,7 @@ function ProjectionFanChart({
 					);
 				})}
 			</div>
-			{focusedProjection ? (
-				<div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-[9px] tabular-nums">
-					<span className="text-muted-foreground">
-						Y{focusedProjection.year} central{" "}
-						<span className="font-medium text-foreground">
-							{formatBn(focusedProjection.net)}
-						</span>
-					</span>
-					{focusedBand ? (
-						<>
-							<span className="text-muted-foreground">
-								90% {formatBn(focusedBand.p5)} – {formatBn(focusedBand.p95)}
-							</span>
-							{(() => {
-								const pBelow = probBelowZero(focusedBand);
-								if (pBelow <= 0.01 || pBelow >= 0.99) return null;
-								return (
-									<span
-										className={cn(
-											"text-muted-foreground",
-											pBelow > 0.25 && "text-amber-700",
-										)}
-									>
-										P(&lt;0) {Math.round(pBelow * 100)}%
-									</span>
-								);
-							})()}
-						</>
-					) : (
-						<span className="text-muted-foreground">central only</span>
-					)}
-				</div>
-			) : (
+			{!focusedProjection && (
 				<div className="mt-1 text-[9px] text-muted-foreground">
 					baseline = £0
 				</div>
