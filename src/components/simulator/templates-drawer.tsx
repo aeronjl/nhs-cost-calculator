@@ -8,6 +8,7 @@ import {
 	type AnnotatedBudget,
 	ANNOTATED_BUDGETS,
 } from "@/data/budgets/annotated";
+import { RESEARCH_SCENARIO_FIXTURES } from "@/data/research-scenarios";
 import {
 	type ScenarioDiff,
 	deserializeScenario,
@@ -25,6 +26,15 @@ const PARTY_COLOURS: Record<AnnotatedBudget["party"], string> = {
 };
 
 type PartyFilter = "all" | AnnotatedBudget["party"];
+
+const SCENARIO_TEMPLATES: readonly AnnotatedBudget[] = [
+	...RESEARCH_SCENARIO_FIXTURES,
+	...ANNOTATED_BUDGETS,
+];
+
+const RESEARCH_SCENARIO_IDS = new Set<string>(
+	RESEARCH_SCENARIO_FIXTURES.map((fixture) => fixture.id),
+);
 
 const formatDate = (iso: string): string => {
 	const d = new Date(iso);
@@ -74,13 +84,13 @@ export function TemplatesDrawer({
 
 	const availableParties = useMemo<readonly PartyFilter[]>(() => {
 		const set = new Set<AnnotatedBudget["party"]>();
-		for (const b of ANNOTATED_BUDGETS) set.add(b.party);
+		for (const b of SCENARIO_TEMPLATES) set.add(b.party);
 		return ["all", ...Array.from(set)];
 	}, []);
 
-	const filteredBudgets = useMemo(() => {
+	const filteredTemplates = useMemo(() => {
 		const q = search.trim().toLowerCase();
-		return ANNOTATED_BUDGETS.filter((b) => {
+		return SCENARIO_TEMPLATES.filter((b) => {
 			if (partyFilter !== "all" && b.party !== partyFilter) return false;
 			if (!q) return true;
 			return (
@@ -137,7 +147,7 @@ export function TemplatesDrawer({
 			className="fixed inset-0 z-50"
 			role="dialog"
 			aria-modal="true"
-			aria-label="Replay a UK budget"
+			aria-label="Load a scenario template"
 		>
 			{/* Overlay */}
 			<button
@@ -151,10 +161,10 @@ export function TemplatesDrawer({
 			<div className="absolute inset-y-0 right-0 w-full sm:w-[480px] bg-background border-l shadow-xl flex flex-col">
 				<div className="px-4 py-3 border-b flex items-center justify-between gap-4">
 					<div>
-						<h2 className="font-semibold">Replay a budget</h2>
+						<h2 className="font-semibold">Load a scenario template</h2>
 						<p className="text-xs text-muted-foreground">
-							{filteredBudgets.length} of {ANNOTATED_BUDGETS.length} budgets,
-							2010–2026
+							{filteredTemplates.length} of {SCENARIO_TEMPLATES.length}{" "}
+							templates
 						</p>
 					</div>
 					<button
@@ -173,7 +183,7 @@ export function TemplatesDrawer({
 						onChange={(e) => setSearch(e.target.value)}
 						placeholder="Search by name, chancellor, or description…"
 						className="w-full px-2.5 py-1.5 text-sm border rounded-md bg-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
-						aria-label="Search budgets"
+						aria-label="Search scenario templates"
 					/>
 					<div
 						role="group"
@@ -202,12 +212,12 @@ export function TemplatesDrawer({
 				</div>
 
 				<div className="flex-1 overflow-y-auto p-4 space-y-3">
-					{filteredBudgets.length === 0 && (
+					{filteredTemplates.length === 0 && (
 						<p className="text-sm text-muted-foreground text-center py-8">
-							No budgets match. Try clearing the search or party filter.
+							No templates match. Try clearing the search or party filter.
 						</p>
 					)}
-					{filteredBudgets.map((budget) => (
+					{filteredTemplates.map((budget) => (
 						<div
 							key={budget.id}
 							className={cn(
@@ -222,6 +232,11 @@ export function TemplatesDrawer({
 										<span className="text-[11px] text-muted-foreground tabular-nums">
 											{formatDate(budget.date)}
 										</span>
+										{RESEARCH_SCENARIO_IDS.has(budget.id) && (
+											<span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full border bg-emerald-50 text-emerald-800 border-emerald-200">
+												Research preset
+											</span>
+										)}
 										<span
 											className={cn(
 												"text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full border",
@@ -237,7 +252,7 @@ export function TemplatesDrawer({
 									<p className="text-xs mt-1.5">{budget.shortDescription}</p>
 									<details className="mt-1.5 text-[11px] text-muted-foreground">
 										<summary className="cursor-pointer hover:text-foreground">
-											More on this budget
+											More on this scenario
 										</summary>
 										<div className="mt-1.5 space-y-1.5 leading-snug">
 											<p>{budget.notes}</p>

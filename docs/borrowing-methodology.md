@@ -203,6 +203,10 @@ The simulator report includes a model-audit evidence pack. It collects scenario 
 
 The simulator also includes a macro stress lab. It re-runs the same scenario through the general-equilibrium projection under low/high nominal growth, inflation, Bank Rate, fiscal-multiplier strength, tax-buoyancy, and debt-risk-premium assumptions. The output is a tornado-style rule-headroom sensitivity and a case table covering PSNB, debt/GDP, debt interest, and risk rating.
 
+## Research Scenario Fixtures
+
+Named research presets live in `src/data/research-scenarios.ts` and are exposed in the scenario template drawer. They cover unscored £80bn borrowing, tax-funded consolidation, and emergency backstopped borrowing. The regression suite replays each fixture through deserialization, scenario scoring, GE feedback, OBR baseline comparison, fiscal-rule fan, macro stress lab, provenance ledger, and model-audit export plumbing. These cases are deliberately directional benchmarks: they enforce professional modelling invariants, such as unscored borrowing worsening headroom, tax consolidation repairing headroom, and emergency/QE metadata lowering expected market-pressure tails relative to identical unscored borrowing.
+
 ## Market Reaction Loop
 
 Large borrowing packages also receive an endogenous market-reaction path. The central path applies the static debt/GDP and issuance risk premium. The market-reaction path then carries forward an additional credibility premium when debt/GDP, refinancing exposure, or the size of the issuance package cross risk thresholds:
