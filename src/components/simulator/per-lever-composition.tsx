@@ -3,6 +3,7 @@
 import { type PointerEvent, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { LineEvaluation, YearProjection } from "@/lib/scenario";
+import { useAnimatedPerLineValues } from "@/lib/use-animated-values";
 import { pointerToYearIndex, useYearFocus } from "@/lib/year-focus";
 
 // Per-lever composition view of the multi-year trajectory. Sits beneath the
@@ -67,25 +68,44 @@ export function PerLeverComposition({ projection, lineProjections }: Props) {
 			description: lp.line.description,
 			color: PER_LEVER_PALETTE[idx % PER_LEVER_PALETTE.length] ?? fallbackColor,
 			isPositive,
-			values: clamped,
+			targetValues: clamped,
 		};
 	});
 
-	const positiveLines = stackable.filter((s) => s.isPositive);
-	const negativeLines = stackable.filter((s) => !s.isPositive);
+	// Keyed animation: each line's stack values morph between renders, with
+	// new lines fading in from zero and removed lines dropping immediately.
+	// Using line.id as the key prevents the visual swap that would happen if
+	// we animated over a flat values array — removing a positive-stacked line
+	// would otherwise re-colour the slot above it as though it had moved.
+	const animatedMap = useAnimatedPerLineValues(
+		stackable.map((s) => ({ id: s.id, values: s.targetValues })),
+	);
+	const valuesFor = (
+		id: string,
+		fallback: readonly number[],
+	): readonly number[] => animatedMap.get(id) ?? fallback;
+
+	const withAnimatedValues = stackable.map((s) => ({
+		...s,
+		values: valuesFor(s.id, s.targetValues),
+	}));
+	const positiveLines = withAnimatedValues.filter((s) => s.isPositive);
+	const negativeLines = withAnimatedValues.filter((s) => !s.isPositive);
+
+	type AnimatedLine = (typeof withAnimatedValues)[number];
 
 	// Compute per-line, per-year [bottom, top] in £ (positive lines stack
 	// upward from £0; negative downward from £0).
 	const buildBands = (
-		group: typeof stackable,
+		group: readonly AnimatedLine[],
 		direction: "up" | "down",
-	): { line: (typeof stackable)[number]; band: { bottom: number[]; top: number[] } }[] => {
+	): { line: AnimatedLine; band: { bottom: number[]; top: number[] } }[] => {
 		const out: ReturnType<typeof buildBands> = [];
 		const cursor = new Array(yearCount).fill(0);
 		for (const line of group) {
 			const bottom = [...cursor];
 			const top = bottom.map((b, y) =>
-				direction === "up" ? b + line.values[y]! : b + line.values[y]!,
+				direction === "up" ? b + (line.values[y] ?? 0) : b + (line.values[y] ?? 0),
 			);
 			out.push({ line, band: { bottom, top } });
 			for (let y = 0; y < yearCount; y++) {
@@ -156,7 +176,10 @@ export function PerLeverComposition({ projection, lineProjections }: Props) {
 		focusedIndex !== null ? projection[focusedIndex] : null;
 	const focusedStaticSum =
 		focusedIndex !== null
-			? stackable.reduce((s, l) => s + (l.values[focusedIndex] ?? 0), 0)
+			? stackable.reduce(
+					(s, l) => s + (l.targetValues[focusedIndex] ?? 0),
+					0,
+				)
 			: null;
 	const focusedFeedback =
 		focusedIndex !== null && focusedYearProjection && focusedStaticSum !== null
@@ -165,7 +188,7 @@ export function PerLeverComposition({ projection, lineProjections }: Props) {
 
 	const finalYearProjection = projection[yearCount - 1] ?? null;
 	const finalStaticSum = stackable.reduce(
-		(s, l) => s + (l.values[yearCount - 1] ?? 0),
+		(s, l) => s + (l.targetValues[yearCount - 1] ?? 0),
 		0,
 	);
 	const finalFeedback = finalYearProjection
