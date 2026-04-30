@@ -12,11 +12,24 @@ export type FiscalReactionPriorProfileId =
 	| "tax-lock"
 	| "late-parliament";
 
+export type FiscalReactionPriorSensitivityCaseId =
+	| "neutral"
+	| "credibility-repair"
+	| "service-protection"
+	| "spending-restraint";
+
 export interface FiscalReactionPriorProfile {
 	id: FiscalReactionPriorProfileId;
 	label: string;
 	description: string;
 	scoreAdjustments: Partial<Record<FiscalReactionPackageShapeId, number>>;
+}
+
+export interface FiscalReactionPriorSensitivityCase {
+	id: FiscalReactionPriorSensitivityCaseId;
+	label: string;
+	description: string;
+	priorProfileIds: readonly FiscalReactionPriorProfileId[];
 }
 
 export const FISCAL_REACTION_PRIOR_PROFILES: readonly FiscalReactionPriorProfile[] =
@@ -91,3 +104,35 @@ export const getFiscalReactionPriorProfile = (
 ): FiscalReactionPriorProfile =>
 	FISCAL_REACTION_PRIOR_PROFILES.find((profile) => profile.id === id) ??
 	FISCAL_REACTION_PRIOR_PROFILES[0]!;
+
+export const FISCAL_REACTION_PRIOR_SENSITIVITY_CASES: readonly FiscalReactionPriorSensitivityCase[] =
+	[
+		{
+			id: "neutral",
+			label: "Neutral",
+			description:
+				"Rule arithmetic only; no explicit political or institutional tilt.",
+			priorProfileIds: [],
+		},
+		{
+			id: "credibility-repair",
+			label: "Credibility repair",
+			description:
+				"Visible repair after market, OBR, or fiscal-framework pressure.",
+			priorProfileIds: ["credibility-repair"],
+		},
+		{
+			id: "service-protection",
+			label: "Service protection",
+			description:
+				"Protected public-service or investment commitments constrain spending cuts.",
+			priorProfileIds: ["public-service-protection"],
+		},
+		{
+			id: "spending-restraint",
+			label: "Spending restraint",
+			description:
+				"Mandate or spending-review strategy favours welfare and departmental restraint.",
+			priorProfileIds: ["spending-restraint-mandate"],
+		},
+	];

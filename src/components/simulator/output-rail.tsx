@@ -19,6 +19,7 @@ import { OBR_BASELINE } from "@/data/baseline/obr-baseline";
 import {
 	projectAgainstBaseline,
 	projectFiscalRuleFan,
+	projectFiscalRulePriorSensitivity,
 } from "@/lib/baseline-projection";
 import {
 	evaluateMicrosim,
@@ -114,7 +115,10 @@ export function OutputRail({
 			assumptions: v,
 		});
 
-	const result = evaluateScenario(scenario as ScenarioLine[]);
+	const result = useMemo(
+		() => evaluateScenario(scenario as ScenarioLine[]),
+		[scenario],
+	);
 	const items = comparisonsCovered(result.net, comparisons, usdPerGbp);
 	const distribution = evaluateScenarioDistribution(result);
 	const dynamic = evaluateScenarioDynamic(result);
@@ -134,8 +138,20 @@ export function OutputRail({
 	);
 	const macroPath = ge.macroPath;
 	const baselineComparison = projectAgainstBaseline(projection, baseline);
-	const fiscalRuleFan =
-		scenario.length > 0 ? projectFiscalRuleFan(result, baseline, 500) : undefined;
+	const fiscalRuleFan = useMemo(
+		() =>
+			scenario.length > 0
+				? projectFiscalRuleFan(result, baseline, 500)
+				: undefined,
+		[baseline, result, scenario.length],
+	);
+	const fiscalRulePriorSensitivity = useMemo(
+		() =>
+			fiscalRuleFan && fiscalRuleFan.policyReactionTriggeredProbability > 0
+				? projectFiscalRulePriorSensitivity(result, baseline, 300)
+				: undefined,
+		[baseline, fiscalRuleFan, result],
+	);
 	const geYear1 = ge.withFeedback[0]?.net ?? 0;
 	const macroYear1 = ge.noFeedback[0]?.net ?? 0;
 	const geGap = geYear1 - macroYear1;
@@ -213,6 +229,7 @@ export function OutputRail({
 				<BaselineComparisonPanel
 					comparison={baselineComparison}
 					fiscalRuleFan={fiscalRuleFan}
+					fiscalRulePriorSensitivity={fiscalRulePriorSensitivity}
 				/>
 			</CollapsibleSection>
 

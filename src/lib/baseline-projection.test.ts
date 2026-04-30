@@ -3,6 +3,7 @@ import type { OBRBaseline } from "@/data/baseline/obr-baseline";
 import {
 	projectAgainstBaseline,
 	projectFiscalRuleFan,
+	projectFiscalRulePriorSensitivity,
 } from "./baseline-projection";
 import {
 	evaluateScenario,
@@ -443,5 +444,48 @@ describe("projectFiscalRuleFan", () => {
 		);
 		expect(unscoredFan.headroomBand.p5).toBeLessThan(scoredFan.headroomBand.p5);
 		expect(unscoredFan.centralHeadroomGbp).toBe(scoredFan.centralHeadroomGbp);
+	});
+
+	it("compares policy-reaction prior sensitivity cases", () => {
+		const result = evaluateScenario([
+			{
+				id: "borrow",
+				type: "borrow",
+				leverId: "",
+				magnitude: 80_000_000_000,
+				borrowingContext: {
+					fiscalEvent: "unscored",
+					duration: "persistent",
+				},
+			},
+		]);
+		const sensitivity = projectFiscalRulePriorSensitivity(
+			result,
+			TEST_BASELINE,
+			200,
+			7,
+		);
+		expect(sensitivity.rows.map((row) => row.id)).toEqual([
+			"neutral",
+			"credibility-repair",
+			"service-protection",
+			"spending-restraint",
+		]);
+		expect(sensitivity.neutral.id).toBe("neutral");
+		for (const row of sensitivity.rows) {
+			expect(row.fan.samples).toBe(200);
+			expect(row.fan.policyReactionTriggeredProbability).toBeGreaterThan(0);
+			expect(row.dominantPackage).not.toBeNull();
+		}
+		const neutral = sensitivity.rows.find((row) => row.id === "neutral")!;
+		const spending = sensitivity.rows.find(
+			(row) => row.id === "spending-restraint",
+		)!;
+		expect(neutral.dominantPackage?.id).toBe("tax-led");
+		expect(spending.dominantPackage?.id).toBe("spending-led");
+		expect(spending.postReactionBreachDeltaFromNeutral).toBe(
+			spending.fan.postReactionBreachProbability -
+				neutral.fan.postReactionBreachProbability,
+		);
 	});
 });

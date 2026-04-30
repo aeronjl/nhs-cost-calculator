@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import type {
 	BaselineComparison,
 	FiscalRuleFan,
+	FiscalRulePriorSensitivity,
 } from "@/lib/baseline-projection";
 import { policyReactionPackageSummary } from "@/lib/policy-reaction-packages";
 
@@ -23,11 +24,21 @@ import { policyReactionPackageSummary } from "@/lib/policy-reaction-packages";
 interface Props {
 	comparison: BaselineComparison;
 	fiscalRuleFan?: FiscalRuleFan;
+	fiscalRulePriorSensitivity?: FiscalRulePriorSensitivity;
 }
 
 const formatBn = (n: number): string => {
 	const abs = Math.abs(n);
 	const sign = n >= 0 ? "" : "−";
+	if (abs >= 1_000_000_000)
+		return `${sign}£${(abs / 1_000_000_000).toFixed(1)}bn`;
+	if (abs >= 1_000_000) return `${sign}£${Math.round(abs / 1_000_000)}m`;
+	return `${sign}£${Math.round(abs).toLocaleString()}`;
+};
+
+const formatBnDelta = (n: number): string => {
+	const abs = Math.abs(n);
+	const sign = n > 0 ? "+" : n < 0 ? "−" : "";
 	if (abs >= 1_000_000_000)
 		return `${sign}£${(abs / 1_000_000_000).toFixed(1)}bn`;
 	if (abs >= 1_000_000) return `${sign}£${Math.round(abs / 1_000_000)}m`;
@@ -42,6 +53,13 @@ const formatSignedPp = (n: number): string => {
 };
 
 const formatProbability = (n: number): string => `${Math.round(n * 100)}%`;
+
+const formatProbabilityDelta = (n: number): string => {
+	const pp = n * 100;
+	const sign = pp > 0 ? "+" : pp < 0 ? "−" : "";
+	const abs = Math.abs(pp);
+	return `${sign}${abs >= 10 ? abs.toFixed(0) : abs.toFixed(1)}pp`;
+};
 
 const formatHouseholdGbp = (n: number): string => {
 	const abs = Math.abs(n);
@@ -60,7 +78,11 @@ const formatImpactPct = (n: number): string => {
 	return "0%";
 };
 
-export function BaselineComparisonPanel({ comparison, fiscalRuleFan }: Props) {
+export function BaselineComparisonPanel({
+	comparison,
+	fiscalRuleFan,
+	fiscalRulePriorSensitivity,
+}: Props) {
 	const {
 		years,
 		ruleYear,
@@ -213,6 +235,119 @@ export function BaselineComparisonPanel({ comparison, fiscalRuleFan }: Props) {
 										{formatBn(fiscalRuleFan.endogenousReactionGrossBand.p95)}
 									</span>
 									.
+								</div>
+							)}
+						{fiscalRulePriorSensitivity &&
+							fiscalRulePriorSensitivity.rows.length > 1 && (
+								<div className="mt-1.5 rounded-sm bg-muted/40 px-2 py-1.5 text-[10px] text-muted-foreground">
+									<div className="mb-1 flex items-baseline justify-between gap-2">
+										<span className="font-medium text-foreground">
+											Prior sensitivity
+										</span>
+										<span className="tabular-nums">
+											{fiscalRulePriorSensitivity.samples} draws each
+										</span>
+									</div>
+									<div className="overflow-x-auto">
+										<table className="w-full min-w-[520px] tabular-nums">
+											<thead>
+												<tr className="text-left">
+													<th className="py-1 pr-2 font-medium">Prior</th>
+													<th className="py-1 pr-2 font-medium">
+														Dominant offset
+													</th>
+													<th className="py-1 pr-2 font-medium">Trigger</th>
+													<th className="py-1 pr-2 font-medium">
+														Post-breach
+													</th>
+													<th className="py-1 font-medium">p95 action</th>
+												</tr>
+											</thead>
+											<tbody>
+												{fiscalRulePriorSensitivity.rows.map((row) => (
+													<tr key={row.id} className="border-t border-border/60">
+														<td className="py-1 pr-2">
+															<span className="font-medium text-foreground">
+																{row.label}
+															</span>
+														</td>
+														<td className="py-1 pr-2">
+															{row.dominantPackage ? (
+																<>
+																	<span className="text-foreground">
+																		{row.dominantPackage.label}
+																	</span>{" "}
+																	{formatProbability(
+																		row.dominantPackage.probability,
+																	)}
+																</>
+															) : (
+																"none"
+															)}
+														</td>
+														<td className="py-1 pr-2">
+															{formatProbability(
+																row.fan
+																	.policyReactionTriggeredProbability,
+															)}
+														</td>
+														<td className="py-1 pr-2">
+															<span
+																className={cn(
+																	row.fan
+																		.postReactionBreachProbability >
+																		0.25
+																		? "text-red-700"
+																		: row.fan
+																				.postReactionBreachProbability >
+																				0.1
+																			? "text-amber-700"
+																			: "text-foreground",
+																)}
+															>
+																{formatProbability(
+																	row.fan
+																		.postReactionBreachProbability,
+																)}
+															</span>
+															{row.id !== "neutral" && (
+																<span className="text-muted-foreground">
+																	{" "}
+																	(
+																	{formatProbabilityDelta(
+																		row.postReactionBreachDeltaFromNeutral,
+																	)}
+																	)
+																</span>
+															)}
+														</td>
+														<td className="py-1">
+															<span className="text-foreground">
+																{formatBn(
+																	row.fan
+																		.endogenousReactionGrossBand.p95,
+																)}
+															</span>
+															{row.id !== "neutral" && (
+																<span className="text-muted-foreground">
+																	{" "}
+																	(
+																	{formatBnDelta(
+																		row.p95GrossActionDeltaFromNeutral,
+																	)}
+																	)
+																</span>
+															)}
+														</td>
+													</tr>
+												))}
+											</tbody>
+										</table>
+									</div>
+									<div className="mt-1 leading-snug">
+										Priors change the reaction branch, not the raw
+										pre-reaction fiscal-risk fan.
+									</div>
 								</div>
 							)}
 					</div>

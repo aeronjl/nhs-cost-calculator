@@ -195,6 +195,8 @@ The fan also carries an endogenous policy-reaction branch. The headline breach a
 
 The selector is checked against curated consolidation episodes in `src/data/fiscal-reaction-backtests.ts`. Each episode records the historical fiscal stress, the package actually chosen, the encoded tax/spending measures from the annotated budget corpus, and transparent institutional prior profiles from `src/data/fiscal-reaction-priors.ts`. The audit reports both the rule-only choice and the prior-informed choice, then scores exact package-label matches, tax/spending-share distance, and named-lever overlap. Prior-driven switches are visible in the reference page so political-economy judgement is auditable rather than hidden inside the calibration.
 
+The live simulator also runs a prior-sensitivity comparison for scenarios that trigger the endogenous reaction branch. It holds the same macro-fiscal draws fixed and compares neutral, credibility-repair, service-protection, and spending-restraint assumptions on dominant offset package, trigger probability, post-reaction breach risk, and p95 gross action. This makes the policy-economy judgement layer inspectable at the point of use, not only in the historical audit.
+
 ## Market Reaction Loop
 
 Large borrowing packages also receive an endogenous market-reaction path. The central path applies the static debt/GDP and issuance risk premium. The market-reaction path then carries forward an additional credibility premium when debt/GDP, refinancing exposure, or the size of the issuance package cross risk thresholds:

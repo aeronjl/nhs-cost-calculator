@@ -22,7 +22,11 @@ import type {
 	OBRBaseline,
 } from "@/data/baseline/obr-baseline";
 import { OBR_BASELINE } from "@/data/baseline/obr-baseline";
-import type { FiscalReactionPriorProfileId } from "@/data/fiscal-reaction-priors";
+import {
+	FISCAL_REACTION_PRIOR_SENSITIVITY_CASES,
+	type FiscalReactionPriorProfileId,
+	type FiscalReactionPriorSensitivityCaseId,
+} from "@/data/fiscal-reaction-priors";
 import {
 	type ProjectionAssumptions,
 	type ScenarioResult,
@@ -155,6 +159,23 @@ export interface FiscalRuleFan {
 	}[];
 	centralHeadroomGbp: number;
 	centralRiskRating: FiscalRiskRating;
+}
+
+export interface FiscalRulePriorSensitivityRow {
+	id: FiscalReactionPriorSensitivityCaseId;
+	label: string;
+	description: string;
+	priorProfileIds: readonly FiscalReactionPriorProfileId[];
+	fan: FiscalRuleFan;
+	dominantPackage: FiscalRuleFan["reactionPackageMix"][number] | null;
+	postReactionBreachDeltaFromNeutral: number;
+	p95GrossActionDeltaFromNeutral: number;
+}
+
+export interface FiscalRulePriorSensitivity {
+	samples: number;
+	rows: readonly FiscalRulePriorSensitivityRow[];
+	neutral: FiscalRulePriorSensitivityRow;
 }
 
 export interface FiscalRuleFanOptions {
@@ -721,5 +742,67 @@ export const projectFiscalRuleFan = (
 		})),
 		centralHeadroomGbp: central.adjustedStabilityHeadroom,
 		centralRiskRating: central.diagnostics.riskRating,
+	};
+};
+
+const dominantReactionPackage = (
+	fan: FiscalRuleFan,
+): FiscalRuleFan["reactionPackageMix"][number] | null =>
+	fan.reactionPackageMix
+		.filter((row) => row.count > 0)
+		.slice()
+		.sort((a, b) => {
+			const probabilityDelta = b.probability - a.probability;
+			if (Math.abs(probabilityDelta) > 1e-9) return probabilityDelta;
+			return a.label.localeCompare(b.label);
+		})[0] ?? null;
+
+export const projectFiscalRulePriorSensitivity = (
+	result: ScenarioResult,
+	baseline: OBRBaseline = OBR_BASELINE,
+	samples = 300,
+	seed = 137,
+	assumptions: Partial<ProjectionAssumptions> = {},
+	options: Omit<FiscalRuleFanOptions, "policyReactionPriorProfileIds"> = {},
+): FiscalRulePriorSensitivity => {
+	const baseRows = FISCAL_REACTION_PRIOR_SENSITIVITY_CASES.map((caseDef) => {
+		const fan = projectFiscalRuleFan(
+			result,
+			baseline,
+			samples,
+			seed,
+			assumptions,
+			{
+				...options,
+				policyReactionPackage:
+					options.policyReactionPackage ?? "stress-contingent",
+				policyReactionPriorProfileIds: caseDef.priorProfileIds,
+			},
+		);
+		return {
+			id: caseDef.id,
+			label: caseDef.label,
+			description: caseDef.description,
+			priorProfileIds: caseDef.priorProfileIds,
+			fan,
+			dominantPackage: dominantReactionPackage(fan),
+		};
+	});
+	const neutralBase =
+		baseRows.find((row) => row.id === "neutral") ?? baseRows[0]!;
+	const rows: FiscalRulePriorSensitivityRow[] = baseRows.map((row) => ({
+		...row,
+		postReactionBreachDeltaFromNeutral:
+			row.fan.postReactionBreachProbability -
+			neutralBase.fan.postReactionBreachProbability,
+		p95GrossActionDeltaFromNeutral:
+			row.fan.endogenousReactionGrossBand.p95 -
+			neutralBase.fan.endogenousReactionGrossBand.p95,
+	}));
+	const neutral = rows.find((row) => row.id === neutralBase.id) ?? rows[0]!;
+	return {
+		samples,
+		rows,
+		neutral,
 	};
 };
