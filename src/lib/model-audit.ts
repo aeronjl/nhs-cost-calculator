@@ -1,5 +1,9 @@
 import auctionDemandCalibration from "@/data/generated/auction-demand-calibration.json";
-import { BORROWING } from "@/data/levers/borrowing";
+import {
+	BORROWING,
+	type BorrowingStrategyId,
+	getBorrowingStrategy,
+} from "@/data/levers/borrowing";
 import { TAX_LEVERS, getTaxLever } from "@/data/levers/tax-rates";
 import { UK_SPENDING_PROGRAMMES } from "@/data/levers/uk-spending";
 import type { OBRBaseline } from "@/data/baseline/obr-baseline";
@@ -18,7 +22,20 @@ import type {
 	FiscalRulePriorSensitivity,
 	FiscalRuleUncertaintyDecomposition,
 } from "./baseline-projection";
-import type { ScenarioResult } from "./scenario";
+import {
+	projectAgainstBaseline,
+	projectFiscalRuleFan,
+} from "./baseline-projection";
+import {
+	evaluateScenario,
+	projectScenarioWithGEFeedback,
+	type ScenarioLine,
+	type ScenarioResult,
+} from "./scenario";
+import {
+	describeBorrowingContext,
+	type BorrowingScenarioContext,
+} from "./borrowing-context";
 
 export interface ModelAuditCalibrationItem {
 	label: string;
@@ -79,6 +96,36 @@ export interface ModelAuditBaselineComparison {
 	rule: ModelAuditFiscalRuleComparison;
 }
 
+export interface ModelAuditBorrowingScenarioComparisonRow {
+	id: string;
+	label: string;
+	description: string;
+	strategyLabel: string;
+	contextLabel: string;
+	borrowingAmountGbp: number;
+	finalYearInterestGbp: number;
+	cumulativeInterestGbp: number;
+	finalDebtStockDeltaGbp: number;
+	adjustedHeadroomGbp: number;
+	consolidationRequiredGbp: number;
+	riskRating: BaselineComparison["diagnostics"]["riskRating"];
+	breachProbability: number;
+	postReactionBreachProbability: number;
+	topReactionPackageLabel: string | null;
+	topRegimeLabel: string | null;
+	topRegimeProbability: number | null;
+	expectedPeakPressureBp: number | null;
+}
+
+export interface ModelAuditBorrowingScenarioComparison {
+	amountGbp: number;
+	years: number;
+	rows: readonly ModelAuditBorrowingScenarioComparisonRow[];
+	bestHeadroomRowLabel: string;
+	worstBreachRowLabel: string;
+	highestInterestRowLabel: string;
+}
+
 export interface ModelAuditRegimeProbability {
 	id: string;
 	label: string;
@@ -115,6 +162,7 @@ export interface ModelAuditLiveRiskSummary {
 export interface ModelAuditEvidencePack {
 	scenario: ModelAuditScenarioSummary;
 	baselineComparison: ModelAuditBaselineComparison | null;
+	borrowingScenarioComparison: ModelAuditBorrowingScenarioComparison | null;
 	calibration: readonly ModelAuditCalibrationItem[];
 	backtests: ModelAuditBacktestSummary;
 	liveRisk: ModelAuditLiveRiskSummary;
@@ -140,6 +188,9 @@ const auctionCalibration = auctionDemandCalibration as {
 	curves: Record<string, unknown>;
 };
 
+const SCENARIO_COMPARISON_FISCAL_SAMPLES = 48;
+const SCENARIO_COMPARISON_SEED = 71;
+
 const rangeCoverage = (result: ScenarioResult): string => {
 	const covered = result.lines.filter((line) => line.methodology.range).length;
 	return `${covered}/${Math.max(1, result.lines.length)}`;
@@ -149,6 +200,13 @@ const borrowingAmountFor = (result: ScenarioResult): number =>
 	result.lines
 		.filter((line) => line.line.type === "borrow" && line.line.magnitude > 0)
 		.reduce((sum, line) => sum + line.line.magnitude, 0);
+
+const positiveBorrowingLinesFor = (
+	result: ScenarioResult,
+): readonly ScenarioLine[] =>
+	result.lines
+		.filter((line) => line.line.type === "borrow" && line.line.magnitude > 0)
+		.map((line) => line.line);
 
 const borrowingRegimeFor = (
 	result: ScenarioResult,
@@ -217,6 +275,226 @@ const buildBaselineComparisonSummary = (
 	};
 };
 
+type BorrowingScenarioVariant = {
+	id: string;
+	label: string;
+	description: string;
+	strategyId?: BorrowingStrategyId;
+	context?: BorrowingScenarioContext;
+	useCurrentLines?: boolean;
+};
+
+const BORROWING_SCENARIO_VARIANTS: readonly BorrowingScenarioVariant[] = [
+	{
+		id: "current",
+		label: "Current assumptions",
+		description: "Borrowing lines exactly as entered in the scenario.",
+		useCurrentLines: true,
+	},
+	{
+		id: "obr-scored-dmo",
+		label: "OBR-scored DMO blend",
+		description: "Central institutional case with normal remit-style issuance.",
+		strategyId: "dmo-remit",
+		context: {
+			fiscalEvent: "obr-scored",
+			monetaryBackstop: "none",
+			duration: "persistent",
+		},
+	},
+	{
+		id: "unscored-persistent",
+		label: "Unscored persistent",
+		description: "Credibility-stress case: persistent borrowing outside OBR scoring.",
+		strategyId: "dmo-remit",
+		context: {
+			fiscalEvent: "unscored",
+			monetaryBackstop: "none",
+			duration: "persistent",
+		},
+	},
+	{
+		id: "emergency-backstop",
+		label: "Emergency backstop",
+		description: "Temporary emergency borrowing with monetary-policy backstop.",
+		strategyId: "dmo-remit",
+		context: {
+			fiscalEvent: "emergency",
+			monetaryBackstop: "qe-backstopped",
+			duration: "temporary",
+		},
+	},
+	{
+		id: "short-funded-unscored",
+		label: "Short-funded stress",
+		description: "Unscored persistent borrowing funded with bills and short gilts.",
+		strategyId: "short-funded",
+		context: {
+			fiscalEvent: "unscored",
+			monetaryBackstop: "none",
+			duration: "persistent",
+		},
+	},
+	{
+		id: "long-funded-scored",
+		label: "Long-funded scored",
+		description: "OBR-scored borrowing with longer-duration issuance.",
+		strategyId: "long-funded",
+		context: {
+			fiscalEvent: "obr-scored",
+			monetaryBackstop: "none",
+			duration: "persistent",
+		},
+	},
+];
+
+const withBorrowingVariant = (
+	lines: readonly ScenarioLine[],
+	variant: BorrowingScenarioVariant,
+): ScenarioLine[] =>
+	lines.map((line) => {
+		if (line.type !== "borrow" || line.magnitude <= 0 || variant.useCurrentLines) {
+			return { ...line };
+		}
+		const { borrowingPortfolio: _portfolio, ...rest } = line;
+		return {
+			...rest,
+			borrowingStrategyId: variant.strategyId,
+			borrowingContext: variant.context,
+		};
+	});
+
+const currentStrategyLabel = (lines: readonly ScenarioLine[]): string => {
+	const positiveBorrowingLines = lines.filter(
+		(line) => line.type === "borrow" && line.magnitude > 0,
+	);
+	const customCount = positiveBorrowingLines.filter(
+		(line) => line.borrowingPortfolio,
+	).length;
+	const strategyLabels = Array.from(
+		new Set(
+			positiveBorrowingLines
+				.filter((line) => !line.borrowingPortfolio)
+				.map((line) => getBorrowingStrategy(line.borrowingStrategyId).label),
+		),
+	);
+	if (customCount > 0 && strategyLabels.length > 0) {
+		return `Mixed: custom + ${strategyLabels.join(", ")}`;
+	}
+	if (customCount > 0) return "Custom portfolio";
+	return strategyLabels.length === 1 ? strategyLabels[0]! : "Mixed strategies";
+};
+
+const currentContextLabel = (lines: readonly ScenarioLine[]): string => {
+	const labels = Array.from(
+		new Set(
+			lines
+				.filter((line) => line.type === "borrow" && line.magnitude > 0)
+				.map((line) => describeBorrowingContext(line.borrowingContext)),
+		),
+	);
+	return labels.length === 1 ? labels[0]! : "Mixed context metadata";
+};
+
+const rowForBorrowingScenarioVariant = (
+	lines: readonly ScenarioLine[],
+	baseline: OBRBaseline,
+	variant: BorrowingScenarioVariant,
+	options: {
+		currentFiscalRuleFan?: FiscalRuleFan;
+		currentBaselineComparison?: BaselineComparison;
+	} = {},
+): ModelAuditBorrowingScenarioComparisonRow => {
+	const scenarioLines = withBorrowingVariant(lines, variant);
+	const variantResult = evaluateScenario(scenarioLines);
+	const ge = projectScenarioWithGEFeedback(variantResult, baseline.years.length);
+	const comparison =
+		variant.useCurrentLines && options.currentBaselineComparison
+			? options.currentBaselineComparison
+			: projectAgainstBaseline(ge.withFeedback, baseline);
+	const fiscalRuleFan =
+		variant.useCurrentLines && options.currentFiscalRuleFan
+			? options.currentFiscalRuleFan
+			: projectFiscalRuleFan(
+					variantResult,
+					baseline,
+					SCENARIO_COMPARISON_FISCAL_SAMPLES,
+					SCENARIO_COMPARISON_SEED,
+				);
+	const borrowingRegime = borrowingRegimeFor(
+		variantResult,
+		baseline.years.length,
+	);
+	const finalProjection = ge.withFeedback.at(-1);
+	const cumulativeInterestGbp = ge.withFeedback.reduce(
+		(sum, year) => sum + year.debtInterestGbp,
+		0,
+	);
+	const strategyLabel = variant.useCurrentLines
+		? currentStrategyLabel(lines)
+		: getBorrowingStrategy(variant.strategyId).label;
+	const contextLabel = variant.useCurrentLines
+		? currentContextLabel(lines)
+		: describeBorrowingContext(variant.context);
+
+	return {
+		id: variant.id,
+		label: variant.label,
+		description: variant.description,
+		strategyLabel,
+		contextLabel,
+		borrowingAmountGbp: borrowingAmountFor(variantResult),
+		finalYearInterestGbp: finalProjection?.debtInterestGbp ?? 0,
+		cumulativeInterestGbp,
+		finalDebtStockDeltaGbp: finalProjection?.debtStockDeltaGbp ?? 0,
+		adjustedHeadroomGbp: comparison.adjustedStabilityHeadroom,
+		consolidationRequiredGbp: comparison.diagnostics.consolidationRequiredGbp,
+		riskRating: comparison.diagnostics.riskRating,
+		breachProbability: fiscalRuleFan.breachProbability,
+		postReactionBreachProbability:
+			fiscalRuleFan.postReactionBreachProbability,
+		topReactionPackageLabel: topReactionPackageLabel(fiscalRuleFan),
+		topRegimeLabel: borrowingRegime?.topRegime.label ?? null,
+		topRegimeProbability: borrowingRegime?.topRegime.probability ?? null,
+		expectedPeakPressureBp: borrowingRegime?.expectedPeakPressureBp ?? null,
+	};
+};
+
+const buildBorrowingScenarioComparison = (
+	result: ScenarioResult,
+	baseline: OBRBaseline,
+	options: {
+		currentFiscalRuleFan?: FiscalRuleFan;
+		currentBaselineComparison?: BaselineComparison;
+	} = {},
+): ModelAuditBorrowingScenarioComparison | null => {
+	const lines = result.lines.map((line) => line.line);
+	const amountGbp = borrowingAmountFor(result);
+	if (amountGbp <= 0 || positiveBorrowingLinesFor(result).length === 0) {
+		return null;
+	}
+	const rows = BORROWING_SCENARIO_VARIANTS.map((variant) =>
+		rowForBorrowingScenarioVariant(lines, baseline, variant, options),
+	);
+	const bestHeadroomRow = rows.reduce((best, row) =>
+		row.adjustedHeadroomGbp > best.adjustedHeadroomGbp ? row : best,
+	);
+	const worstBreachRow = rows.reduce((worst, row) =>
+		row.breachProbability > worst.breachProbability ? row : worst,
+	);
+	const highestInterestRow = rows.reduce((highest, row) =>
+		row.finalYearInterestGbp > highest.finalYearInterestGbp ? row : highest,
+	);
+	return {
+		amountGbp,
+		years: baseline.years.length,
+		rows,
+		bestHeadroomRowLabel: bestHeadroomRow.label,
+		worstBreachRowLabel: worstBreachRow.label,
+		highestInterestRowLabel: highestInterestRow.label,
+	};
+};
+
 export const buildModelAuditEvidencePack = ({
 	result,
 	baseline,
@@ -265,6 +543,14 @@ export const buildModelAuditEvidencePack = ({
 			stabilityRuleAt: baseline.stabilityRuleAt,
 		},
 		baselineComparison: buildBaselineComparisonSummary(baselineComparison),
+		borrowingScenarioComparison: buildBorrowingScenarioComparison(
+			result,
+			baseline,
+			{
+				currentFiscalRuleFan: fiscalRuleFan,
+				currentBaselineComparison: baselineComparison,
+			},
+		),
 		calibration: [
 			{
 				label: "Borrowing balance-sheet calibration",
@@ -481,6 +767,50 @@ export const buildModelAuditMarkdownAppendix = (
 						formatSignedPp(rule.debtProxyShiftPpAtHorizon),
 					],
 					["Policy reaction", formatGbp(rule.policyReactionGbp)],
+				],
+			),
+		);
+	}
+
+	if (audit.borrowingScenarioComparison) {
+		const comparison = audit.borrowingScenarioComparison;
+		sections.push(
+			"## Borrowing Scenario Matrix",
+			`Amount compared: ${formatGbp(comparison.amountGbp)} over ${comparison.years} years.`,
+			markdownTable(
+				[
+					"Variant",
+					"Strategy",
+					"Context",
+					"Y5 interest",
+					"Rule headroom",
+					"Breach",
+					"Post-reaction breach",
+					"Regime",
+					"Peak pressure",
+				],
+				comparison.rows.map((row) => [
+					row.label,
+					row.strategyLabel,
+					row.contextLabel,
+					formatGbp(row.finalYearInterestGbp),
+					formatGbp(row.adjustedHeadroomGbp),
+					formatProbability(row.breachProbability),
+					formatProbability(row.postReactionBreachProbability),
+					row.topRegimeLabel
+						? `${row.topRegimeLabel} (${formatProbability(
+								row.topRegimeProbability,
+							)})`
+						: "n/a",
+					formatBp(row.expectedPeakPressureBp),
+				]),
+			),
+			markdownTable(
+				["Scenario comparison diagnostic", "Variant"],
+				[
+					["Best headroom", comparison.bestHeadroomRowLabel],
+					["Worst breach probability", comparison.worstBreachRowLabel],
+					["Highest final-year interest", comparison.highestInterestRowLabel],
 				],
 			),
 		);

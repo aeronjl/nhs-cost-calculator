@@ -74,6 +74,7 @@ export function ModelAuditPanel({ audit }: Props) {
 	const {
 		scenario,
 		baselineComparison,
+		borrowingScenarioComparison,
 		calibration,
 		backtests,
 		liveRisk,
@@ -291,6 +292,108 @@ export function ModelAuditPanel({ audit }: Props) {
 											</td>
 											<td className="px-2 py-1">
 												{formatPct(year.adjustedDebtGdpPct)}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				)}
+
+				{borrowingScenarioComparison && (
+					<div className="rounded-sm border bg-muted/20 p-2 space-y-2">
+						<div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+							<span className="font-medium text-foreground">
+								Borrowing scenario matrix
+							</span>
+							<span className="text-muted-foreground tabular-nums">
+								{formatBn(borrowingScenarioComparison.amountGbp)} over{" "}
+								{borrowingScenarioComparison.years} years
+							</span>
+						</div>
+						<div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+							<Metric
+								label="Best headroom"
+								value={borrowingScenarioComparison.bestHeadroomRowLabel}
+							/>
+							<Metric
+								label="Worst breach"
+								value={borrowingScenarioComparison.worstBreachRowLabel}
+							/>
+							<Metric
+								label="Highest interest"
+								value={borrowingScenarioComparison.highestInterestRowLabel}
+							/>
+						</div>
+						<div className="overflow-x-auto rounded-sm border bg-background/70">
+							<table className="w-full min-w-[980px] tabular-nums">
+								<thead className="text-muted-foreground">
+									<tr className="text-left">
+										<th className="px-2 py-1 font-medium">Variant</th>
+										<th className="px-2 py-1 font-medium">Assumptions</th>
+										<th className="px-2 py-1 font-medium">Y5 interest</th>
+										<th className="px-2 py-1 font-medium">Rule headroom</th>
+										<th className="px-2 py-1 font-medium">Breach</th>
+										<th className="px-2 py-1 font-medium">Regime</th>
+										<th className="px-2 py-1 font-medium">Pressure</th>
+									</tr>
+								</thead>
+								<tbody>
+									{borrowingScenarioComparison.rows.map((row) => (
+										<tr key={row.id} className="border-t border-border/60">
+											<td className="px-2 py-1 align-top">
+												<div className="font-medium text-foreground">
+													{row.label}
+												</div>
+												<div className="max-w-[210px] text-muted-foreground leading-snug">
+													{row.description}
+												</div>
+											</td>
+											<td className="px-2 py-1 align-top">
+												<div>{row.strategyLabel}</div>
+												<div className="max-w-[220px] text-muted-foreground leading-snug">
+													{row.contextLabel}
+												</div>
+											</td>
+											<td className="px-2 py-1 align-top">
+												<div>{formatBn(row.finalYearInterestGbp)}</div>
+												<div className="text-muted-foreground">
+													cumulative {formatBn(row.cumulativeInterestGbp)}
+												</div>
+											</td>
+											<td
+												className={cn(
+													"px-2 py-1 align-top",
+													row.adjustedHeadroomGbp < 0
+														? "text-red-700"
+														: row.riskRating === "tight"
+															? "text-amber-700"
+															: "text-foreground",
+												)}
+											>
+												<div>{formatBn(row.adjustedHeadroomGbp)}</div>
+												<div className="text-muted-foreground">
+													{row.riskRating}
+												</div>
+											</td>
+											<td className="px-2 py-1 align-top">
+												<div>{formatProbability(row.breachProbability)}</div>
+												<div className="text-muted-foreground">
+													post {formatProbability(row.postReactionBreachProbability)}
+												</div>
+											</td>
+											<td className="px-2 py-1 align-top">
+												<div>{row.topRegimeLabel ?? "n/a"}</div>
+												<div className="text-muted-foreground">
+													{formatProbability(row.topRegimeProbability)}
+												</div>
+											</td>
+											<td className="px-2 py-1 align-top">
+												<div>{formatBp(row.expectedPeakPressureBp)}</div>
+												<div className="text-muted-foreground">
+													reaction {row.topReactionPackageLabel ?? "none"}
+												</div>
 											</td>
 										</tr>
 									))}

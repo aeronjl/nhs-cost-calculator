@@ -65,6 +65,26 @@ describe("model audit evidence pack", () => {
 		expect(audit.baselineComparison?.rule.adjustedHeadroomGbp).toBe(
 			baselineComparison.adjustedStabilityHeadroom,
 		);
+		expect(audit.borrowingScenarioComparison?.amountGbp).toBe(
+			80_000_000_000,
+		);
+		expect(audit.borrowingScenarioComparison?.rows.map((row) => row.id)).toEqual([
+			"current",
+			"obr-scored-dmo",
+			"unscored-persistent",
+			"emergency-backstop",
+			"short-funded-unscored",
+			"long-funded-scored",
+		]);
+		expect(
+			audit.borrowingScenarioComparison?.rows.every(
+				(row) =>
+					Number.isFinite(row.adjustedHeadroomGbp) &&
+					Number.isFinite(row.finalYearInterestGbp) &&
+					row.breachProbability >= 0 &&
+					row.breachProbability <= 1,
+			),
+		).toBe(true);
 		expect(audit.calibration.map((item) => item.label)).toContain(
 			"Borrowing balance-sheet calibration",
 		);
@@ -105,6 +125,8 @@ describe("model audit evidence pack", () => {
 		expect(markdown).toContain(`Generated: ${generatedAt}`);
 		expect(markdown).toContain(`Share URL: ${shareUrl}`);
 		expect(markdown).toContain("| Fiscal year | Baseline PSNB |");
+		expect(markdown).toContain("## Borrowing Scenario Matrix");
+		expect(markdown).toContain("Unscored persistent");
 		expect(markdown).toContain("## Calibration Evidence");
 		expect(markdown).toContain("### Uncertainty Decomposition");
 
@@ -116,5 +138,6 @@ describe("model audit evidence pack", () => {
 		expect(parsed.audit.baselineComparison.years).toHaveLength(
 			OBR_BASELINE.years.length,
 		);
+		expect(parsed.audit.borrowingScenarioComparison.rows).toHaveLength(6);
 	});
 });

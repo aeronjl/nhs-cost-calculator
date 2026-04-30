@@ -173,7 +173,7 @@ export function OutputRail({
 	);
 	const modelAudit = useMemo(
 		() =>
-			scenario.length > 0
+			openMap.audit && scenario.length > 0
 				? buildModelAuditEvidencePack({
 						result,
 						baseline,
@@ -189,6 +189,7 @@ export function OutputRail({
 			fiscalRuleFan,
 			fiscalRulePriorSensitivity,
 			fiscalRuleUncertaintyDecomposition,
+			openMap.audit,
 			result,
 			scenario.length,
 		],
