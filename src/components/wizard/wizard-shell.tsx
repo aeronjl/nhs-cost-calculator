@@ -175,6 +175,7 @@ export function WizardShell({
 		if (preset.baselineMode) actions.setBaselineMode(preset.baselineMode);
 		actions.setGoal(preset.goal);
 		actions.replaceScenario(buildPolicyScenarioLines(preset));
+		actions.setPolicyScenarioId(preset.id);
 		actions.setStep(5);
 	};
 

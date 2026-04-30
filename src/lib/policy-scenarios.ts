@@ -370,6 +370,17 @@ export const getPolicyScenariosForEra = (
 	era: EraId,
 ): readonly PolicyScenarioPreset[] => POLICY_SCENARIOS_BY_ERA[era];
 
+export const getPolicyScenarioById = (
+	id: string | null | undefined,
+): PolicyScenarioPreset | null => {
+	if (!id) return null;
+	for (const presets of Object.values(POLICY_SCENARIOS_BY_ERA)) {
+		const preset = presets.find((item) => item.id === id);
+		if (preset) return preset;
+	}
+	return null;
+};
+
 export const buildPolicyScenarioLines = (
 	preset: PolicyScenarioPreset,
 ): ScenarioLine[] =>

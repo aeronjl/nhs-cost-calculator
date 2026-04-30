@@ -30,6 +30,8 @@ test.describe("policy scenario quick starts", () => {
 		await expect(
 			page.getByRole("heading", { name: "Fiscal report" }),
 		).toBeVisible();
+		await expect(page.getByText("Policy quick start")).toBeVisible();
+		await expect(page.getByText("Emergency consolidation")).toBeVisible();
 		await expect(page.getByText("4 decisions")).toBeVisible();
 		await expect(page.getByText("Reduce borrowing")).toBeVisible();
 		await expect(page.getByText("No decisions yet.")).toHaveCount(0);
@@ -37,6 +39,11 @@ test.describe("policy scenario quick starts", () => {
 		await expectSearchParam(() => page.url(), "wstep", "5");
 		await expectSearchParam(() => page.url(), "wera", "2010");
 		await expectSearchParam(() => page.url(), "wgoal", "reduce-borrowing");
+		await expectSearchParam(
+			() => page.url(),
+			"wpreset",
+			"2010-emergency-consolidation",
+		);
 
 		const wiz = new URL(page.url()).searchParams.get("wiz") ?? "";
 		expect(wiz).toContain("t:vat-standard:2.5");
@@ -58,10 +65,17 @@ test.describe("policy scenario quick starts", () => {
 		await expect(
 			page.getByRole("heading", { name: "Fiscal report" }),
 		).toBeVisible();
+		await expect(page.getByText("Policy quick start")).toBeVisible();
+		await expect(page.getByText("Borrow to invest")).toBeVisible();
 		await expect(page.getByText("4 decisions")).toBeVisible();
 		await expect(page.getByText("No decisions yet.")).toHaveCount(0);
 
 		await expectSearchParam(() => page.url(), "wstep", "5");
+		await expectSearchParam(
+			() => page.url(),
+			"wpreset",
+			"current-borrow-investment",
+		);
 		await expectSearchParamMissing(() => page.url(), "wera");
 		await expectSearchParamMissing(() => page.url(), "wgoal");
 

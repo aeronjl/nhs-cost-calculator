@@ -26,7 +26,10 @@ import { getTaxLever } from "@/data/levers/tax-rates";
 import { getProgramme } from "@/data/levers/uk-spending";
 import type { OBRBaseline } from "@/data/baseline/obr-baseline";
 import type { ScenarioLine } from "@/lib/scenario";
-import type { PolicyScenarioPreset } from "@/lib/policy-scenarios";
+import {
+	getPolicyScenarioById,
+	type PolicyScenarioPreset,
+} from "@/lib/policy-scenarios";
 import {
 	GOAL_DEFINITIONS,
 	type WizardActions,
@@ -1347,6 +1350,7 @@ export function StepResult({
 	const goalDef = state.goal ? GOAL_DEFINITIONS[state.goal] : null;
 	const era = ERAS[state.era];
 	const isCurrent = state.era === "current";
+	const policyScenario = getPolicyScenarioById(state.policyScenarioId);
 
 	// Materialise the goal's implicit action (e.g. NHS +12% for fund-nhs)
 	// so the report reflects the full trade — implicit cost + offsets.
@@ -1400,6 +1404,22 @@ export function StepResult({
 						)}
 					</div>
 				</div>
+				{policyScenario && (
+					<div className="mt-4 rounded-md border bg-muted/30 px-3 py-2">
+						<div className="flex flex-wrap items-center gap-2">
+							<span className="rounded-full border bg-background px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+								Policy quick start
+							</span>
+							<span className="text-sm font-medium">{policyScenario.label}</span>
+							<span className="text-[11px] text-muted-foreground">
+								{ERAS[policyScenario.era].year}
+							</span>
+						</div>
+						<p className="mt-1 text-xs leading-snug text-muted-foreground">
+							Started from this preset: {policyScenario.fiscalLogic}
+						</p>
+					</div>
+				)}
 			</header>
 
 			{!isCurrent && hasChoices && (

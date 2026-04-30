@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildWizardUrl, encodeWizardState } from "./wizard-state";
+import {
+	buildWizardUrl,
+	decodeWizardState,
+	encodeWizardState,
+} from "./wizard-state";
 
 describe("buildWizardUrl", () => {
 	it("rewrites legacy simulator state into canonical wizard params", () => {
@@ -54,11 +58,50 @@ describe("encodeWizardState", () => {
 			era: "current",
 			baselineMode: "forecast",
 			mobileSparklineCollapsed: false,
+			policyScenarioId: null,
 		});
 
 		expect(encoded).toEqual({
 			wstep: "5",
 			wiz: "t:basic-rate-income-tax:1",
 		});
+	});
+
+	it("persists policy quick-start provenance when present", () => {
+		const encoded = encodeWizardState({
+			step: 5,
+			goal: null,
+			committedScenario: [
+				{
+					id: "a",
+					type: "borrow",
+					leverId: "",
+					magnitude: 30_000_000_000,
+					borrowingStrategyId: "long-funded",
+				},
+			],
+			previewLines: [],
+			era: "current",
+			baselineMode: "forecast",
+			mobileSparklineCollapsed: false,
+			policyScenarioId: "current-borrow-investment",
+		});
+
+		expect(encoded).toMatchObject({
+			wstep: "5",
+			wpreset: "current-borrow-investment",
+		});
+	});
+});
+
+describe("decodeWizardState", () => {
+	it("accepts known policy quick-start provenance only", () => {
+		expect(
+			decodeWizardState({ wpreset: "current-borrow-investment" })
+				.policyScenarioId,
+		).toBe("current-borrow-investment");
+		expect(decodeWizardState({ wpreset: "not-real" }).policyScenarioId).toBe(
+			undefined,
+		);
 	});
 });

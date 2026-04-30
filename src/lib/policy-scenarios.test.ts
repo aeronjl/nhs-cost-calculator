@@ -3,6 +3,7 @@ import { ERA_ORDER } from "@/data/eras";
 import {
 	POLICY_SCENARIOS_BY_ERA,
 	buildPolicyScenarioLines,
+	getPolicyScenarioById,
 	getPolicyScenariosForEra,
 } from "./policy-scenarios";
 import { materialiseGoalLine } from "./wizard-goals";
@@ -58,5 +59,12 @@ describe("policy scenario quick starts", () => {
 			.toEqual(["Austerity mix", "Go slower", "Protect NHS"]);
 		expect(getPolicyScenariosForEra("current").map((preset) => preset.shortLabel))
 			.toEqual(["NHS repair", "Borrow/invest", "Headroom repair"]);
+	});
+
+	it("finds a preset by id for URL provenance", () => {
+		expect(getPolicyScenarioById("current-borrow-investment")?.label).toBe(
+			"Borrow to invest",
+		);
+		expect(getPolicyScenarioById("unknown")).toBeNull();
 	});
 });

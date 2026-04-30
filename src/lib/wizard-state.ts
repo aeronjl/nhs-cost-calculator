@@ -17,6 +17,7 @@ import {
 	GOAL_DEFINITIONS,
 	type WizardGoal,
 } from "./wizard-goals";
+import { getPolicyScenarioById } from "./policy-scenarios";
 
 export {
 	GOAL_DEFINITIONS,
@@ -50,6 +51,9 @@ export interface WizardState {
 	// Persisted to URL (wsparkline) so a share-link carries the user's
 	// preference. localStorage also caches it for first-visit defaults.
 	mobileSparklineCollapsed: boolean;
+	// Optional quick-start provenance. Kept as "started from" metadata so a
+	// refined scenario can still identify the policy package it began with.
+	policyScenarioId: string | null;
 }
 
 const STEP_BRIEFING = 0;
@@ -88,6 +92,7 @@ export interface WizardActions {
 	setEra: (era: EraId) => void;
 	setBaselineMode: (mode: BaselineMode) => void;
 	setMobileSparklineCollapsed: (collapsed: boolean) => void;
+	setPolicyScenarioId: (id: string | null) => void;
 	addChoice: (line: ScenarioLine) => void;
 	removeChoice: (id: string) => void;
 	updateChoice: (id: string, patch: Partial<ScenarioLine>) => void;
@@ -134,6 +139,7 @@ export function useWizardState(initial?: Partial<WizardState>): WizardComputedSt
 		era: initial?.era ?? "current",
 		baselineMode: initial?.baselineMode ?? "forecast",
 		mobileSparklineCollapsed: initial?.mobileSparklineCollapsed ?? false,
+		policyScenarioId: initial?.policyScenarioId ?? null,
 	});
 
 	const setStep = useCallback((step: number) => {
@@ -153,6 +159,7 @@ export function useWizardState(initial?: Partial<WizardState>): WizardComputedSt
 			era,
 			committedScenario: [],
 			previewLines: [],
+			policyScenarioId: null,
 		}));
 	}, []);
 
@@ -168,6 +175,10 @@ export function useWizardState(initial?: Partial<WizardState>): WizardComputedSt
 		} catch {
 			// no localStorage — URL persistence still works
 		}
+	}, []);
+
+	const setPolicyScenarioId = useCallback((id: string | null) => {
+		setState((s) => ({ ...s, policyScenarioId: id }));
 	}, []);
 
 	const addChoice = useCallback((line: ScenarioLine) => {
@@ -222,7 +233,12 @@ export function useWizardState(initial?: Partial<WizardState>): WizardComputedSt
 	}, []);
 
 	const resetScenario = useCallback(() => {
-		setState((s) => ({ ...s, committedScenario: [], previewLines: [] }));
+		setState((s) => ({
+			...s,
+			committedScenario: [],
+			previewLines: [],
+			policyScenarioId: null,
+		}));
 	}, []);
 
 	const effectiveScenario = useMemo(
@@ -238,6 +254,7 @@ export function useWizardState(initial?: Partial<WizardState>): WizardComputedSt
 			setEra,
 			setBaselineMode,
 			setMobileSparklineCollapsed,
+			setPolicyScenarioId,
 			addChoice,
 			removeChoice,
 			updateChoice,
@@ -262,6 +279,7 @@ export const WIZARD_PARAMS = [
 	"wera",
 	"wmode",
 	"wsparkline",
+	"wpreset",
 ] as const;
 
 export const WIZARD_OWNED_PARAMS = [
@@ -287,6 +305,7 @@ export const encodeWizardState = (state: WizardState): Record<string, string> =>
 	if (state.mobileSparklineCollapsed) {
 		out.wsparkline = "collapsed";
 	}
+	if (state.policyScenarioId) out.wpreset = state.policyScenarioId;
 	if (state.committedScenario.length > 0) {
 		out.wiz = serializeScenario(state.committedScenario);
 	}
@@ -312,6 +331,9 @@ export const decodeWizardState = (
 	}
 	if (params.wsparkline === "collapsed") {
 		out.mobileSparklineCollapsed = true;
+	}
+	if (getPolicyScenarioById(params.wpreset)) {
+		out.policyScenarioId = params.wpreset ?? null;
 	}
 	if (params.wiz) {
 		out.committedScenario = deserializeScenario(params.wiz);
