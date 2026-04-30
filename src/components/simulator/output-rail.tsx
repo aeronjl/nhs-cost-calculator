@@ -21,12 +21,14 @@ import { comparisonsCovered } from "@/lib/counterfactual";
 import {
 	type ScenarioLine,
 	type ScenarioDistribution,
+	type ScenarioResult,
 	evaluateScenario,
 	evaluateScenarioBand,
 	evaluateScenarioDistribution,
 	evaluateScenarioDynamic,
 	evaluateScenarioMacro,
 	projectScenarioBandsByYear,
+	projectScenarioOverYears,
 	projectScenarioWithGEFeedback,
 } from "@/lib/scenario";
 import type { OBRBaseline } from "@/data/baseline/obr-baseline";
@@ -421,6 +423,25 @@ export function OutputRail({
 		result,
 		baseline.years.length,
 	);
+	const lineProjections = useMemo(
+		() =>
+			result.lines.map((ev) => {
+				const single: ScenarioResult = {
+					freed: Math.max(0, ev.deltaGbp),
+					required: Math.max(0, -ev.deltaGbp),
+					net: ev.deltaGbp,
+					lines: [ev],
+				};
+				return {
+					line: ev,
+					values: projectScenarioOverYears(
+						single,
+						baseline.years.length,
+					).map((p) => p.net),
+				};
+			}),
+		[result, baseline.years.length],
+	);
 	const macroPath = ge.macroPath;
 	const baselineComparison = projectAgainstBaseline(projection, baseline);
 	const fiscalRuleFan = useMemo(
@@ -715,6 +736,7 @@ export function OutputRail({
 												<MultiYearProjection
 													projection={projection}
 													bands={projectionBands}
+													lineProjections={lineProjections}
 												/>
 											</div>
 											<div className="min-w-0">

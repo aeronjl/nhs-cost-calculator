@@ -3,8 +3,9 @@
 import { type PointerEvent, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { PercentileBand } from "@/lib/uncertainty";
-import type { YearProjection } from "@/lib/scenario";
+import type { LineEvaluation, YearProjection } from "@/lib/scenario";
 import { pointerToYearIndex, useYearFocus } from "@/lib/year-focus";
+import { PerLeverComposition } from "./per-lever-composition";
 
 // Compact multi-year projection display. Shows year-1 / year-N net + a
 // fan-chart sparkline with 50% and 90% confidence bands when available
@@ -18,6 +19,10 @@ import { pointerToYearIndex, useYearFocus } from "@/lib/year-focus";
 interface Props {
 	projection: readonly YearProjection[];
 	bands?: readonly { year: number; central: number; band: PercentileBand }[];
+	lineProjections?: readonly {
+		line: LineEvaluation;
+		values: readonly number[];
+	}[];
 }
 
 const formatBn = (n: number): string => {
@@ -43,7 +48,11 @@ const formatPp = (n: number): string => {
 const valueToneClassName = (n: number): string =>
 	n > 0 ? "text-blue-700" : n < 0 ? "text-amber-700" : "text-muted-foreground";
 
-export function MultiYearProjection({ projection, bands }: Props) {
+export function MultiYearProjection({
+	projection,
+	bands,
+	lineProjections,
+}: Props) {
 	if (projection.length === 0) return null;
 
 	const year1 = projection[0]!;
@@ -91,6 +100,12 @@ export function MultiYearProjection({ projection, bands }: Props) {
 					bands={bands}
 					maxAbs={maxAbs}
 				/>
+				{lineProjections && lineProjections.length > 0 && (
+					<PerLeverComposition
+						projection={projection}
+						lineProjections={lineProjections}
+					/>
+				)}
 				<div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-1.5 text-[10px] text-muted-foreground">
 					<ProjectionLegendItem color="#64748b" label="no-policy baseline" />
 					<ProjectionLegendItem color="#2563eb" label="central scenario path" />

@@ -9,6 +9,7 @@ import type {
 	ScenarioResult,
 } from "@/lib/scenario";
 import { cn } from "@/lib/utils";
+import { PerLeverDecileBreakdown } from "./per-lever-decile";
 
 interface Props {
 	distribution: ScenarioDistribution;
@@ -215,6 +216,10 @@ export function WhoPaysOverview({ distribution, microsim, result }: Props) {
 							toneValue={biggestGain.impact.totalImpactGbp}
 						/>
 					</div>
+				</div>
+
+				<div className="xl:col-span-2">
+					<PerLeverDecileBreakdown lines={result.lines} />
 				</div>
 
 				<div className="rounded-sm border bg-muted/20 p-3 xl:col-span-2">
