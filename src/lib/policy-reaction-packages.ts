@@ -24,6 +24,15 @@ export type PolicyReactionOptionId =
 	| "spending-led"
 	| "delayed";
 
+export interface PolicyReactionSelectionState {
+	policyReactionGbp: number;
+	stabilityRuleBreached: boolean;
+	growthShock: number;
+	inflationShock: number;
+	rateStress: number;
+	mode?: PolicyReactionOptionId | "stress-contingent";
+}
+
 export interface PolicyReactionPrototype {
 	id: PolicyReactionOptionId;
 	label: string;
@@ -427,6 +436,23 @@ export const POLICY_REACTION_PROTOTYPES: readonly PolicyReactionPrototype[] = [
 		],
 	},
 ];
+
+export const selectPolicyReactionOptionId = (
+	state: PolicyReactionSelectionState,
+): PolicyReactionOptionId | null => {
+	if (state.policyReactionGbp <= 0) return null;
+	if (state.mode && state.mode !== "stress-contingent") return state.mode;
+	if (
+		state.stabilityRuleBreached &&
+		(state.rateStress > 0.01 || state.policyReactionGbp > 20_000_000_000)
+	) {
+		return "tax-led";
+	}
+	if (state.inflationShock > 0.01 && state.growthShock > -0.006) {
+		return "spending-led";
+	}
+	return "balanced";
+};
 
 const taxQuantityLabel = (unit: TaxUnit, magnitude: number): string => {
 	const abs = Math.abs(magnitude);

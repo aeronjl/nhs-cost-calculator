@@ -46,6 +46,7 @@ import {
 	type PolicyReactionOptionId,
 	type PolicyReactionPackage,
 	policyReactionPackageToScenarioLines,
+	selectPolicyReactionOptionId,
 } from "./policy-reaction-packages";
 
 export interface BaselineRelativeYear {
@@ -464,19 +465,14 @@ const selectEndogenousPolicyReactionId = (
 	draw: FiscalRuleDrawState,
 	mode: PolicyReactionOptionId | "stress-contingent" | undefined,
 ): PolicyReactionOptionId | null => {
-	if (comparison.diagnostics.policyReactionGbp <= 0) return null;
-	if (mode && mode !== "stress-contingent") return mode;
-	const rateStress = draw.giltShock + draw.bankRateShock + draw.regimeOverlay;
-	if (
-		comparison.diagnostics.stabilityRuleBreached &&
-		(rateStress > 0.01 || comparison.diagnostics.policyReactionGbp > 20_000_000_000)
-	) {
-		return "tax-led";
-	}
-	if (draw.inflationShock > 0.01 && draw.growthShock > -0.006) {
-		return "spending-led";
-	}
-	return "balanced";
+	return selectPolicyReactionOptionId({
+		policyReactionGbp: comparison.diagnostics.policyReactionGbp,
+		stabilityRuleBreached: comparison.diagnostics.stabilityRuleBreached,
+		growthShock: draw.growthShock,
+		inflationShock: draw.inflationShock,
+		rateStress: draw.giltShock + draw.bankRateShock + draw.regimeOverlay,
+		mode,
+	});
 };
 
 const drawReactionYieldRelief = (

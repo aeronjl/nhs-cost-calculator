@@ -5,6 +5,7 @@ import {
 } from "@/components/simulator/header";
 import { BorrowingBacktestSection } from "@/components/simulator/borrowing-backtest-section";
 import { BacktestSection } from "@/components/simulator/backtest-section";
+import { FiscalReactionBacktestSection } from "@/components/simulator/fiscal-reaction-backtest-section";
 import NHSSpendingCalculator from "../NHSSpendingCalculator";
 import PersonalTaxBurden from "../PersonalTaxBurden";
 import InternationalPanel from "../InternationalPanel";
@@ -180,6 +181,20 @@ export default async function Reference({
 						methodology.
 					</p>
 					<BacktestSection />
+				</section>
+
+				<section aria-labelledby="fiscal-reaction-backtest-heading">
+					<h2
+						id="fiscal-reaction-backtest-heading"
+						className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-1"
+					>
+						Fiscal reaction backtests
+					</h2>
+					<p className="text-xs text-muted-foreground mb-4">
+						How the fiscal-rule reaction selector compares with real UK
+						consolidation packages.
+					</p>
+					<FiscalReactionBacktestSection />
 				</section>
 
 				<section aria-labelledby="borrowing-backtest-heading">
