@@ -24,6 +24,7 @@ import {
 	calloutAnchor,
 	calloutXPct,
 } from "./chart-callout";
+import { CopyChartButton } from "./copy-chart-button";
 import { FiscalRiskGauge } from "./fiscal-risk-gauge";
 
 // Renders the scenario's impact against OBR's "do-nothing" baseline.
@@ -950,6 +951,7 @@ function FiscalCounterfactualChart({
 	fiscalRuleUncertaintyDecomposition?: FiscalRuleUncertaintyDecomposition;
 	compareSeries?: CompareSeries | null;
 }) {
+	const captureRef = useRef<HTMLDivElement | null>(null);
 	const { years, policyReactionPath } = comparison;
 	if (years.length === 0) return null;
 
@@ -1052,11 +1054,17 @@ function FiscalCounterfactualChart({
 	];
 
 	return (
-		<div className="rounded-md border bg-background/70 p-3">
+		<div ref={captureRef} className="rounded-md border bg-background/70 p-3">
 			<div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 				<div>
-					<div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-						Fiscal counterfactual paths
+					<div className="flex items-center gap-2">
+						<div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+							Fiscal counterfactual paths
+						</div>
+						<CopyChartButton
+							targetRef={captureRef}
+							chartTitle="Fiscal counterfactual paths"
+						/>
 					</div>
 					<p className="mt-1 text-xs leading-snug text-muted-foreground">
 						Baseline is the OBR current-policy path; scenario lines show the

@@ -1,8 +1,10 @@
 "use client";
 
+import { useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { ScenarioSignature } from "@/lib/scenario-signature";
 import { useAnimatedValues } from "@/lib/use-animated-values";
+import { CopyChartButton } from "./copy-chart-button";
 
 // Pentagonal radar that summarises a scenario's "shape" on five axes:
 // tax / spend / borrow / progressive / long-run. Designed to be compact
@@ -81,6 +83,7 @@ const labelAnchor = (
 export function ScenarioSignatureRadar({ signature }: Props) {
 	const targetValues = AXES.map((a) => signature[a.id]);
 	const animatedValues = useAnimatedValues(targetValues);
+	const captureRef = useRef<HTMLDivElement | null>(null);
 
 	const polygonPoints = AXES.map((axis, i) => {
 		const value = animatedValues[i] ?? signature[axis.id];
@@ -92,6 +95,7 @@ export function ScenarioSignatureRadar({ signature }: Props) {
 
 	return (
 		<section
+			ref={captureRef}
 			aria-label="Scenario signature"
 			className="rounded-md border bg-background/70 p-3"
 		>
@@ -99,7 +103,15 @@ export function ScenarioSignatureRadar({ signature }: Props) {
 				<h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
 					Signature
 				</h3>
-				<span className="text-[9px] text-muted-foreground">5-axis fingerprint</span>
+				<div className="flex items-center gap-2">
+					<span className="text-[9px] text-muted-foreground">
+						5-axis fingerprint
+					</span>
+					<CopyChartButton
+						targetRef={captureRef}
+						chartTitle="Scenario signature"
+					/>
+				</div>
 			</div>
 			<div className="mt-2 flex justify-center">
 				<svg

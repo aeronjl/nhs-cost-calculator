@@ -15,6 +15,7 @@ import {
 	calloutAnchor,
 	calloutXPct,
 } from "./chart-callout";
+import { CopyChartButton } from "./copy-chart-button";
 import { PerLeverComposition } from "./per-lever-composition";
 
 // Compact multi-year projection display. Shows year-1 / year-N net + a
@@ -92,6 +93,7 @@ export function MultiYearProjection({
 }: Props) {
 	if (projection.length === 0) return null;
 
+	const captureRef = useRef<HTMLDivElement | null>(null);
 	const year1 = projection[0]!;
 	const yearN = projection[projection.length - 1]!;
 	const trajectory = yearN.net - year1.net;
@@ -115,23 +117,32 @@ export function MultiYearProjection({
 
 	return (
 		<div className="space-y-2">
-			<div className="flex items-baseline justify-between">
+			<div className="flex items-baseline justify-between gap-3">
 				<h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
 					{projection.length}-year projection
 				</h3>
-				{significant && (
-					<span
-						className={cn(
-							"text-[10px] tabular-nums",
-							trajectory > 0 ? "text-blue-700" : "text-amber-700",
-						)}
-					>
-						{formatDelta(trajectory)} by year {projection.length}
-					</span>
-				)}
+				<div className="flex items-center gap-2">
+					{significant && (
+						<span
+							className={cn(
+								"text-[10px] tabular-nums",
+								trajectory > 0 ? "text-blue-700" : "text-amber-700",
+							)}
+						>
+							{formatDelta(trajectory)} by year {projection.length}
+						</span>
+					)}
+					<CopyChartButton
+						targetRef={captureRef}
+						chartTitle={`${projection.length}-year projection`}
+					/>
+				</div>
 			</div>
 
-			<div className="rounded-md border bg-background/60 p-2 space-y-1.5">
+			<div
+				ref={captureRef}
+				className="rounded-md border bg-background/60 p-2 space-y-1.5"
+			>
 				<ProjectionFanChart
 					projection={projection}
 					bands={bands}
