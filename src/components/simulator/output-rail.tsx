@@ -112,7 +112,30 @@ type AppendixExportFeedback = {
 } | null;
 
 const STORAGE_KEY = "simulator-rail-active-tab";
+const MODE_STORAGE_KEY = "simulator-rail-mode";
 const APPENDIX_FEEDBACK_MS = 1800;
+
+const MODES = ["headline", "analyst", "researcher"] as const;
+type RailMode = (typeof MODES)[number];
+
+const MODE_DESCRIPTIONS: Record<RailMode, { label: string; tagline: string }> = {
+	headline: {
+		label: "Headline",
+		tagline: "Top-line answer per tab — no nested tables.",
+	},
+	analyst: {
+		label: "Analyst",
+		tagline: "Full report — bridges, fans, microsim, household archetypes.",
+	},
+	researcher: {
+		label: "Researcher",
+		tagline:
+			"Analyst plus stress lab + audit pack force-loaded for cross-tab reference.",
+	},
+};
+
+const isRailMode = (value: string | undefined | null): value is RailMode =>
+	typeof value === "string" && (MODES as readonly string[]).includes(value);
 
 const SECTION_NAV: readonly {
 	id: SectionId;
@@ -286,6 +309,7 @@ export function OutputRail({
 }: OutputRailProps) {
 	const [activeSection, setActiveSection] =
 		useState<SectionId>("trajectory");
+	const [mode, setMode] = useState<RailMode>("analyst");
 	const [copied, setCopied] = useState(false);
 	const [appendixFeedback, setAppendixFeedback] =
 		useState<AppendixExportFeedback>(null);
@@ -312,10 +336,39 @@ export function OutputRail({
 			const stored = localStorage.getItem(STORAGE_KEY);
 			const storedSection = stored ?? undefined;
 			if (isSectionId(storedSection)) setActiveSection(storedSection);
+			const storedMode = localStorage.getItem(MODE_STORAGE_KEY);
+			if (isRailMode(storedMode)) setMode(storedMode);
 		} catch {
 			// localStorage unavailable / parse error — keep defaults
 		}
 	}, []);
+
+	useEffect(() => {
+		try {
+			localStorage.setItem(MODE_STORAGE_KEY, mode);
+		} catch {
+			// ignore
+		}
+	}, [mode]);
+
+	useEffect(() => {
+		if (
+			mode === "headline" &&
+			(activeSection === "stress" || activeSection === "audit")
+		) {
+			setActiveSection("trajectory");
+		}
+	}, [mode, activeSection]);
+
+	const visibleNav = useMemo(
+		() =>
+			mode === "headline"
+				? SECTION_NAV.filter(
+						(s) => s.id !== "stress" && s.id !== "audit",
+					)
+				: SECTION_NAV,
+		[mode],
+	);
 
 	useEffect(() => {
 		if (typeof window === "undefined") return;
@@ -376,26 +429,26 @@ export function OutputRail({
 		}
 	};
 	const onTabKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-		const currentIndex = SECTION_NAV.findIndex(
+		const currentIndex = visibleNav.findIndex(
 			(item) => item.id === activeSection,
 		);
 		if (currentIndex < 0) return;
 
 		let nextIndex: number | undefined;
 		if (event.key === "ArrowRight") {
-			nextIndex = (currentIndex + 1) % SECTION_NAV.length;
+			nextIndex = (currentIndex + 1) % visibleNav.length;
 		} else if (event.key === "ArrowLeft") {
 			nextIndex =
-				(currentIndex - 1 + SECTION_NAV.length) % SECTION_NAV.length;
+				(currentIndex - 1 + visibleNav.length) % visibleNav.length;
 		} else if (event.key === "Home") {
 			nextIndex = 0;
 		} else if (event.key === "End") {
-			nextIndex = SECTION_NAV.length - 1;
+			nextIndex = visibleNav.length - 1;
 		}
 
 		if (nextIndex === undefined) return;
 		event.preventDefault();
-		const nextId = SECTION_NAV[nextIndex].id;
+		const nextId = visibleNav[nextIndex]!.id;
 		goToSection(nextId);
 		window.setTimeout(() => {
 			document.getElementById(`report-tab-${nextId}`)?.focus();
@@ -467,15 +520,18 @@ export function OutputRail({
 	);
 	const macroStressLab = useMemo(
 		() =>
-			(activeSection === "stress" || activeSection === "audit") &&
+			(mode === "researcher" ||
+				activeSection === "stress" ||
+				activeSection === "audit") &&
 			scenario.length > 0
 				? buildMacroStressLab(result, baseline)
 				: undefined,
-		[activeSection, baseline, result, scenario.length],
+		[activeSection, baseline, mode, result, scenario.length],
 	);
 	const modelAudit = useMemo(
 		() =>
-			activeSection === "audit" && scenario.length > 0
+			(mode === "researcher" || activeSection === "audit") &&
+			scenario.length > 0
 				? buildModelAuditEvidencePack({
 						result,
 						baseline,
@@ -493,6 +549,7 @@ export function OutputRail({
 			fiscalRulePriorSensitivity,
 			fiscalRuleUncertaintyDecomposition,
 			macroStressLab,
+			mode,
 			activeSection,
 			result,
 			scenario.length,
@@ -585,7 +642,7 @@ export function OutputRail({
 				<div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
 					<nav
 						aria-label="Report shortcuts"
-						className="flex flex-wrap gap-1.5"
+						className="flex flex-wrap items-center gap-1.5"
 					>
 						<button
 							type="button"
@@ -594,6 +651,34 @@ export function OutputRail({
 						>
 							Summary
 						</button>
+						<div
+							role="radiogroup"
+							aria-label="Report depth mode"
+							className="ml-1 inline-flex items-center rounded-md border bg-muted/20 p-0.5"
+						>
+							{MODES.map((m) => {
+								const meta = MODE_DESCRIPTIONS[m];
+								const selected = mode === m;
+								return (
+									<button
+										key={m}
+										type="button"
+										role="radio"
+										aria-checked={selected}
+										title={meta.tagline}
+										onClick={() => setMode(m)}
+										className={cn(
+											"rounded-sm px-2 py-0.5 text-[11px] font-medium transition-colors",
+											selected
+												? "bg-background text-foreground shadow-sm"
+												: "text-muted-foreground hover:text-foreground",
+										)}
+									>
+										{meta.label}
+									</button>
+								);
+							})}
+						</div>
 					</nav>
 					<div className="flex flex-wrap gap-1.5">
 						<button
@@ -655,6 +740,7 @@ export function OutputRail({
 					fiscalRuleUncertaintyDecomposition
 				}
 				scenarioLineCount={result.lines.length}
+				visibleIds={visibleNav.map((s) => s.id)}
 				onSelect={goToSection}
 			/>
 
@@ -679,7 +765,7 @@ export function OutputRail({
 						onKeyDown={onTabKeyDown}
 						className="mt-3 flex flex-wrap gap-1.5"
 					>
-						{SECTION_NAV.map((item) => {
+						{visibleNav.map((item) => {
 							const selected = activeSection === item.id;
 							return (
 								<button
@@ -705,7 +791,7 @@ export function OutputRail({
 					</div>
 				</div>
 
-				{SECTION_NAV.map((item) => {
+				{visibleNav.map((item) => {
 					const selected = activeSection === item.id;
 					return (
 						<div
@@ -731,7 +817,14 @@ export function OutputRail({
 									</div>
 
 									{activeSection === "trajectory" && (
-										<div className="grid gap-3 xl:grid-cols-[minmax(300px,0.7fr)_minmax(0,1.3fr)] xl:items-start">
+										<div
+											className={cn(
+												"grid gap-3 xl:items-start",
+												mode === "headline"
+													? "xl:grid-cols-1"
+													: "xl:grid-cols-[minmax(300px,0.7fr)_minmax(0,1.3fr)]",
+											)}
+										>
 											<div className="min-w-0 xl:sticky xl:top-20">
 												<MultiYearProjection
 													projection={projection}
@@ -739,18 +832,20 @@ export function OutputRail({
 													lineProjections={lineProjections}
 												/>
 											</div>
-											<div className="min-w-0">
-												<BaselineComparisonPanel
-													comparison={baselineComparison}
-													fiscalRuleFan={fiscalRuleFan}
-													fiscalRulePriorSensitivity={
-														fiscalRulePriorSensitivity
-													}
-													fiscalRuleUncertaintyDecomposition={
-														fiscalRuleUncertaintyDecomposition
-													}
-												/>
-											</div>
+											{mode !== "headline" && (
+												<div className="min-w-0">
+													<BaselineComparisonPanel
+														comparison={baselineComparison}
+														fiscalRuleFan={fiscalRuleFan}
+														fiscalRulePriorSensitivity={
+															fiscalRulePriorSensitivity
+														}
+														fiscalRuleUncertaintyDecomposition={
+															fiscalRuleUncertaintyDecomposition
+														}
+													/>
+												</div>
+											)}
 										</div>
 									)}
 
@@ -761,32 +856,34 @@ export function OutputRail({
 												microsim={microsim}
 												result={result}
 											/>
-											<div className="grid gap-3 xl:grid-cols-[minmax(300px,0.82fr)_minmax(0,1.18fr)] xl:items-start">
-												<div className="min-w-0 space-y-3">
-													<DistributionalImpact
-														distribution={distribution}
-													/>
-													{items.length > 0 && (
-														<div className="rounded-md border bg-background/60 p-3">
-															<ComparisonsAffordedList
-																items={items}
-																caption={
-																	result.net > 0
-																		? "Full list — what the net surplus could fund:"
-																		: result.net < 0
-																			? "Full list — equivalent costs:"
-																			: undefined
-																}
-																emptyMessage={null}
-															/>
-														</div>
-													)}
+											{mode !== "headline" && (
+												<div className="grid gap-3 xl:grid-cols-[minmax(300px,0.82fr)_minmax(0,1.18fr)] xl:items-start">
+													<div className="min-w-0 space-y-3">
+														<DistributionalImpact
+															distribution={distribution}
+														/>
+														{items.length > 0 && (
+															<div className="rounded-md border bg-background/60 p-3">
+																<ComparisonsAffordedList
+																	items={items}
+																	caption={
+																		result.net > 0
+																			? "Full list — what the net surplus could fund:"
+																			: result.net < 0
+																				? "Full list — equivalent costs:"
+																				: undefined
+																	}
+																	emptyMessage={null}
+																/>
+															</div>
+														)}
+													</div>
+													<div className="min-w-0 space-y-3">
+														<MicrosimulationPanel result={result} />
+														<HouseholdImpactPanel result={result} />
+													</div>
 												</div>
-												<div className="min-w-0 space-y-3">
-													<MicrosimulationPanel result={result} />
-													<HouseholdImpactPanel result={result} />
-												</div>
-											</div>
+											)}
 										</div>
 									)}
 
@@ -806,66 +903,68 @@ export function OutputRail({
 													maxChangeGbp: ge.maxChangeGbp,
 												}}
 											/>
-											<div className="grid gap-3 xl:grid-cols-[minmax(280px,0.75fr)_minmax(0,1.25fr)] xl:items-start">
-												<div className="min-w-0 space-y-3 xl:max-w-[520px]">
-													<MacroTierBreakdown
-														staticNet={result.net}
-														dynamic={dynamic}
-														dynamicGapSignificant={
-															dynamicGapSignificant
-														}
-														macro={macro}
-														macroGapSignificant={
-															macroGapSignificant
-														}
-														macroYear1={macroYear1}
-														geYear1={geYear1}
-														geGap={geGap}
-														geGapSignificant={
-															geGapSignificant
-														}
-													/>
-													{bandWidthSignificant && (
-														<div className="space-y-1 rounded-md border bg-background/60 p-2 text-[11px] leading-snug">
-															<div className="text-xs font-medium">
-																Confidence band
+											{mode !== "headline" && (
+												<div className="grid gap-3 xl:grid-cols-[minmax(280px,0.75fr)_minmax(0,1.25fr)] xl:items-start">
+													<div className="min-w-0 space-y-3 xl:max-w-[520px]">
+														<MacroTierBreakdown
+															staticNet={result.net}
+															dynamic={dynamic}
+															dynamicGapSignificant={
+																dynamicGapSignificant
+															}
+															macro={macro}
+															macroGapSignificant={
+																macroGapSignificant
+															}
+															macroYear1={macroYear1}
+															geYear1={geYear1}
+															geGap={geGap}
+															geGapSignificant={
+																geGapSignificant
+															}
+														/>
+														{bandWidthSignificant && (
+															<div className="space-y-1 rounded-md border bg-background/60 p-2 text-[11px] leading-snug">
+																<div className="text-xs font-medium">
+																	Confidence band
+																</div>
+																<div className="text-muted-foreground">
+																	90% CI:{" "}
+																	<span className="tabular-nums text-foreground">
+																		£
+																		{Math.round(
+																			band.p5,
+																		).toLocaleString()}
+																	</span>{" "}
+																	—{" "}
+																	<span className="tabular-nums text-foreground">
+																		£
+																		{Math.round(
+																			band.p95,
+																		).toLocaleString()}
+																	</span>
+																</div>
+																<div className="text-[10px] text-muted-foreground">
+																	1000-draw Monte Carlo over
+																	per-lever yield distributions
+																	(HMRC ranges where stated,
+																	±10% otherwise).
+																</div>
 															</div>
-															<div className="text-muted-foreground">
-																90% CI:{" "}
-																<span className="tabular-nums text-foreground">
-																	£
-																	{Math.round(
-																		band.p5,
-																	).toLocaleString()}
-																</span>{" "}
-																—{" "}
-																<span className="tabular-nums text-foreground">
-																	£
-																	{Math.round(
-																		band.p95,
-																	).toLocaleString()}
-																</span>
-															</div>
-															<div className="text-[10px] text-muted-foreground">
-																1000-draw Monte Carlo over
-																per-lever yield distributions
-																(HMRC ranges where stated,
-																±10% otherwise).
-															</div>
-														</div>
-													)}
+														)}
+													</div>
+													<div className="min-w-0">
+														<MacroStatePanel
+															path={macroPath}
+															convergence={{
+																iterations: ge.iterations,
+																converged: ge.converged,
+																maxChangeGbp: ge.maxChangeGbp,
+															}}
+														/>
+													</div>
 												</div>
-												<div className="min-w-0">
-													<MacroStatePanel
-														path={macroPath}
-														convergence={{
-															iterations: ge.iterations,
-															converged: ge.converged,
-															maxChangeGbp: ge.maxChangeGbp,
-														}}
-													/>
-												</div>
-											</div>
+											)}
 										</div>
 									)}
 
@@ -907,6 +1006,7 @@ function ReportNarrativeMap({
 	fiscalRuleFan,
 	fiscalRuleUncertaintyDecomposition,
 	scenarioLineCount,
+	visibleIds,
 	onSelect,
 }: {
 	activeSection: SectionId;
@@ -918,6 +1018,7 @@ function ReportNarrativeMap({
 	fiscalRuleFan?: FiscalRuleFan;
 	fiscalRuleUncertaintyDecomposition?: FiscalRuleUncertaintyDecomposition;
 	scenarioLineCount: number;
+	visibleIds?: readonly SectionId[];
 	onSelect: (id: SectionId) => void;
 }) {
 	const finalYear = baselineComparison.years.at(-1);
@@ -1047,6 +1148,12 @@ function ReportNarrativeMap({
 		},
 	];
 
+	const visibleSet = visibleIds ? new Set(visibleIds) : null;
+	const visibleCards = visibleSet
+		? cards.filter((card) => visibleSet.has(card.id))
+		: cards;
+	if (visibleCards.length === 0) return null;
+
 	return (
 		<section
 			aria-label="Report narrative map"
@@ -1059,7 +1166,7 @@ function ReportNarrativeMap({
 				</p>
 			</div>
 			<div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-				{cards.map((card) => (
+				{visibleCards.map((card) => (
 					<ReportSignalCard
 						key={card.id}
 						card={card}

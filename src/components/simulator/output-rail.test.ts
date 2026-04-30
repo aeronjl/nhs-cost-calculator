@@ -75,6 +75,17 @@ describe("OutputRail report chrome", () => {
 		expect(html).toContain("Show fiscal uncertainty decomposition");
 		expect(html).not.toContain("Expand all");
 		expect(html).not.toContain('aria-expanded="false"');
+
+		// Mode toggle is present, with Analyst selected by default.
+		expect(html).toContain('role="radiogroup"');
+		expect(html).toContain('aria-label="Report depth mode"');
+		expect(html).toContain("Headline");
+		expect(html).toContain("Analyst");
+		expect(html).toContain("Researcher");
+		const radioButtons = html.match(/role="radio"/g) ?? [];
+		expect(radioButtons.length).toBe(3);
+		const checkedRadios = html.match(/aria-checked="true"/g) ?? [];
+		expect(checkedRadios.length).toBe(1);
 	});
 
 	it("does not render report chrome for an empty scenario", () => {
