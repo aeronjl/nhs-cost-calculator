@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import type { OBRBaseline } from "@/data/baseline/obr-baseline";
 import { getEraBaseline } from "@/data/historical/era-baselines";
 import type { EraId } from "@/data/eras";
-import { deserializeScenario, serializeScenario } from "@/lib/scenario";
+import { deserializeScenario } from "@/lib/scenario";
 import type { ResolvedComparison } from "@/data/comparisons";
 import {
 	STEP_LABELS,
@@ -16,7 +16,6 @@ import {
 	WIZARD_PARAMS,
 	decodeWizardState,
 	encodeWizardState,
-	materialiseGoalLine,
 	useWizardState,
 } from "@/lib/wizard-state";
 import { ChancellorHUD } from "./chancellor-hud";
@@ -175,27 +174,6 @@ export function WizardShell({
 		actions.setStep(5);
 	};
 
-	// Result-step "Open in scenario sandbox →" — bails out of the
-	// guided wizard into the full lever-rail editor at /sandbox, with
-	// the wizard's scenario (plus the goal's implicit action) carried
-	// in the URL. Wizard state (goal/era/mode) carried as wgoal/wera/
-	// wmode so the sandbox's "← Wizard" breadcrumb can return the user
-	// to the same wizard configuration without losing context.
-	const openInSandbox = () => {
-		const goalLine = materialiseGoalLine(state.goal);
-		const fullScenario = goalLine
-			? [goalLine, ...state.committedScenario]
-			: state.committedScenario;
-		const scenarioStr = serializeScenario(fullScenario);
-		const qs = new URLSearchParams();
-		if (scenarioStr) qs.set("scenario", scenarioStr);
-		qs.set("editor", "stack");
-		if (state.goal) qs.set("wgoal", state.goal);
-		if (state.era !== "current") qs.set("wera", state.era);
-		if (state.baselineMode !== "forecast") qs.set("wmode", state.baselineMode);
-		router.push(`/sandbox?${qs.toString()}`);
-	};
-
 	// Era-aware baseline: in non-current eras, use the historical forecast
 	// the Chancellor would have been working against (HMT FSBR for pre-OBR
 	// eras, the relevant EFO for 2010+). When the user toggles to
@@ -233,7 +211,6 @@ export function WizardShell({
 		onAdvance: advance,
 		onBack: back,
 		onSkipToResults: skipToResults,
-		onOpenInSandbox: openInSandbox,
 	};
 
 	const isResultStep = state.step === 5;

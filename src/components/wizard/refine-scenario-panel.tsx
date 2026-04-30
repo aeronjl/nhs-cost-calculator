@@ -1,37 +1,41 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { MethodologyPopover } from "@/components/ui/methodology-popover";
+import { ScenarioDiffModal } from "@/components/simulator/scenario-diff-modal";
 import {
 	LeverRail,
 	type PickerLever,
 } from "@/components/simulator/lever-rail";
-import { getTaxLever } from "@/data/levers/tax-rates";
-import { type ScenarioLine, evaluateScenario } from "@/lib/scenario";
+import { BORROWING_STRATEGIES } from "@/data/levers/borrowing";
+import { TAX_LEVERS, getTaxLever } from "@/data/levers/tax-rates";
+import { UK_SPENDING_PROGRAMMES } from "@/data/levers/uk-spending";
+import {
+	BORROWING_DURATION_OPTIONS,
+	BORROWING_FISCAL_EVENT_OPTIONS,
+	BORROWING_MONETARY_BACKSTOP_OPTIONS,
+	isBorrowingContextEmpty,
+	type BorrowingScenarioContext,
+} from "@/lib/borrowing-context";
+import {
+	type LineEvaluation,
+	type ScenarioDiff,
+	type ScenarioLine,
+	deserializeScenario,
+	diffScenarios,
+	evaluateScenario,
+	serializeScenario,
+} from "@/lib/scenario";
+import {
+	type SavedScenario,
+	deleteSavedScenario,
+	listSavedScenarios,
+	saveScenario,
+} from "@/lib/saved-scenarios";
+import { cn } from "@/lib/utils";
 
-// Per-line magnitude unit metadata. The Refine panel's inline editor
-// uses this to render the right input step + suffix label, and to
-// translate the stored magnitude into a user-facing display value.
-//
-// `kind` is a structural discriminator — pattern-match on it when a
-// caller needs unit-specific behaviour beyond the divisor + suffix
-// (e.g. country-aware bound presets, lever-specific validation, etc.).
-// `displayDivisor` is the per-unit conversion factor from stored
-// magnitude to user-facing value:
-//   displayValue   = magnitude / displayDivisor
-//   storedValue    = inputValue * displayDivisor
-//
-// Today only the `rawPounds` kind (borrow) uses a non-identity divisor:
-// its magnitude is stored as raw £ but the user edits in £bn (1e9). All
-// other kinds (percent / pp / yr / k / bn / p-per-litre) store and
-// display the same number. A future raw-£ lever sets kind: "rawPounds"
-// and the divisor follows.
-//
-// Bounds calibrated against UK fiscal-policy norms. Other-country
-// support would need country-keyed bound presets (parallel to
-// PLAUSIBILITY_BOUNDS_BY_COUNTRY in src/data/sources/ons-psf-historical.ts);
-// since the wizard is UK-active, the current bounds suffice.
 type LineUnitKind =
 	| "rawPounds"
 	| "percent"
@@ -52,18 +56,14 @@ interface LineUnit {
 }
 
 const getLineUnit = (line: ScenarioLine): LineUnit => {
-	// Bounds calibrated to typical UK fiscal-policy ranges. Loose enough
-	// to allow educational extremes (e.g. +20pp basic IT for "what if")
-	// but tight enough to reject fat-finger entries (+999pp, etc.) that
-	// would produce nonsense yields.
 	if (line.type === "borrow") {
 		return {
 			kind: "rawPounds",
 			step: 1,
 			suffix: "£bn",
 			displayDivisor: 1_000_000_000,
-			min: -200, // £200bn debt repayment
-			max: 200, // £200bn additional borrowing
+			min: -200,
+			max: 200,
 		};
 	}
 	if (line.type === "programme") {
@@ -72,15 +72,12 @@ const getLineUnit = (line: ScenarioLine): LineUnit => {
 			step: 1,
 			suffix: "%",
 			displayDivisor: 1,
-			min: -100, // -100% = abolish (extreme but not nonsense)
-			max: 100, // +100% = double the programme
+			min: -100,
+			max: 100,
 		};
 	}
 	const lever = getTaxLever(line.leverId);
 	if (lever.unit === "pp") {
-		// Income tax / VAT / NICs / corp tax. -10 covers a 10pp cut from
-		// any current rate; +20 covers a +20pp rise (additional rate could
-		// hit 65% from 45%, hypothetical but bounded).
 		return {
 			kind: "pp",
 			step: 0.5,
@@ -94,14 +91,13 @@ const getLineUnit = (line: ScenarioLine): LineUnit => {
 		return {
 			kind: "yr",
 			step: 1,
-			suffix: " yr",
+			suffix: "yr",
 			displayDivisor: 1,
 			min: -5,
 			max: 10,
 		};
 	}
 	if (lever.unit === "k") {
-		// Threshold raise/lower in £k. ±£50k captures realistic moves.
 		return {
 			kind: "k",
 			step: 1,
@@ -112,8 +108,6 @@ const getLineUnit = (line: ScenarioLine): LineUnit => {
 		};
 	}
 	if (lever.unit === "bn") {
-		// Direct £bn lever (asset taxes, sundry measures, hypotheticals).
-		// ±£100bn captures even an LVT-scale revenue raiser.
 		return {
 			kind: "bn",
 			step: 1,
@@ -136,6 +130,19 @@ const getLineUnit = (line: ScenarioLine): LineUnit => {
 	return { kind: "unknown", step: 1, suffix: "", displayDivisor: 1 };
 };
 
+const UNIT_INPUT: Record<
+	"pp" | "yr" | "k" | "bn" | "p-per-litre",
+	{
+		defaultMag: number;
+	}
+> = {
+	pp: { defaultMag: 1 },
+	yr: { defaultMag: 1 },
+	k: { defaultMag: 1 },
+	bn: { defaultMag: 1 },
+	"p-per-litre": { defaultMag: 1 },
+};
+
 const clamp = (value: number, min?: number, max?: number): number => {
 	let result = value;
 	if (min !== undefined && result < min) result = min;
@@ -146,21 +153,12 @@ const clamp = (value: number, min?: number, max?: number): number => {
 const MAGNITUDE_DEBOUNCE_MS = 250;
 
 interface MagnitudeInputProps {
-	value: number; // raw magnitude (already × displayDivisor)
+	value: number;
 	unit: LineUnit;
 	ariaLabel: string;
 	onCommit: (rawMagnitude: number) => void;
 }
 
-// Inline magnitude editor for a single scenario line. Uses local draft
-// state for typing responsiveness and debounces commits to wizard
-// state, plus flushes on blur (so a user editing then clicking elsewhere
-// doesn't lose the edit). Clamps to per-unit bounds at commit time.
-//
-// External re-sync only fires when the input is unfocused — while the
-// user is editing, their draft is the source of truth and parent state
-// updates don't fight their keystrokes. After blur, parent state wins
-// (so a budget load or a remove+re-add naturally re-syncs).
 function MagnitudeInput({
 	value,
 	unit,
@@ -171,14 +169,8 @@ function MagnitudeInput({
 	const [draft, setDraft] = useState<string>(String(initialDisplay));
 	const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const isFocused = useRef(false);
-	// De-dupe consecutive commits with identical values — onBlur and the
-	// debounced flush can both fire for the same value (idempotent but
-	// redundant rerenders downstream).
 	const lastCommittedRaw = useRef<number>(value);
 
-	// External re-sync: parent state changed (budget load, programmatic
-	// update). If the user isn't currently editing this input, mirror
-	// their draft to the new external value.
 	useEffect(() => {
 		if (isFocused.current) return;
 		setDraft(String(value / unit.displayDivisor));
@@ -194,8 +186,6 @@ function MagnitudeInput({
 	const flush = (nextDisplay: number) => {
 		const clamped = clamp(nextDisplay, unit.min, unit.max);
 		const rawMagnitude = clamped * unit.displayDivisor;
-		// Skip if identical to the most recent commit. Idempotent
-		// downstream but saves a state update + render cycle.
 		if (rawMagnitude === lastCommittedRaw.current) return;
 		lastCommittedRaw.current = rawMagnitude;
 		onCommit(rawMagnitude);
@@ -234,21 +224,10 @@ function MagnitudeInput({
 				else setDraft(String(value / unit.displayDivisor));
 			}}
 			aria-label={ariaLabel}
-			className="w-16 text-right tabular-nums border rounded-sm px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-300"
+			className="w-20 text-right tabular-nums border rounded-sm px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300"
 		/>
 	);
 }
-
-// Refine panel rendered on the wizard's Result step. Two halves:
-//
-//   1. Lever picker — the full simulator lever rail (25+ taxes, 10
-//      programmes, borrowing) so the user can add levers the wizard's
-//      curated cards didn't surface (dividend allowance, fuel duty,
-//      bank surcharge, etc.).
-//   2. Current basket — committed scenario lines with remove buttons.
-//
-// Collapsed by default; opening reveals both halves stacked. Adding or
-// removing a line re-renders the analytics report below — no navigation.
 
 let nextLocalId = 1;
 const newLocalId = () => `wzr${nextLocalId++}`;
@@ -278,6 +257,24 @@ const defaultLineForLever = (lever: PickerLever): ScenarioLine => {
 	};
 };
 
+const defaultLineForType = (type: ScenarioLine["type"]): ScenarioLine => {
+	if (type === "borrow") {
+		return defaultLineForLever({ type: "borrow", id: "borrow", label: "Borrow" });
+	}
+	if (type === "programme") {
+		return defaultLineForLever({
+			type: "programme",
+			id: "defence",
+			label: "Defence",
+		});
+	}
+	return defaultLineForLever({
+		type: "tax",
+		id: "basic-rate-income-tax",
+		label: "Basic-rate income tax",
+	});
+};
+
 const formatBn = (n: number): string => {
 	const abs = Math.abs(n);
 	if (abs >= 1_000_000_000) return `£${(n / 1_000_000_000).toFixed(1)}bn`;
@@ -285,52 +282,158 @@ const formatBn = (n: number): string => {
 	return `£${Math.round(n).toLocaleString()}`;
 };
 
+const defaultScenarioName = (
+	result: ReturnType<typeof evaluateScenario>,
+): string => {
+	const lines = result.lines.length;
+	if (result.net > 0) {
+		return `Net £${(result.net / 1_000_000_000).toFixed(1)}bn freed (${lines} line${lines === 1 ? "" : "s"})`;
+	}
+	if (result.net < 0) {
+		return `Net £${(Math.abs(result.net) / 1_000_000_000).toFixed(1)}bn shortfall (${lines} line${lines === 1 ? "" : "s"})`;
+	}
+	return `Balanced (${lines} line${lines === 1 ? "" : "s"})`;
+};
+
+interface PendingSavedLoad {
+	saved: SavedScenario;
+	diff: ScenarioDiff;
+}
+
 interface Props {
 	committedScenario: readonly ScenarioLine[];
 	onAdd: (line: ScenarioLine) => void;
 	onRemove: (id: string) => void;
-	onUpdateMagnitude: (id: string, magnitude: number) => void;
+	onUpdate: (id: string, patch: Partial<ScenarioLine>) => void;
+	onReplace: (lines: ScenarioLine[]) => void;
 }
 
 export function RefineScenarioPanel({
 	committedScenario,
 	onAdd,
 	onRemove,
-	onUpdateMagnitude,
+	onUpdate,
+	onReplace,
 }: Props) {
-	const [open, setOpen] = useState(false);
+	const [open, setOpen] = useState(committedScenario.length === 0);
+	const [saved, setSaved] = useState<SavedScenario[]>([]);
+	const [pendingLoad, setPendingLoad] = useState<PendingSavedLoad | null>(null);
 
+	useEffect(() => {
+		setSaved(listSavedScenarios());
+	}, []);
+
+	const result = useMemo(
+		() => evaluateScenario([...committedScenario]),
+		[committedScenario],
+	);
 	const editableCount = committedScenario.length;
+	const serializedScenario = useMemo(
+		() => serializeScenario([...committedScenario]),
+		[committedScenario],
+	);
+
+	const handleSave = () => {
+		if (!serializedScenario) return;
+		const name = window.prompt("Name this scenario:", defaultScenarioName(result));
+		if (name === null) return;
+		saveScenario(name, serializedScenario);
+		setSaved(listSavedScenarios());
+	};
+
+	const loadSaved = (entry: SavedScenario) => {
+		const incoming = deserializeScenario(entry.scenario);
+		if (committedScenario.length === 0) {
+			onReplace(incoming);
+			return;
+		}
+		setPendingLoad({
+			saved: entry,
+			diff: diffScenarios([...committedScenario], incoming),
+		});
+	};
+
+	const deleteSaved = (id: string) => {
+		deleteSavedScenario(id);
+		setSaved(listSavedScenarios());
+	};
 
 	return (
-		<section className="rounded-md border bg-background/40 overflow-hidden">
-			<button
-				type="button"
-				onClick={() => setOpen((o) => !o)}
-				aria-expanded={open}
-				className={cn(
-					"w-full flex items-center justify-between gap-2 px-3 py-2",
-					"text-left hover:bg-accent/40 transition-colors",
-				)}
-			>
-				<div className="min-w-0 flex-1">
-					<div className="text-sm font-semibold text-foreground leading-tight">
-						Refine scenario
-					</div>
-					<div className="text-[10px] text-muted-foreground leading-snug mt-0.5">
-						Full lever catalog · {editableCount}{" "}
-						{editableCount === 1 ? "line" : "lines"} editable
-					</div>
-				</div>
-				<motion.span
-					aria-hidden="true"
-					className="text-muted-foreground text-sm shrink-0"
-					animate={{ rotate: open ? 90 : 0 }}
-					transition={{ duration: 0.15, ease: "easeOut" }}
+		<section className="rounded-md border bg-background/70 overflow-hidden">
+			<div className="flex flex-col gap-2 border-b px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+				<button
+					type="button"
+					onClick={() => setOpen((o) => !o)}
+					aria-expanded={open}
+					className="min-w-0 flex items-center gap-2 text-left"
 				>
-					▸
-				</motion.span>
-			</button>
+					<motion.span
+						aria-hidden="true"
+						className="text-muted-foreground text-sm shrink-0"
+						animate={{ rotate: open ? 90 : 0 }}
+						transition={{ duration: 0.15, ease: "easeOut" }}
+					>
+						▸
+					</motion.span>
+					<div className="min-w-0">
+						<div className="text-sm font-semibold leading-tight">
+							Scenario workspace
+						</div>
+						<div className="text-[10px] text-muted-foreground leading-snug mt-0.5">
+							{editableCount} editable {editableCount === 1 ? "line" : "lines"} ·{" "}
+							<span
+								className={cn(
+									"tabular-nums",
+									result.net > 0
+										? "text-blue-700"
+										: result.net < 0
+											? "text-amber-700"
+											: "text-muted-foreground",
+								)}
+							>
+								{result.net > 0 ? "+" : result.net < 0 ? "-" : ""}
+								{formatBn(Math.abs(result.net))}
+							</span>
+						</div>
+					</div>
+				</button>
+				<div className="flex flex-wrap gap-1.5">
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={() => onAdd(defaultLineForType("tax"))}
+					>
+						+ Tax
+					</Button>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={() => onAdd(defaultLineForType("programme"))}
+					>
+						+ Spending
+					</Button>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={() => onAdd(defaultLineForType("borrow"))}
+					>
+						+ Borrow
+					</Button>
+					<Button
+						type="button"
+						variant="default"
+						size="sm"
+						disabled={!serializedScenario}
+						onClick={handleSave}
+					>
+						Save
+					</Button>
+				</div>
+			</div>
+
 			<AnimatePresence initial={false}>
 				{open && (
 					<motion.div
@@ -344,87 +447,372 @@ export function RefineScenarioPanel({
 						}}
 						className="overflow-hidden"
 					>
-						<div className="grid grid-cols-1 lg:grid-cols-2 gap-3 px-3 pb-3 pt-1">
-							{/* Lever picker (left on desktop) */}
-							{/* Lever picker height grows with the viewport — comfy
-							    on tablets / desktop (up to 60vh, ~480px on an
-							    800px window), still usable on small phones
-							    (min ~5 lever cards visible). */}
-							<div className="rounded-md border bg-background overflow-hidden min-h-[280px] lg:min-h-[360px] max-h-[60vh]">
-								<LeverRail onAdd={(l) => onAdd(defaultLineForLever(l))} />
-							</div>
-							{/* Current basket (right on desktop) */}
-							{/* Current basket — same height envelope so the two
-							    halves stay visually aligned on desktop. */}
-							<div className="rounded-md border bg-background p-3 space-y-2 min-h-[280px] lg:min-h-[360px] max-h-[60vh] overflow-y-auto">
-								<div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-									Your scenario
+						<div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-3 p-3">
+							<div className="space-y-3 min-w-0">
+								<div className="rounded-md border bg-background p-3 space-y-2">
+									<div className="flex items-center justify-between gap-2">
+										<div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+											Editable scenario
+										</div>
+										{editableCount > 0 && (
+											<button
+												type="button"
+												onClick={() => onReplace([])}
+												className="text-[10px] text-muted-foreground hover:text-foreground"
+											>
+												Clear
+											</button>
+										)}
+									</div>
+									{result.lines.length === 0 ? (
+										<p className="text-xs text-muted-foreground py-6 text-center">
+											No editable lines yet.
+										</p>
+									) : (
+										<ul className="space-y-2">
+											{result.lines.map((evaluation) => (
+												<LineRow
+													key={evaluation.line.id}
+													evaluation={evaluation}
+													onUpdate={(patch) =>
+														onUpdate(evaluation.line.id, patch)
+													}
+													onRemove={() => onRemove(evaluation.line.id)}
+												/>
+											))}
+										</ul>
+									)}
 								</div>
-								{committedScenario.length === 0 ? (
-									<p className="text-[11px] text-muted-foreground italic">
-										No editable lines yet. The implicit goal action (e.g.
-										NHS expansion for fund-NHS) is included in the report
-										but is not editable here.
-									</p>
-								) : (
-									<ul className="space-y-2">
-										{committedScenario.map((line) => {
-											const ev = evaluateScenario([line]);
-											const lineDelta = ev.net;
-											const evLine = ev.lines[0];
-											const unit = getLineUnit(line);
-											return (
-												<li
-													key={line.id}
-													className="flex items-center gap-1.5 text-[11px]"
+
+								<div className="rounded-md border bg-background p-3 space-y-2">
+									<div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+										Saved scenarios
+									</div>
+									{saved.length === 0 ? (
+										<p className="text-xs text-muted-foreground">
+											No saved scenarios on this device.
+										</p>
+									) : (
+										<div className="flex flex-wrap gap-2">
+											{saved.map((entry) => (
+												<div
+													key={entry.id}
+													className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border bg-background px-2 py-1 text-xs"
 												>
-													<span className="truncate flex-1 min-w-0">
-														{evLine?.description ?? line.leverId}
-													</span>
-													<span className="flex items-center gap-0.5 shrink-0">
-														<MagnitudeInput
-															value={line.magnitude}
-															unit={unit}
-															ariaLabel={`Magnitude for ${evLine?.description ?? line.leverId}`}
-															onCommit={(rawMagnitude) =>
-																onUpdateMagnitude(line.id, rawMagnitude)
-															}
-														/>
-														<span className="text-[9px] text-muted-foreground tabular-nums w-7">
-															{unit.suffix}
-														</span>
-													</span>
-													<span
-														className={cn(
-															"tabular-nums shrink-0 w-14 text-right",
-															lineDelta > 0
-																? "text-blue-700"
-																: lineDelta < 0
-																	? "text-amber-700"
-																	: "",
-														)}
-													>
-														{lineDelta >= 0 ? "+" : "−"}
-														{formatBn(Math.abs(lineDelta))}
-													</span>
 													<button
 														type="button"
-														onClick={() => onRemove(line.id)}
-														aria-label={`Remove ${evLine?.description ?? line.leverId}`}
-														className="text-muted-foreground hover:text-foreground text-xs leading-none px-1 shrink-0"
+														onClick={() => loadSaved(entry)}
+														className="truncate max-w-[240px] hover:underline"
+														title={entry.name}
+													>
+														{entry.name}
+													</button>
+													{committedScenario.length > 0 && (
+														<button
+															type="button"
+															onClick={() =>
+																setPendingLoad({
+																	saved: entry,
+																	diff: diffScenarios(
+																		[...committedScenario],
+																		deserializeScenario(entry.scenario),
+																	),
+																})
+															}
+															aria-label={`Compare ${entry.name} with current`}
+															className="text-muted-foreground hover:text-foreground rounded leading-none px-1"
+														>
+															⇄
+														</button>
+													)}
+													<button
+														type="button"
+														onClick={() => deleteSaved(entry.id)}
+														aria-label={`Delete ${entry.name}`}
+														className="text-muted-foreground hover:text-foreground rounded leading-none px-1"
 													>
 														×
 													</button>
-												</li>
-											);
-										})}
-									</ul>
-								)}
+												</div>
+											))}
+										</div>
+									)}
+								</div>
+							</div>
+
+							<div className="rounded-md border bg-background overflow-hidden min-h-[320px] max-h-[64vh]">
+								<LeverRail onAdd={(lever) => onAdd(defaultLineForLever(lever))} />
 							</div>
 						</div>
 					</motion.div>
 				)}
 			</AnimatePresence>
+
+			<ScenarioDiffModal
+				open={pendingLoad !== null}
+				onOpenChange={(nextOpen) => {
+					if (!nextOpen) setPendingLoad(null);
+				}}
+				budgetName={pendingLoad?.saved.name ?? ""}
+				diff={
+					pendingLoad?.diff ?? {
+						removed: [],
+						added: [],
+						modified: [],
+						unchanged: [],
+					}
+				}
+				onConfirm={() => {
+					if (!pendingLoad) return;
+					onReplace(deserializeScenario(pendingLoad.saved.scenario));
+					setPendingLoad(null);
+				}}
+			/>
 		</section>
+	);
+}
+
+function LineRow({
+	evaluation,
+	onUpdate,
+	onRemove,
+}: {
+	evaluation: LineEvaluation;
+	onUpdate: (patch: Partial<ScenarioLine>) => void;
+	onRemove: () => void;
+}) {
+	const { line, deltaGbp, methodology } = evaluation;
+	const unit = getLineUnit(line);
+	const lineType =
+		line.type === "tax" ? "Tax" : line.type === "programme" ? "Spending" : "Borrowing";
+	const isFreed = deltaGbp > 0;
+
+	let cuttableWarning: string | null = null;
+	if (line.type === "programme" && line.magnitude < 0) {
+		const prog = UK_SPENDING_PROGRAMMES.find((p) => p.id === line.leverId);
+		const cuttable = prog?.cuttableFraction;
+		const cutFrac = Math.abs(line.magnitude / 100);
+		if (
+			prog &&
+			cuttable !== undefined &&
+			cuttable < 1 &&
+			cutFrac > cuttable
+		) {
+			cuttableWarning = `Exceeds ${(cuttable * 100).toFixed(0)}% realistic cut`;
+		}
+	}
+
+	return (
+		<li
+			className={cn(
+				"rounded-md border bg-card p-2.5 space-y-2",
+				cuttableWarning && "border-amber-400 bg-amber-50",
+			)}
+		>
+			<div className="grid grid-cols-1 lg:grid-cols-[74px_minmax(0,1fr)_auto] gap-2 lg:items-center">
+				<span className="inline-flex w-fit rounded-full border bg-muted/40 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+					{lineType}
+				</span>
+				<div className="min-w-0">
+					{line.type === "programme" && (
+						<ProgrammeLineControls line={line} onUpdate={onUpdate} />
+					)}
+					{line.type === "tax" && (
+						<TaxLineControls line={line} onUpdate={onUpdate} />
+					)}
+					{line.type === "borrow" && (
+						<BorrowLineControls line={line} onUpdate={onUpdate} />
+					)}
+				</div>
+				<div className="flex items-center justify-end gap-2">
+					<span
+						className={cn(
+							"text-xs tabular-nums font-medium min-w-20 text-right",
+							isFreed ? "text-blue-700" : "text-amber-700",
+						)}
+					>
+						{isFreed ? "+" : "-"}
+						{formatBn(Math.abs(deltaGbp))}
+					</span>
+					<MethodologyPopover methodology={methodology} />
+					<button
+						type="button"
+						onClick={onRemove}
+						aria-label="Remove line"
+						className="text-muted-foreground hover:text-foreground rounded px-1 text-lg leading-none"
+					>
+						×
+					</button>
+				</div>
+			</div>
+			<div className="flex flex-wrap items-center gap-1.5">
+				<MagnitudeInput
+					value={line.magnitude}
+					unit={unit}
+					ariaLabel={`Magnitude for ${evaluation.description}`}
+					onCommit={(rawMagnitude) => onUpdate({ magnitude: rawMagnitude })}
+				/>
+				<span className="text-[10px] text-muted-foreground tabular-nums">
+					{unit.suffix}
+				</span>
+				<span className="text-[10px] text-muted-foreground truncate">
+					{evaluation.description}
+				</span>
+			</div>
+			{cuttableWarning && (
+				<p className="text-[11px] text-amber-800">{cuttableWarning}</p>
+			)}
+		</li>
+	);
+}
+
+function ProgrammeLineControls({
+	line,
+	onUpdate,
+}: {
+	line: ScenarioLine;
+	onUpdate: (patch: Partial<ScenarioLine>) => void;
+}) {
+	return (
+		<select
+			value={line.leverId}
+			onChange={(e) => onUpdate({ leverId: e.target.value })}
+			className="w-full rounded border border-input bg-background px-2 py-1 text-xs"
+			aria-label="Spending programme"
+		>
+			{UK_SPENDING_PROGRAMMES.map((programme) => (
+				<option key={programme.id} value={programme.id}>
+					{programme.name}
+				</option>
+			))}
+		</select>
+	);
+}
+
+function TaxLineControls({
+	line,
+	onUpdate,
+}: {
+	line: ScenarioLine;
+	onUpdate: (patch: Partial<ScenarioLine>) => void;
+}) {
+	const lever = TAX_LEVERS.find((l) => l.id === line.leverId);
+	return (
+		<select
+			value={line.leverId}
+			onChange={(e) => {
+				const next = TAX_LEVERS.find((l) => l.id === e.target.value);
+				const switching = lever && next && lever.unit !== next.unit;
+				onUpdate({
+					leverId: e.target.value,
+					...(switching && next
+						? { magnitude: UNIT_INPUT[next.unit].defaultMag }
+						: {}),
+				});
+			}}
+			className="w-full rounded border border-input bg-background px-2 py-1 text-xs"
+			aria-label="Tax lever"
+		>
+			{TAX_LEVERS.map((tax) => (
+				<option key={tax.id} value={tax.id}>
+					{tax.name}
+				</option>
+			))}
+		</select>
+	);
+}
+
+function BorrowLineControls({
+	line,
+	onUpdate,
+}: {
+	line: ScenarioLine;
+	onUpdate: (patch: Partial<ScenarioLine>) => void;
+}) {
+	const updateContext = (patch: Partial<BorrowingScenarioContext>) => {
+		const next = { ...line.borrowingContext, ...patch };
+		onUpdate({
+			borrowingContext: isBorrowingContextEmpty(next) ? undefined : next,
+		});
+	};
+
+	return (
+		<div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+			<select
+				value={line.borrowingStrategyId ?? "dmo-remit"}
+				onChange={(e) =>
+					onUpdate({
+						borrowingStrategyId: e.target
+							.value as ScenarioLine["borrowingStrategyId"],
+						borrowingPortfolio: undefined,
+					})
+				}
+				className="rounded border border-input bg-background px-2 py-1 text-xs"
+				aria-label="Borrowing financing strategy"
+			>
+				{BORROWING_STRATEGIES.map((strategy) => (
+					<option key={strategy.id} value={strategy.id}>
+						{strategy.label}
+					</option>
+				))}
+			</select>
+			<select
+				value={line.borrowingContext?.fiscalEvent ?? ""}
+				onChange={(e) =>
+					updateContext({
+						fiscalEvent:
+							(e.target.value as BorrowingScenarioContext["fiscalEvent"]) ||
+							undefined,
+					})
+				}
+				className="rounded border border-input bg-background px-2 py-1 text-xs"
+				aria-label="Borrowing fiscal event context"
+			>
+				<option value="">Event inferred</option>
+				{BORROWING_FISCAL_EVENT_OPTIONS.map((option) => (
+					<option key={option.id} value={option.id}>
+						{option.label}
+					</option>
+				))}
+			</select>
+			<select
+				value={line.borrowingContext?.duration ?? ""}
+				onChange={(e) =>
+					updateContext({
+						duration:
+							(e.target.value as BorrowingScenarioContext["duration"]) ||
+							undefined,
+					})
+				}
+				className="rounded border border-input bg-background px-2 py-1 text-xs"
+				aria-label="Borrowing duration context"
+			>
+				<option value="">Duration inferred</option>
+				{BORROWING_DURATION_OPTIONS.map((option) => (
+					<option key={option.id} value={option.id}>
+						{option.label}
+					</option>
+				))}
+			</select>
+			<select
+				value={line.borrowingContext?.monetaryBackstop ?? ""}
+				onChange={(e) =>
+					updateContext({
+						monetaryBackstop:
+							(e.target.value as BorrowingScenarioContext["monetaryBackstop"]) ||
+							undefined,
+					})
+				}
+				className="rounded border border-input bg-background px-2 py-1 text-xs sm:col-span-3"
+				aria-label="Borrowing monetary backstop context"
+			>
+				<option value="">Backstop inferred</option>
+				{BORROWING_MONETARY_BACKSTOP_OPTIONS.map((option) => (
+					<option key={option.id} value={option.id}>
+						{option.label}
+					</option>
+				))}
+			</select>
+		</div>
 	);
 }

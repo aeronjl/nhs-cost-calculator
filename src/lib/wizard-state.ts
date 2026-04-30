@@ -156,9 +156,11 @@ export interface WizardActions {
 	setMobileSparklineCollapsed: (collapsed: boolean) => void;
 	addChoice: (line: ScenarioLine) => void;
 	removeChoice: (id: string) => void;
+	updateChoice: (id: string, patch: Partial<ScenarioLine>) => void;
 	// Update an existing line's magnitude (used by the Refine panel's
 	// inline editor). No-op if id doesn't match a committed line.
 	updateChoiceMagnitude: (id: string, magnitude: number) => void;
+	replaceScenario: (lines: ScenarioLine[]) => void;
 	setPreview: (lines: ScenarioLine[]) => void;
 	clearPreview: () => void;
 	resetScenario: () => void;
@@ -297,18 +299,33 @@ export function useWizardState(initial?: Partial<WizardState>): WizardComputedSt
 		}));
 	}, []);
 
-	const updateChoiceMagnitude = useCallback(
-		(id: string, magnitude: number) => {
-			if (!Number.isFinite(magnitude)) return;
+	const updateChoice = useCallback(
+		(id: string, patch: Partial<ScenarioLine>) => {
 			setState((s) => ({
 				...s,
 				committedScenario: s.committedScenario.map((l) =>
-					l.id === id ? { ...l, magnitude } : l,
+					l.id === id ? { ...l, ...patch } : l,
 				),
 			}));
 		},
 		[],
 	);
+
+	const updateChoiceMagnitude = useCallback(
+		(id: string, magnitude: number) => {
+			if (!Number.isFinite(magnitude)) return;
+			updateChoice(id, { magnitude });
+		},
+		[updateChoice],
+	);
+
+	const replaceScenario = useCallback((lines: ScenarioLine[]) => {
+		setState((s) => ({
+			...s,
+			committedScenario: lines,
+			previewLines: [],
+		}));
+	}, []);
 
 	const setPreview = useCallback((lines: ScenarioLine[]) => {
 		setState((s) => ({ ...s, previewLines: lines }));
@@ -337,7 +354,9 @@ export function useWizardState(initial?: Partial<WizardState>): WizardComputedSt
 			setMobileSparklineCollapsed,
 			addChoice,
 			removeChoice,
+			updateChoice,
 			updateChoiceMagnitude,
+			replaceScenario,
 			setPreview,
 			clearPreview,
 			resetScenario,

@@ -11,8 +11,8 @@ import { WizardShell } from "@/components/wizard/wizard-shell";
 import { formatMoney } from "./utils/formatters";
 
 // The wizard is the main entry. Step into the Treasury, make decisions
-// with live impact, end on a fiscal report. Power-user free-form editing
-// lives at /sandbox; comparison-share URLs route to /reference.
+// with live impact, end on a fiscal report. Power-user free-form editing now
+// lives inside the Result step; comparison-share URLs route to /reference.
 //
 // Legacy simulator share-links (those with ?scenario= / ?editor= / ?cf_*
 // / ?to_* params from before the route swap) decode into the wizard's

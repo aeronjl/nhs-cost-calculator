@@ -74,7 +74,6 @@ interface StepProps {
 	onAdvance: () => void;
 	onBack: () => void;
 	onSkipToResults: () => void;
-	onOpenInSandbox: () => void;
 }
 
 const formatBn = (n: number): string => {
@@ -1295,7 +1294,6 @@ export function StepResult({
 	comparisons,
 	usdPerGbp,
 	onBack,
-	onOpenInSandbox,
 }: StepProps) {
 	const goalDef = state.goal ? GOAL_DEFINITIONS[state.goal] : null;
 	const era = ERAS[state.era];
@@ -1341,35 +1339,30 @@ export function StepResult({
 			)}
 
 			{/* Refine inline — full lever catalog (25+ taxes, 10 programmes,
-			    borrow) accessible without leaving the report. Power-user
-			    users can adjust without bouncing to /sandbox. */}
+			    borrow) accessible without leaving the report. */}
 			<RefineScenarioPanel
 				committedScenario={state.committedScenario}
 				onAdd={(line) => actions.addChoice(line)}
 				onRemove={actions.removeChoice}
-				onUpdateMagnitude={actions.updateChoiceMagnitude}
+				onUpdate={actions.updateChoice}
+				onReplace={actions.replaceScenario}
 			/>
 
 			{/* The report itself — OutputRail is the existing simulator
 			    sidebar promoted to the wizard's main surface. Progressive
 			    disclosure: TopZone always visible (~6 lines), 4 collapsible
 			    sections beneath (Trajectory, Who pays, Macro, Assumptions). */}
-			{hasChoices && (
-				<OutputRail
-					scenario={fullScenario}
-					comparisons={comparisons}
-					usdPerGbp={usdPerGbp}
-					baseline={baseline}
-					emptyMessage="No decisions yet — go back and make some choices."
-				/>
-			)}
+			<OutputRail
+				scenario={fullScenario}
+				comparisons={comparisons}
+				usdPerGbp={usdPerGbp}
+				baseline={baseline}
+				emptyMessage="No decisions yet."
+			/>
 
-			<div className="flex items-center justify-between gap-2 pt-2">
+			<div className="flex items-center justify-start gap-2 pt-2">
 				<Button variant="outline" size="sm" onClick={onBack}>
 					← Back to borrowing
-				</Button>
-				<Button variant="outline" size="sm" onClick={onOpenInSandbox}>
-					Open in scenario sandbox →
 				</Button>
 			</div>
 		</div>
