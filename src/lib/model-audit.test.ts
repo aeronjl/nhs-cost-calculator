@@ -11,6 +11,7 @@ import {
 	buildModelAuditJsonExport,
 	buildModelAuditMarkdownAppendix,
 } from "./model-audit";
+import { buildMacroStressLab } from "./macro-stress-lab";
 import { evaluateScenario, projectScenarioWithGEFeedback } from "./scenario";
 
 describe("model audit evidence pack", () => {
@@ -41,11 +42,13 @@ describe("model audit evidence pack", () => {
 		);
 		const fiscalRuleUncertaintyDecomposition =
 			projectFiscalRuleUncertaintyDecomposition(result, OBR_BASELINE, 80, 7);
+		const macroStressLab = buildMacroStressLab(result, OBR_BASELINE);
 
 		const audit = buildModelAuditEvidencePack({
 			result,
 			baseline: OBR_BASELINE,
 			baselineComparison,
+			macroStressLab,
 			fiscalRuleFan,
 			fiscalRulePriorSensitivity,
 			fiscalRuleUncertaintyDecomposition,
@@ -85,6 +88,14 @@ describe("model audit evidence pack", () => {
 					row.breachProbability <= 1,
 			),
 		).toBe(true);
+		expect(audit.macroStressLab?.parameters.map((row) => row.id)).toEqual([
+			"growth",
+			"inflation",
+			"bank-rate",
+			"multipliers",
+			"tax-buoyancy",
+			"debt-risk-premium",
+		]);
 		expect(audit.calibration.map((item) => item.label)).toContain(
 			"Borrowing balance-sheet calibration",
 		);
@@ -127,6 +138,8 @@ describe("model audit evidence pack", () => {
 		expect(markdown).toContain("| Fiscal year | Baseline PSNB |");
 		expect(markdown).toContain("## Borrowing Scenario Matrix");
 		expect(markdown).toContain("Unscored persistent");
+		expect(markdown).toContain("## Macro Stress Lab");
+		expect(markdown).toContain("Gilt risk premium");
 		expect(markdown).toContain("## Calibration Evidence");
 		expect(markdown).toContain("### Uncertainty Decomposition");
 
@@ -139,5 +152,6 @@ describe("model audit evidence pack", () => {
 			OBR_BASELINE.years.length,
 		);
 		expect(parsed.audit.borrowingScenarioComparison.rows).toHaveLength(6);
+		expect(parsed.audit.macroStressLab.parameters).toHaveLength(6);
 	});
 });

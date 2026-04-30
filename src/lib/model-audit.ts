@@ -36,6 +36,7 @@ import {
 	describeBorrowingContext,
 	type BorrowingScenarioContext,
 } from "./borrowing-context";
+import type { MacroStressLab } from "./macro-stress-lab";
 
 export interface ModelAuditCalibrationItem {
 	label: string;
@@ -163,6 +164,7 @@ export interface ModelAuditEvidencePack {
 	scenario: ModelAuditScenarioSummary;
 	baselineComparison: ModelAuditBaselineComparison | null;
 	borrowingScenarioComparison: ModelAuditBorrowingScenarioComparison | null;
+	macroStressLab: MacroStressLab | null;
 	calibration: readonly ModelAuditCalibrationItem[];
 	backtests: ModelAuditBacktestSummary;
 	liveRisk: ModelAuditLiveRiskSummary;
@@ -499,6 +501,7 @@ export const buildModelAuditEvidencePack = ({
 	result,
 	baseline,
 	baselineComparison,
+	macroStressLab,
 	fiscalRuleFan,
 	fiscalRulePriorSensitivity,
 	fiscalRuleUncertaintyDecomposition,
@@ -506,6 +509,7 @@ export const buildModelAuditEvidencePack = ({
 	result: ScenarioResult;
 	baseline: OBRBaseline;
 	baselineComparison?: BaselineComparison;
+	macroStressLab?: MacroStressLab;
 	fiscalRuleFan?: FiscalRuleFan;
 	fiscalRulePriorSensitivity?: FiscalRulePriorSensitivity;
 	fiscalRuleUncertaintyDecomposition?: FiscalRuleUncertaintyDecomposition;
@@ -551,6 +555,7 @@ export const buildModelAuditEvidencePack = ({
 				currentBaselineComparison: baselineComparison,
 			},
 		),
+		macroStressLab: macroStressLab ?? null,
 		calibration: [
 			{
 				label: "Borrowing balance-sheet calibration",
@@ -811,6 +816,55 @@ export const buildModelAuditMarkdownAppendix = (
 					["Best headroom", comparison.bestHeadroomRowLabel],
 					["Worst breach probability", comparison.worstBreachRowLabel],
 					["Highest final-year interest", comparison.highestInterestRowLabel],
+				],
+			),
+		);
+	}
+
+	if (audit.macroStressLab) {
+		const lab = audit.macroStressLab;
+		sections.push(
+			"## Macro Stress Lab",
+			markdownTable(
+				["Metric", "Value"],
+				[
+					["Rule year", lab.ruleYear],
+					["Central headroom", formatGbp(lab.central.adjustedHeadroomGbp)],
+					["Central PSNB", formatGbp(lab.central.ruleYearPsnbGbp)],
+					["Central debt/GDP", formatPct(lab.central.ruleYearDebtGdpPct)],
+					["Largest downside", lab.largestDownsideParameterLabel],
+					["Largest swing", lab.largestSwingParameterLabel],
+				],
+			),
+			markdownTable(
+				[
+					"Assumption",
+					"Low case",
+					"Low headroom move",
+					"High case",
+					"High headroom move",
+					"Worst headroom",
+					"PSNB move",
+					"Debt/GDP move",
+					"Y5 interest move",
+				],
+				lab.parameters.map((parameter) => [
+					parameter.label,
+					parameter.lowCase.label,
+					formatSignedGbp(parameter.lowCase.headroomDeltaGbp),
+					parameter.highCase.label,
+					formatSignedGbp(parameter.highCase.headroomDeltaGbp),
+					formatGbp(parameter.downsideCase.adjustedHeadroomGbp),
+					formatSignedGbp(parameter.downsideCase.ruleYearPsnbDeltaGbp),
+					formatSignedPp(parameter.downsideCase.ruleYearDebtGdpDeltaPp),
+					formatSignedGbp(parameter.downsideCase.finalDebtInterestDeltaGbp),
+				]),
+			),
+			markdownTable(
+				["Macro stress diagnostic", "Assumption"],
+				[
+					["Largest downside", lab.largestDownsideParameterLabel],
+					["Largest headroom range", lab.largestSwingParameterLabel],
 				],
 			),
 		);

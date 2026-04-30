@@ -179,10 +179,10 @@ export function OutputRail({
 	);
 	const macroStressLab = useMemo(
 		() =>
-			openMap.stress && scenario.length > 0
+			(openMap.stress || openMap.audit) && scenario.length > 0
 				? buildMacroStressLab(result, baseline)
 				: undefined,
-		[baseline, openMap.stress, result, scenario.length],
+		[baseline, openMap.audit, openMap.stress, result, scenario.length],
 	);
 	const modelAudit = useMemo(
 		() =>
@@ -191,6 +191,7 @@ export function OutputRail({
 						result,
 						baseline,
 						baselineComparison,
+						macroStressLab,
 						fiscalRuleFan,
 						fiscalRulePriorSensitivity,
 						fiscalRuleUncertaintyDecomposition,
@@ -202,6 +203,7 @@ export function OutputRail({
 			fiscalRuleFan,
 			fiscalRulePriorSensitivity,
 			fiscalRuleUncertaintyDecomposition,
+			macroStressLab,
 			openMap.audit,
 			result,
 			scenario.length,
