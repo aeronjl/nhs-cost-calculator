@@ -160,7 +160,9 @@ Fiscal-rule diagnostics compare scenario-adjusted PSNB and debt proxy paths agai
 
 The rule-correction path is a stylised policy reaction. When headroom is breached or becomes very thin, the model ramps in the required annual fiscal tightening by the rule horizon and reports corrected PSNB/debt outcomes.
 
-The panel also shows fiscal reaction options: balanced, tax-led, spending-led, and delayed consolidation. Each option grosses up the required action for demand-side macro feedback using the model's tax-to-GDP ratio, then reports the implied GDP drag, tax/spending split, corrected PSNB, and debt/GDP at the rule horizon. This is not a recommendation about whether the adjustment should come from tax rises or spending cuts; it is a sensitivity showing how the same rule correction can have different macro and debt-path consequences.
+The panel also shows fiscal reaction options: balanced, tax-led, spending-led, and delayed consolidation. These are now concrete offset packages rather than abstract tax/spend shares. Each package is assembled from named simulator levers, such as personal-allowance and higher-rate-threshold freezes, employee and employer NICs, VAT, corporation tax, transport reprofiling, working-age welfare, international aid, and constrained departmental cuts. Programme cuts are capped by each line's cuttability assumption, and tax rises are capped at plausible Budget-scale moves.
+
+Each package is sized to restore the required rule headroom after applying the existing taxable-base elasticities, worker CEV/output effects, and per-lever fiscal multipliers. The output reports gross action, behavioural adjustment, GDP drag, macro revenue feedback, corrected PSNB/debt, and any residual gap if the plausible package caps cannot close the breach. This is not a recommendation about whether the adjustment should come from tax rises or spending cuts; it is a sensitivity showing how realistic offset choices change macro and debt-path consequences.
 
 ## Stress And Stochastic Cases
 

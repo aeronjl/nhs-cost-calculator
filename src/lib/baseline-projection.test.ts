@@ -168,11 +168,69 @@ describe("projectAgainstBaseline", () => {
 		expect(spendingLed.horizonGdpDragGbp).toBeGreaterThan(
 			taxLed.horizonGdpDragGbp,
 		);
-		expect(taxLed.headroomAfterReactionGbp).toBeCloseTo(0);
-		expect(spendingLed.headroomAfterReactionGbp).toBeCloseTo(0);
+		expect(Math.abs(taxLed.headroomAfterReactionGbp)).toBeLessThan(
+			50_000_000,
+		);
+		expect(Math.abs(spendingLed.headroomAfterReactionGbp)).toBeLessThan(
+			50_000_000,
+		);
 		expect(delayed.debtGdpAtHorizon).toBeGreaterThan(
 			balanced.debtGdpAtHorizon,
 		);
+	});
+
+	it("builds concrete fiscal reaction packages from named levers", () => {
+		const proj = [yp(1, 0), yp(2, 0), yp(3, -15_000_000_000)];
+		const cmp = projectAgainstBaseline(proj, TEST_BASELINE);
+		const taxLed = cmp.policyReactionOptions.find(
+			(option) => option.id === "tax-led",
+		)!;
+		const spendingLed = cmp.policyReactionOptions.find(
+			(option) => option.id === "spending-led",
+		)!;
+		const balanced = cmp.policyReactionOptions.find(
+			(option) => option.id === "balanced",
+		)!;
+
+		expect(taxLed.package.components.some((c) => c.type === "tax")).toBe(true);
+		expect(
+			taxLed.package.components.some(
+				(c) => c.leverId === "employer-nics-main",
+			),
+		).toBe(true);
+		expect(
+			spendingLed.package.components.some((c) => c.type === "programme"),
+		).toBe(true);
+		expect(
+			spendingLed.package.components.some(
+				(c) => c.leverId === "working-age-welfare",
+			),
+		).toBe(true);
+		expect(taxLed.package.taxTighteningGbp).toBeGreaterThan(
+			taxLed.package.spendingTighteningGbp,
+		);
+		expect(spendingLed.package.spendingTighteningGbp).toBeGreaterThan(
+			spendingLed.package.taxTighteningGbp,
+		);
+		expect(
+			Math.abs(
+				balanced.package.effectiveCorrectionGbp -
+					cmp.diagnostics.policyReactionGbp,
+			),
+		).toBeLessThan(50_000_000);
+		expect(balanced.package.gdpDragGbp).toBeGreaterThan(0);
+		expect(balanced.package.macroFeedbackGbp).toBeLessThan(0);
+	});
+
+	it("reports residual gaps when plausible reaction package caps bind", () => {
+		const proj = [yp(1, 0), yp(2, 0), yp(3, -90_000_000_000)];
+		const cmp = projectAgainstBaseline(proj, TEST_BASELINE);
+		const spendingLed = cmp.policyReactionOptions.find(
+			(option) => option.id === "spending-led",
+		)!;
+		expect(spendingLed.package.residualGapGbp).toBeGreaterThan(0);
+		expect(spendingLed.package.bindingConstraints.length).toBeGreaterThan(0);
+		expect(spendingLed.headroomAfterReactionGbp).toBeLessThan(0);
 	});
 
 	it("computes adjusted PSNB as % of GDP correctly", () => {

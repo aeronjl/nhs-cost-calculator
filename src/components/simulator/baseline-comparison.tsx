@@ -5,6 +5,7 @@ import type {
 	BaselineComparison,
 	FiscalRuleFan,
 } from "@/lib/baseline-projection";
+import { policyReactionPackageSummary } from "@/lib/policy-reaction-packages";
 
 // Renders the scenario's impact against OBR's "do-nothing" baseline.
 //
@@ -243,6 +244,18 @@ export function BaselineComparisonPanel({ comparison, fiscalRuleFan }: Props) {
 											</div>
 										</div>
 									</div>
+									<div className="mt-1 text-muted-foreground leading-snug">
+										<span className="font-medium text-foreground">
+											Package:{" "}
+										</span>
+										{policyReactionPackageSummary(option.package)}
+									</div>
+									{option.package.residualGapGbp > 250_000_000 && (
+										<div className="mt-1 text-red-700 leading-snug">
+											Residual gap after plausible caps:{" "}
+											{formatBn(option.package.residualGapGbp)}
+										</div>
+									)}
 									<div className="mt-1 text-muted-foreground leading-snug">
 										{option.description}
 									</div>
