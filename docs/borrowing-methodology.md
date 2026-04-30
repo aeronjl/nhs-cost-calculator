@@ -197,6 +197,8 @@ The selector is checked against curated consolidation episodes in `src/data/fisc
 
 The live simulator also runs a prior-sensitivity comparison for scenarios that trigger the endogenous reaction branch. It holds the same macro-fiscal draws fixed and compares neutral, credibility-repair, service-protection, and spending-restraint assumptions on dominant offset package, trigger probability, post-reaction breach risk, and p95 gross action. This makes the policy-economy judgement layer inspectable at the point of use, not only in the historical audit.
 
+The same draw set is also decomposed into sequential uncertainty layers. The report starts from the central headroom path, then adds baseline PSNB forecast error, correlated macro shocks, borrowing-regime overlays, and finally the endogenous policy-reaction branch. Each row reports cumulative breach probability, p5/p50 headroom, and the marginal p5 headroom move from the previous layer, so users can see whether downside risk is mainly ordinary forecast error, macro conditions, gilt-market regime risk, or residual policy-reaction uncertainty.
+
 ## Market Reaction Loop
 
 Large borrowing packages also receive an endogenous market-reaction path. The central path applies the static debt/GDP and issuance risk premium. The market-reaction path then carries forward an additional credibility premium when debt/GDP, refinancing exposure, or the size of the issuance package cross risk thresholds:

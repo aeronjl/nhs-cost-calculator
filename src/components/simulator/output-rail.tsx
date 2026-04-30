@@ -20,6 +20,7 @@ import {
 	projectAgainstBaseline,
 	projectFiscalRuleFan,
 	projectFiscalRulePriorSensitivity,
+	projectFiscalRuleUncertaintyDecomposition,
 } from "@/lib/baseline-projection";
 import {
 	evaluateMicrosim,
@@ -152,6 +153,13 @@ export function OutputRail({
 				: undefined,
 		[baseline, fiscalRuleFan, result],
 	);
+	const fiscalRuleUncertaintyDecomposition = useMemo(
+		() =>
+			scenario.length > 0
+				? projectFiscalRuleUncertaintyDecomposition(result, baseline, 300)
+				: undefined,
+		[baseline, result, scenario.length],
+	);
 	const geYear1 = ge.withFeedback[0]?.net ?? 0;
 	const macroYear1 = ge.noFeedback[0]?.net ?? 0;
 	const geGap = geYear1 - macroYear1;
@@ -230,6 +238,9 @@ export function OutputRail({
 					comparison={baselineComparison}
 					fiscalRuleFan={fiscalRuleFan}
 					fiscalRulePriorSensitivity={fiscalRulePriorSensitivity}
+					fiscalRuleUncertaintyDecomposition={
+						fiscalRuleUncertaintyDecomposition
+					}
 				/>
 			</CollapsibleSection>
 

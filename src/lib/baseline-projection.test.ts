@@ -4,6 +4,7 @@ import {
 	projectAgainstBaseline,
 	projectFiscalRuleFan,
 	projectFiscalRulePriorSensitivity,
+	projectFiscalRuleUncertaintyDecomposition,
 } from "./baseline-projection";
 import {
 	evaluateScenario,
@@ -487,5 +488,52 @@ describe("projectFiscalRuleFan", () => {
 			spending.fan.postReactionBreachProbability -
 				neutral.fan.postReactionBreachProbability,
 		);
+	});
+
+	it("decomposes fiscal-rule uncertainty into sequential risk layers", () => {
+		const result = evaluateScenario([
+			{
+				id: "borrow",
+				type: "borrow",
+				leverId: "",
+				magnitude: 80_000_000_000,
+				borrowingContext: {
+					fiscalEvent: "unscored",
+					duration: "persistent",
+				},
+			},
+		]);
+		const decomp = projectFiscalRuleUncertaintyDecomposition(
+			result,
+			TEST_BASELINE,
+			200,
+			7,
+		);
+		expect(decomp.layers.map((layer) => layer.id)).toEqual([
+			"central",
+			"baseline-forecast-error",
+			"macro-shocks",
+			"borrowing-regime",
+			"policy-reaction",
+		]);
+		for (const layer of decomp.layers) {
+			expect(layer.samples).toBe(200);
+			expect(layer.breachProbability).toBeGreaterThanOrEqual(0);
+			expect(layer.breachProbability).toBeLessThanOrEqual(1);
+			expect(layer.headroomBand.p5).toBeLessThanOrEqual(
+				layer.headroomBand.p50,
+			);
+		}
+		const central = decomp.layers.find((layer) => layer.id === "central")!;
+		const regime = decomp.layers.find(
+			(layer) => layer.id === "borrowing-regime",
+		)!;
+		const policy = decomp.layers.find(
+			(layer) => layer.id === "policy-reaction",
+		)!;
+		expect(central.headroomBand.p5).toBe(decomp.centralHeadroomGbp);
+		expect(regime.headroomBand.p5).toBeLessThan(central.headroomBand.p5);
+		expect(policy.headroomBand.p5).toBeGreaterThan(regime.headroomBand.p5);
+		expect(policy.p5DeltaFromPreviousGbp).toBeGreaterThan(0);
 	});
 });

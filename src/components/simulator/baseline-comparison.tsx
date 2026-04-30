@@ -5,6 +5,7 @@ import type {
 	BaselineComparison,
 	FiscalRuleFan,
 	FiscalRulePriorSensitivity,
+	FiscalRuleUncertaintyDecomposition,
 } from "@/lib/baseline-projection";
 import { policyReactionPackageSummary } from "@/lib/policy-reaction-packages";
 
@@ -25,6 +26,7 @@ interface Props {
 	comparison: BaselineComparison;
 	fiscalRuleFan?: FiscalRuleFan;
 	fiscalRulePriorSensitivity?: FiscalRulePriorSensitivity;
+	fiscalRuleUncertaintyDecomposition?: FiscalRuleUncertaintyDecomposition;
 }
 
 const formatBn = (n: number): string => {
@@ -82,6 +84,7 @@ export function BaselineComparisonPanel({
 	comparison,
 	fiscalRuleFan,
 	fiscalRulePriorSensitivity,
+	fiscalRuleUncertaintyDecomposition,
 }: Props) {
 	const {
 		years,
@@ -202,6 +205,95 @@ export function BaselineComparisonPanel({
 								.
 							</div>
 						)}
+						{fiscalRuleUncertaintyDecomposition &&
+							fiscalRuleUncertaintyDecomposition.layers.length > 1 && (
+								<div className="mt-1.5 rounded-sm bg-muted/40 px-2 py-1.5 text-[10px] text-muted-foreground">
+									<div className="mb-1 flex items-baseline justify-between gap-2">
+										<span className="font-medium text-foreground">
+											Uncertainty decomposition
+										</span>
+										<span className="tabular-nums">
+											{fiscalRuleUncertaintyDecomposition.samples} draws
+										</span>
+									</div>
+									<div className="overflow-x-auto">
+										<table className="w-full min-w-[560px] tabular-nums">
+											<thead>
+												<tr className="text-left">
+													<th className="py-1 pr-2 font-medium">Layer</th>
+													<th className="py-1 pr-2 font-medium">Breach</th>
+													<th className="py-1 pr-2 font-medium">
+														p5 headroom
+													</th>
+													<th className="py-1 pr-2 font-medium">
+														p50 headroom
+													</th>
+													<th className="py-1 font-medium">p5 move</th>
+												</tr>
+											</thead>
+											<tbody>
+												{fiscalRuleUncertaintyDecomposition.layers.map(
+													(row) => (
+														<tr
+															key={row.id}
+															className="border-t border-border/60"
+															title={row.description}
+														>
+															<td className="py-1 pr-2">
+																<span className="font-medium text-foreground">
+																	{row.label}
+																</span>
+															</td>
+															<td className="py-1 pr-2">
+																<span
+																	className={cn(
+																		row.breachProbability > 0.25
+																			? "text-red-700"
+																			: row.breachProbability > 0.1
+																				? "text-amber-700"
+																				: "text-foreground",
+																	)}
+																>
+																	{formatProbability(
+																		row.breachProbability,
+																	)}
+																</span>
+															</td>
+															<td className="py-1 pr-2 text-foreground">
+																{formatBn(row.headroomBand.p5)}
+															</td>
+															<td className="py-1 pr-2 text-foreground">
+																{formatBn(row.headroomBand.p50)}
+															</td>
+															<td
+																className={cn(
+																	"py-1",
+																	row.p5DeltaFromPreviousGbp < -250_000_000
+																		? "text-red-700"
+																		: row.p5DeltaFromPreviousGbp >
+																				250_000_000
+																			? "text-blue-700"
+																			: "text-muted-foreground",
+																)}
+															>
+																{row.id === "central"
+																	? "base"
+																	: formatBnDelta(
+																			row.p5DeltaFromPreviousGbp,
+																		)}
+															</td>
+														</tr>
+													),
+												)}
+											</tbody>
+										</table>
+									</div>
+									<div className="mt-1 leading-snug">
+										Negative p5 moves add downside headroom risk; positive
+										moves show mitigation from the policy-reaction branch.
+									</div>
+								</div>
+							)}
 						{fiscalRuleFan &&
 							fiscalRuleFan.policyReactionTriggeredProbability > 0 && (
 								<div className="mt-1.5 rounded-sm bg-muted/40 px-2 py-1 text-[10px] text-muted-foreground">
