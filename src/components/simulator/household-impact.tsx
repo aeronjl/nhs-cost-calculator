@@ -96,8 +96,9 @@ export function HouseholdImpactPanel({ result }: Props) {
 							return (
 								<Fragment key={household.id}>
 									<tr
+										id={`household-row-${household.id}`}
 										className={cn(
-											"border-t cursor-pointer hover:bg-accent/30 transition-colors",
+											"border-t cursor-pointer hover:bg-accent/30 transition-colors scroll-mt-20",
 											isExpanded && "bg-accent/20",
 										)}
 										onClick={() =>

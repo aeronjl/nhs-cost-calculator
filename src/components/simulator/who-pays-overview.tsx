@@ -208,12 +208,14 @@ export function WhoPaysOverview({ distribution, microsim, result }: Props) {
 							value={formatImpactGbp(hardestHit.impact.totalImpactGbp)}
 							detail={hardestHit.household.label}
 							toneValue={hardestHit.impact.totalImpactGbp}
+							jumpToHouseholdId={hardestHit.household.id}
 						/>
 						<ImpactSummaryCell
 							label="Largest gain"
 							value={formatImpactGbp(biggestGain.impact.totalImpactGbp)}
 							detail={biggestGain.household.label}
 							toneValue={biggestGain.impact.totalImpactGbp}
+							jumpToHouseholdId={biggestGain.household.id}
 						/>
 					</div>
 				</div>
@@ -419,14 +421,37 @@ function ImpactSummaryCell({
 	value,
 	detail,
 	toneValue,
+	jumpToHouseholdId,
 }: {
 	label: string;
 	value: string;
 	detail: string;
 	toneValue: number;
+	jumpToHouseholdId?: string;
 }) {
+	const onJump = jumpToHouseholdId
+		? () => {
+				if (typeof document === "undefined") return;
+				const el = document.getElementById(
+					`household-row-${jumpToHouseholdId}`,
+				);
+				if (el) {
+					el.scrollIntoView({ block: "center", behavior: "smooth" });
+				}
+			}
+		: undefined;
+	const Wrapper = onJump ? "button" : "div";
+	const wrapperProps = onJump
+		? {
+				type: "button" as const,
+				onClick: onJump,
+				className:
+					"w-full rounded-sm border bg-background/70 p-2 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+				"aria-label": `${label}: ${detail}, jump to household row`,
+			}
+		: { className: "rounded-sm border bg-background/70 p-2" };
 	return (
-		<div className="rounded-sm border bg-background/70 p-2">
+		<Wrapper {...wrapperProps}>
 			<div className="uppercase tracking-wider text-muted-foreground">
 				{label}
 			</div>
@@ -439,7 +464,7 @@ function ImpactSummaryCell({
 				{value}
 			</div>
 			<div className="mt-0.5 truncate text-muted-foreground">{detail}</div>
-		</div>
+		</Wrapper>
 	);
 }
 

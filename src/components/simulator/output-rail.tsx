@@ -71,21 +71,32 @@ import { TopZone } from "./top-zone";
 import { WhoPaysOverview } from "./who-pays-overview";
 import { YearFocusProvider } from "@/lib/year-focus";
 
-// Output rail with progressive disclosure:
+// Output rail with progressive disclosure across three modes:
 //
-//   • Top zone (always visible): essential answer in ~6 lines —
-//     net effect, comparisons, 1-line distributional + household headlines.
+//   • Top zone (always visible): plain-English narrative + net effect +
+//     scenario signature radar + comparisons + 1-line distributional and
+//     household headlines.
 //
-//   • 6 detailed tabs:
-//     - Trajectory: multi-year + vs OBR baseline
-//     - Who pays: distributional + microsim + household archetypes
-//     - Macro feedback: tier breakdown (reckoner→dynamic→macro→GE) + macro state
-//     - Stress lab: macro assumption tornado and sensitivity table
-//     - Assumptions: per-line caveats with full methodology
-//     - Model audit: calibration/backtest evidence pack
+//   • Year-of-focus scrubber + report narrative map (always visible).
 //
-// Mobile and desktop share the same structure. Active tab persisted via
-// localStorage so a user's preferred view survives reloads.
+//   • Detailed tabs (set by mode toggle in the action bar):
+//     - Headline: Trajectory · Who pays · Macro · Assumptions
+//     - Analyst (default): adds Stress + Audit
+//     - Researcher: same tabs as Analyst, with stress lab and audit
+//       evidence pack force-loaded for cross-tab reference
+//
+//     Each tab in turn:
+//       Trajectory — multi-year fan + per-lever composition, fiscal-rule
+//         risk gauge, PSNB / debt:GDP counterfactual, historical replay
+//       Who pays — decile incidence path, per-lever decile breakdown,
+//         representative archetypes, microsim winners/losers
+//       Macro — causal overview, scoring bridge, state-channel sparklines
+//       Stress — macro stress lab tornado + sensitivity matrix
+//       Assumptions — per-line caveats + evidence dashboard
+//       Audit — calibration / provenance / backtest evidence pack
+//
+// Active tab + mode persisted via localStorage so a user's preferred view
+// survives reloads. Mobile and desktop share the same structure.
 
 export interface OutputRailProps {
 	scenario: readonly ScenarioLine[];
@@ -222,15 +233,6 @@ const signalToneClassName = (tone: SignalTone): string =>
 			: tone === "red"
 				? "text-red-700"
 				: "text-muted-foreground";
-
-const signalBarClassName = (tone: SignalTone): string =>
-	tone === "blue"
-		? "bg-blue-600"
-		: tone === "amber"
-			? "bg-amber-500"
-			: tone === "red"
-				? "bg-red-600"
-				: "bg-slate-400";
 
 const fiscalRiskTone = (probability: number | undefined): SignalTone =>
 	probability === undefined
@@ -1084,7 +1086,6 @@ function ReportNarrativeMap({
 				baselineComparison.adjustedStabilityHeadroom,
 			)}`,
 			tone: trajectoryTone,
-			intensity: Math.abs(psnbDelta) / 50_000_000_000,
 		},
 		{
 			id: "who-pays",
@@ -1098,7 +1099,6 @@ function ReportNarrativeMap({
 					: "Not modelled",
 			detail: `${distribution.modelledLines}/${distribution.totalLines} lines with incidence; baseline = £0/yr`,
 			tone: distributionTone,
-			intensity: maxHouseholdImpact / 1000,
 		},
 		{
 			id: "macro",
@@ -1114,7 +1114,6 @@ function ReportNarrativeMap({
 					: macroAdjustment < 0
 						? "amber"
 						: "muted",
-			intensity: Math.abs(macroAdjustment) / Math.max(Math.abs(staticNet), 1),
 		},
 		{
 			id: "stress",
@@ -1131,7 +1130,6 @@ function ReportNarrativeMap({
 				? `Largest downside: ${largestDownsideLayer.label}`
 				: `${ruleYear.fiscalYear} rule-year central case`,
 			tone: breachTone,
-			intensity: fiscalRuleFan?.breachProbability ?? 0,
 		},
 		{
 			id: "assumptions",
@@ -1147,7 +1145,6 @@ function ReportNarrativeMap({
 					: dynamicAdjustment < 0
 						? "amber"
 						: "muted",
-			intensity: Math.abs(dynamicAdjustment) / Math.max(Math.abs(staticNet), 1),
 		},
 		{
 			id: "audit",
@@ -1156,7 +1153,6 @@ function ReportNarrativeMap({
 			value: fiscalRuleFan ? `${fiscalRuleFan.samples} risk draws` : "Central case",
 			detail: "Calibration, provenance, backtests, uncertainty layers",
 			tone: "blue",
-			intensity: fiscalRuleFan ? 1 : 0.55,
 		},
 	];
 
@@ -1198,7 +1194,6 @@ interface ReportSignalCardData {
 	value: string;
 	detail: string;
 	tone: SignalTone;
-	intensity: number;
 }
 
 function ReportSignalCard({
@@ -1248,12 +1243,6 @@ function ReportSignalCard({
 						{card.value}
 					</div>
 				</div>
-			</div>
-			<div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-				<span
-					className={cn("block h-full", signalBarClassName(card.tone))}
-					style={{ width: formatStylePct(card.intensity) }}
-				/>
 			</div>
 			<div className="mt-2 line-clamp-2 text-[10px] leading-snug text-muted-foreground">
 				{card.detail}
