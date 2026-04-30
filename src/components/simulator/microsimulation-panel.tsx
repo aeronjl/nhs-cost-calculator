@@ -110,8 +110,11 @@ function HeadlineWinnersLosers({ agg }: { agg: MicrosimAggregate }) {
 	if (total === 0) return null;
 	return (
 		<div className="text-xs">
-			<div className="flex items-center gap-2 font-medium mb-1">
+			<div className="flex items-baseline justify-between gap-2 font-medium mb-1">
 				<span>Winners + losers</span>
+				<span className="text-[10px] font-normal text-muted-foreground">
+					vs current-policy baseline
+				</span>
 			</div>
 			<div className="flex h-2 rounded-sm overflow-hidden bg-muted/40 mb-1.5">
 				<div
@@ -154,7 +157,12 @@ function DecileTable({ agg }: { agg: MicrosimAggregate }) {
 	);
 	return (
 		<div>
-			<div className="text-xs font-medium mb-1">By income decile</div>
+			<div className="mb-1 flex items-baseline justify-between gap-2">
+				<div className="text-xs font-medium">By income decile</div>
+				<div className="text-[10px] text-muted-foreground">
+					baseline = £0/yr
+				</div>
+			</div>
 			<div className="space-y-0.5">
 				{agg.decileMean.map((mean, i) => {
 					const decile = i + 1;

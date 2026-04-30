@@ -51,6 +51,10 @@ export function HouseholdImpactPanel({ result }: Props) {
 	if (impacts.every((i) => Math.abs(i.impact.totalImpactGbp) < 1)) {
 		return null;
 	}
+	const maxAbsImpact = Math.max(
+		...impacts.map((item) => Math.abs(item.impact.totalImpactGbp)),
+		1,
+	);
 
 	return (
 		<div className="space-y-2">
@@ -62,6 +66,11 @@ export function HouseholdImpactPanel({ result }: Props) {
 					{REPRESENTATIVE_HOUSEHOLDS.length} archetypes
 				</span>
 			</div>
+
+			<HouseholdImpactChart
+				impacts={impacts}
+				maxAbsImpact={maxAbsImpact}
+			/>
 
 			<div className="rounded-md border bg-background/60 overflow-hidden">
 				<table className="w-full text-[11px] tabular-nums">
@@ -190,6 +199,90 @@ export function HouseholdImpactPanel({ result }: Props) {
 				here. Sign convention: positive £ = household loses; negative = household
 				gains.
 			</p>
+		</div>
+	);
+}
+
+function HouseholdImpactChart({
+	impacts,
+	maxAbsImpact,
+}: {
+	impacts: readonly {
+		household: (typeof REPRESENTATIVE_HOUSEHOLDS)[number];
+		impact: ReturnType<typeof evaluateHouseholdImpact>;
+	}[];
+	maxAbsImpact: number;
+}) {
+	return (
+		<div
+			className="rounded-md border bg-background/60 p-2"
+			role="img"
+			aria-label="Representative household gains and losses versus current-policy baseline"
+		>
+			<div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[10px] text-muted-foreground">
+				<span className="inline-flex items-center gap-1">
+					<span className="h-2 w-2 rounded-sm bg-blue-500" aria-hidden="true" />
+					gain
+				</span>
+				<span className="tabular-nums">current-policy baseline = £0/yr</span>
+				<span className="inline-flex items-center gap-1">
+					loss
+					<span className="h-2 w-2 rounded-sm bg-amber-500" aria-hidden="true" />
+				</span>
+			</div>
+			<div className="space-y-1">
+				{impacts.map(({ household, impact }) => {
+					const amount = impact.totalImpactGbp;
+					const isLoss = amount > 0;
+					const widthPct = (Math.abs(amount) / maxAbsImpact) * 50;
+					const shortLabel = household.label
+						.replace("Working ", "")
+						.replace(" pensioner", " pens.")
+						.replace(" couple", " cpl.")
+						.replace(" with ", " + ");
+					return (
+						<div
+							key={household.id}
+							className="grid grid-cols-[minmax(78px,0.55fr)_minmax(0,1fr)_64px] items-center gap-2 text-[10px] tabular-nums"
+						>
+							<span
+								className="truncate text-muted-foreground"
+								title={household.label}
+							>
+								{shortLabel}
+							</span>
+							<div className="relative h-3.5 rounded-sm bg-muted/30 overflow-hidden">
+								<div
+									className={cn(
+										"absolute top-0 bottom-0",
+										isLoss
+											? "left-1/2 bg-amber-500"
+											: "right-1/2 bg-blue-500",
+									)}
+									style={{ width: `${widthPct}%` }}
+									aria-hidden="true"
+								/>
+								<div
+									className="absolute top-0 bottom-0 left-1/2 w-px bg-foreground/40"
+									aria-hidden="true"
+								/>
+							</div>
+							<span
+								className={cn(
+									"text-right",
+									amount > 0
+										? "text-amber-700"
+										: amount < 0
+											? "text-blue-700"
+											: "text-muted-foreground",
+								)}
+							>
+								{formatGbp(amount)}
+							</span>
+						</div>
+					);
+				})}
+			</div>
 		</div>
 	);
 }

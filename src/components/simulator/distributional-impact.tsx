@@ -78,40 +78,53 @@ function DecileChart({
 }) {
 	return (
 		<div
-			className="space-y-0.5"
+			className="rounded-md border bg-background/60 p-2"
 			role="img"
-			aria-label="Per-decile distributional impact"
+			aria-label="Per-decile distributional impact versus current-policy baseline"
 		>
-			{perDecile.map((amount, i) => {
-				const widthPct = (Math.abs(amount) / maxAbs) * 50;
-				const isLoss = amount > 0;
-				return (
-					<div
-						key={i}
-						className="flex items-center gap-1 text-[10px] tabular-nums"
-					>
-						<span className="w-6 text-right text-muted-foreground">
-							{i + 1}
-						</span>
-						<div className="flex-1 h-3 relative bg-muted/30 rounded-sm overflow-hidden">
-							<div
-								className={cn(
-									"absolute top-0 bottom-0",
-									isLoss
-										? "left-1/2 bg-amber-500"
-										: "right-1/2 bg-blue-500",
-								)}
-								style={{ width: `${widthPct}%` }}
-								aria-hidden="true"
-							/>
-							<div
-								className="absolute top-0 bottom-0 left-1/2 w-px bg-foreground/20"
-								aria-hidden="true"
-							/>
+			<div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[10px] text-muted-foreground">
+				<span className="inline-flex items-center gap-1">
+					<span className="h-2 w-2 rounded-sm bg-blue-500" aria-hidden="true" />
+					gain vs baseline
+				</span>
+				<span className="tabular-nums">current-policy baseline = £0</span>
+				<span className="inline-flex items-center gap-1">
+					loss vs baseline
+					<span className="h-2 w-2 rounded-sm bg-amber-500" aria-hidden="true" />
+				</span>
+			</div>
+			<div className="space-y-0.5">
+				{perDecile.map((amount, i) => {
+					const widthPct = (Math.abs(amount) / maxAbs) * 50;
+					const isLoss = amount > 0;
+					return (
+						<div
+							key={i}
+							className="flex items-center gap-1 text-[10px] tabular-nums"
+						>
+							<span className="w-6 text-right text-muted-foreground">
+								D{i + 1}
+							</span>
+							<div className="flex-1 h-3.5 relative bg-muted/30 rounded-sm overflow-hidden">
+								<div
+									className={cn(
+										"absolute top-0 bottom-0",
+										isLoss
+											? "left-1/2 bg-amber-500"
+											: "right-1/2 bg-blue-500",
+									)}
+									style={{ width: `${widthPct}%` }}
+									aria-hidden="true"
+								/>
+								<div
+									className="absolute top-0 bottom-0 left-1/2 w-px bg-foreground/40"
+									aria-hidden="true"
+								/>
+							</div>
 						</div>
-					</div>
-				);
-			})}
+					);
+				})}
+			</div>
 		</div>
 	);
 }
