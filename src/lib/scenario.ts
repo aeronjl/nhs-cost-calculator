@@ -85,6 +85,7 @@ import {
 import {
 	BORROWING,
 	type BorrowingStrategyId,
+	type DebtInstrument,
 	getBorrowingStrategy,
 } from "@/data/levers/borrowing";
 import type { Methodology } from "@/lib/methodology";
@@ -112,6 +113,7 @@ export interface ScenarioLine {
 	leverId: string; // programme id, tax id, or "" for borrow
 	magnitude: number; // % for programme, pp for tax, GBP for borrow
 	borrowingStrategyId?: BorrowingStrategyId;
+	borrowingPortfolio?: readonly DebtInstrument[];
 	borrowingContext?: BorrowingScenarioContext;
 	// "Break the rules" flag: when set, the lever has been forced through
 	// despite a statutory protection or pre-introduction status. The
@@ -535,10 +537,16 @@ export interface ScenarioDiff {
 const lineKey = (l: ScenarioLine): string =>
 	l.type === "borrow" ? "borrow" : `${l.type}:${l.leverId}`;
 
+const portfolioKey = (portfolio: readonly DebtInstrument[] | undefined): string =>
+	portfolio
+		?.map((instrument) => `${instrument.id}:${instrument.share.toFixed(4)}`)
+		.join("|") ?? "";
+
 const lineChanged = (a: ScenarioLine, b: ScenarioLine): boolean =>
 	a.magnitude !== b.magnitude ||
 	!!a.overridden !== !!b.overridden ||
 	a.borrowingStrategyId !== b.borrowingStrategyId ||
+	portfolioKey(a.borrowingPortfolio) !== portfolioKey(b.borrowingPortfolio) ||
 	serializeBorrowingContext(a.borrowingContext) !==
 		serializeBorrowingContext(b.borrowingContext);
 
@@ -572,6 +580,7 @@ const distributionDeltaForLine = (evaluation: LineEvaluation): number => {
 	return (
 		projectBorrowingPath(evaluation.line.magnitude, 5, {
 			strategyId: evaluation.line.borrowingStrategyId,
+			portfolio: evaluation.line.borrowingPortfolio,
 		})[4]?.interestCostGbp ?? 0
 	);
 };
@@ -1225,6 +1234,7 @@ const projectScenarioWithMacroPath = (
 					),
 					inflation: a.inflation,
 					strategyId: ev.line.borrowingStrategyId,
+					portfolio: ev.line.borrowingPortfolio,
 					yieldCurveShift:
 						a.yieldCurveShift + macroState.giltYieldDeviationPp / 100,
 					cpiDeviationPp: macroState.cpiDeviationPp,
@@ -1374,6 +1384,7 @@ export const projectScenarioBandsByYear = (
 						inflation: a.inflation,
 						yieldCurveShift: a.yieldCurveShift,
 						strategyId: line.borrowingStrategyId,
+						portfolio: line.borrowingPortfolio,
 					})[y - 1]!.netFundingGbp;
 				} else if (line.type === "tax") {
 					const lever = getTaxLever(line.leverId);
@@ -1436,6 +1447,7 @@ export const projectScenarioOverYears = (
 					inflation: a.inflation,
 					yieldCurveShift: a.yieldCurveShift,
 					strategyId: ev.line.borrowingStrategyId,
+					portfolio: ev.line.borrowingPortfolio,
 				})[y - 1]!;
 				delta = borrowing.netFundingGbp;
 				psnbShift += borrowing.psnbShiftGbp;

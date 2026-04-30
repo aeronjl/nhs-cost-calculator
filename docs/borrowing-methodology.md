@@ -56,6 +56,8 @@ optimised_mix =
 
 This is not a security-by-security DMO order book. It is a reduced-form optimiser for the marginal financing package, designed to show when the user's selected strategy is materially away from the model's least-cost-risk portfolio.
 
+The reference page also runs a fixed strategy comparison for an illustrative £50bn borrowing package. It scores the DMO-style blend, short-funded, long-funded, index-linked-heavy, and optimiser-generated portfolios on the same basis: central year-5 interest, cumulative debt-service objective, worst deterministic stress case, stochastic regime-fan p95 interest, fiscal-rule breach/tightness probabilities, and the binding market/investor bottleneck. The optimised row is simulated with its actual portfolio override rather than mapped back to a named strategy.
+
 ## Market Absorption
 
 Each strategy is also checked against annual DMO-style issuance buckets. The model estimates the marginal issuance allocated to each maturity/type bucket and adds a weighted APF/QT competing-supply proxy, because gilt sales or runoff from the Bank of England portfolio can absorb investor balance sheet capacity at the same time as new DMO issuance.

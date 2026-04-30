@@ -452,6 +452,7 @@ const borrowingRegimeForScenario = (
 	if (amountGbp <= 0) return null;
 	return estimateBorrowingStressRegime(amountGbp, years, {
 		strategyId: largestBorrowingLine?.line.borrowingStrategyId,
+		portfolio: largestBorrowingLine?.line.borrowingPortfolio,
 		context: largestBorrowingLine?.line.borrowingContext,
 	});
 };

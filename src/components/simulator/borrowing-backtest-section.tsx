@@ -1,5 +1,3 @@
-"use client";
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
 	auditBorrowingRegimeCalibration,
@@ -9,6 +7,7 @@ import {
 	observedRangeLabel,
 	summarizeBorrowingBacktests,
 } from "@/lib/borrowing-backtest";
+import { compareBorrowingStrategies } from "@/lib/borrowing-strategy-comparison";
 import type { BorrowingStressRegimeId } from "@/lib/borrowing-regime";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +19,9 @@ const formatBn = (n: number): string => {
 };
 
 const formatBp = (n: number): string => `${Math.round(n)}bp`;
+
+const formatSignedBn = (n: number): string =>
+	`${n >= 0 ? "+" : "-"}${formatBn(Math.abs(n))}`;
 
 const formatSignedBp = (n: number): string =>
 	`${n > 0 ? "+" : ""}${Math.round(n)}bp`;
@@ -75,6 +77,7 @@ const balanceSheetPressureBp = (result: BorrowingBacktestResult): number =>
 export function BorrowingBacktestSection() {
 	const summary = summarizeBorrowingBacktests();
 	const calibrationAudit = auditBorrowingRegimeCalibration();
+	const strategyComparison = compareBorrowingStrategies();
 	const { results } = summary;
 	if (results.length === 0) return null;
 
@@ -117,6 +120,116 @@ export function BorrowingBacktestSection() {
 						alone: credibility loss in 2022, or monetary-policy backstop in
 						2020.
 					</p>
+				</div>
+
+				<div className="space-y-3">
+					<div>
+						<h3 className="text-sm font-semibold">
+							Strategy comparison
+						</h3>
+						<p className="text-xs text-muted-foreground mt-1">
+							Illustrative {formatBn(strategyComparison.amountGbp)} borrowing
+							package over {strategyComparison.years} years. The optimised mix is
+							compared with named financing strategies across central costs,
+							stress cases, regime fans, and fiscal-rule tails.
+						</p>
+					</div>
+					<div className="overflow-x-auto rounded-lg border">
+						<table className="w-full min-w-[980px] text-xs">
+							<thead className="bg-muted/50 text-muted-foreground">
+								<tr className="text-left">
+									<th className="px-3 py-2 font-medium">Strategy</th>
+									<th className="px-3 py-2 font-medium">Portfolio</th>
+									<th className="px-3 py-2 font-medium">Central cost</th>
+									<th className="px-3 py-2 font-medium">Stress / regime tail</th>
+									<th className="px-3 py-2 font-medium">Fiscal-rule tail</th>
+									<th className="px-3 py-2 font-medium">Market bottleneck</th>
+								</tr>
+							</thead>
+							<tbody className="divide-y">
+								{strategyComparison.rows.map((row) => (
+									<tr
+										key={row.id}
+										className={cn(
+											"align-top",
+											row.isOptimised && "bg-blue-50/50",
+										)}
+									>
+										<td className="px-3 py-2">
+											<div className="font-semibold">
+												{row.label}
+												{row.isOptimised && (
+													<span className="ml-2 rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[10px] uppercase tracking-wider text-blue-800">
+														optimised
+													</span>
+												)}
+											</div>
+											<div className="text-muted-foreground leading-snug">
+												{row.description}
+											</div>
+										</td>
+										<td className="px-3 py-2 tabular-nums">
+											<div>{row.averageMaturityYears.toFixed(1)}y avg</div>
+											<div className="text-muted-foreground">
+												bills {formatPct(row.treasuryBillShare)}
+											</div>
+											<div className="text-muted-foreground">
+												index-linked {formatPct(row.indexLinkedShare)}
+											</div>
+										</td>
+										<td className="px-3 py-2 tabular-nums">
+											<div>
+												Y{strategyComparison.years}{" "}
+												{formatBn(row.centralFinalInterestGbp)}
+											</div>
+											<div className="text-muted-foreground">
+												cumulative {formatBn(row.centralCumulativeInterestGbp)}
+											</div>
+											<div className="text-muted-foreground">
+												objective {formatBn(row.objectiveGbp)}
+											</div>
+										</td>
+										<td className="px-3 py-2 tabular-nums">
+											<div>
+												{row.worstStressLabel}{" "}
+												{formatBn(row.worstStressFinalInterestGbp)}
+											</div>
+											<div className="text-muted-foreground">
+												regime p95 {formatBn(row.regimeInterestP95Gbp)}
+											</div>
+											<div className="text-muted-foreground">
+												{row.regimeTopLabel}{" "}
+												{formatProbability(row.regimeTopProbability)} ·{" "}
+												{formatSignedBp(row.expectedRegimeOverlayBp)}
+											</div>
+										</td>
+										<td className="px-3 py-2 tabular-nums">
+											<div>
+												breach {formatProbability(row.fiscalBreachProbability)}
+											</div>
+											<div className="text-muted-foreground">
+												tight/breach{" "}
+												{formatProbability(row.fiscalTightOrBreachProbability)}
+											</div>
+											<div className="text-muted-foreground">
+												p5 headroom {formatSignedBn(row.fiscalHeadroomP5Gbp)}
+											</div>
+										</td>
+										<td className="px-3 py-2 tabular-nums">
+											<div>{formatBp(row.peakMarketPressureBp)} peak</div>
+											<div className="text-muted-foreground">
+												{row.peakAbsorptionStressIndex.toFixed(1)}x{" "}
+												{row.bottleneckInstrumentLabel}
+											</div>
+											<div className="text-muted-foreground">
+												{row.investorBottleneckLabel}
+											</div>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
 				</div>
 
 				<div className="space-y-3">

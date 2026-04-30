@@ -119,6 +119,7 @@ export interface BorrowingStressCase {
 export interface BorrowingStrategyFrontierCase {
 	id: BorrowingStrategyId | "optimised";
 	label: string;
+	portfolio: readonly DebtInstrument[];
 	path: BorrowingYear[];
 	cumulativeInterestCostGbp: number;
 	finalInterestCostGbp: number;
@@ -936,6 +937,7 @@ const scoreBorrowingPortfolio = (
 	return {
 		id,
 		label,
+		portfolio,
 		path,
 		cumulativeInterestCostGbp,
 		finalInterestCostGbp: finalYear.interestCostGbp,

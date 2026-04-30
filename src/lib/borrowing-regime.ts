@@ -1,5 +1,5 @@
 import { BORROWING_BACKTEST_EPISODES } from "@/data/borrowing-backtests";
-import { BORROWING, type BorrowingStrategyId } from "@/data/levers/borrowing";
+import { BORROWING } from "@/data/levers/borrowing";
 import {
 	type BorrowingFanYear,
 	type BorrowingMarketReactionYear,
@@ -282,13 +282,11 @@ const stressRatingFor = (
 export const estimateBorrowingStressRegime = (
 	amountGbp: number,
 	years: number,
-	assumptions: {
-		strategyId?: BorrowingStrategyId;
-		context?: BorrowingScenarioContext;
-	} = {},
+	assumptions: BorrowingRegimeAssumptions = {},
 ): BorrowingRegimeEstimate => {
 	const path = projectBorrowingMarketReactionPath(amountGbp, years, {
 		strategyId: assumptions.strategyId ?? "dmo-remit",
+		portfolio: assumptions.portfolio,
 	});
 	const features = featuresForPath(amountGbp, path);
 	const context = assumptions.context ?? {};
@@ -379,6 +377,7 @@ export const projectBorrowingRegimeFan = (
 	const centralPath = projectBorrowingPath(amount, years, assumptions);
 	const regimeEstimate = estimateBorrowingStressRegime(amount, years, {
 		strategyId: assumptions.strategyId,
+		portfolio: assumptions.portfolio,
 		context: assumptions.context,
 	});
 	const rng = seededRng(seed);
