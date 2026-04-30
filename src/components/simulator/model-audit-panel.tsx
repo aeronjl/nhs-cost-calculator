@@ -82,6 +82,17 @@ const formatSignedPp = (n: number): string => {
 const formatBp = (n: number | null): string =>
 	n === null ? "n/a" : `${Math.round(n)}bp`;
 
+type AuditTone = "blue" | "amber" | "red" | "muted";
+
+const auditToneClassName = (tone: AuditTone): string =>
+	tone === "blue"
+		? "text-blue-700"
+		: tone === "amber"
+			? "text-amber-700"
+			: tone === "red"
+				? "text-red-700"
+				: "text-muted-foreground";
+
 const exportFilename = (kind: "md" | "json", generatedAt: string): string =>
 	`model-audit-${generatedAt.slice(0, 10)}.${kind}`;
 
@@ -380,6 +391,8 @@ export function ModelAuditPanel({ audit }: Props) {
 					</span>
 				</div>
 			</div>
+
+			<AuditExecutiveSummary audit={audit} items={qualityChecklist} />
 
 			<ReportQualityChecklist items={qualityChecklist} />
 
@@ -1042,6 +1055,215 @@ export function ModelAuditPanel({ audit }: Props) {
 						{JSON.stringify(audit, null, 2)}
 					</pre>
 				</details>
+			</div>
+		</div>
+	);
+}
+
+function AuditExecutiveSummary({
+	audit,
+	items,
+}: {
+	audit: ModelAuditEvidencePack;
+	items: readonly ChecklistItem[];
+}) {
+	const present = items.filter((item) => item.status === "present").length;
+	const missingItems = items.filter((item) => item.status === "missing");
+	const notApplicable = items.filter(
+		(item) => item.status === "not-applicable",
+	).length;
+	const evidenceTone: AuditTone = missingItems.length > 0 ? "amber" : "blue";
+	const breachRisk = audit.liveRisk.breachProbability;
+	const breachTone: AuditTone =
+		breachRisk === null
+			? "muted"
+			: breachRisk > 0.25
+				? "red"
+				: breachRisk > 0.1
+					? "amber"
+					: "blue";
+	const postReactionTone: AuditTone =
+		audit.liveRisk.postReactionBreachProbability === null
+			? "muted"
+			: audit.liveRisk.postReactionBreachProbability > 0.25
+				? "red"
+				: audit.liveRisk.postReactionBreachProbability > 0.1
+					? "amber"
+					: "blue";
+	const borrowingTone: AuditTone =
+		audit.liveRisk.borrowingStressRating === "stress"
+			? "red"
+			: audit.liveRisk.borrowingStressRating === "watch"
+				? "amber"
+				: audit.scenario.borrowingAmountGbp > 0
+					? "blue"
+					: "muted";
+	const priorityPoints = [
+		missingItems.length > 0
+			? {
+					label: "Evidence gaps",
+					detail: missingItems.map((item) => item.label).join(", "),
+					tone: "amber" as AuditTone,
+				}
+			: null,
+		audit.liveRisk.largestDownsideLayerLabel
+			? {
+					label: "Downside layer",
+					detail: audit.liveRisk.largestDownsideLayerLabel,
+					tone: "amber" as AuditTone,
+				}
+			: null,
+		audit.liveRisk.borrowingRegimeLabel
+			? {
+					label: "Borrowing regime",
+					detail: `${audit.liveRisk.borrowingRegimeLabel}; peak pressure ${formatBp(
+						audit.liveRisk.borrowingExpectedPeakPressureBp,
+					)}`,
+					tone: borrowingTone,
+				}
+			: null,
+		audit.liveRisk.priorSensitivityRows.length > 0
+			? {
+					label: "Prior sensitivity",
+					detail: `${audit.liveRisk.priorSensitivityRows.length} reaction-prior cases`,
+					tone: "blue" as AuditTone,
+				}
+			: null,
+		audit.limitations.length > 0
+			? {
+					label: "Known limitations",
+					detail: `${audit.limitations.length} caveat${
+						audit.limitations.length === 1 ? "" : "s"
+					} retained in appendix`,
+					tone: "muted" as AuditTone,
+				}
+			: null,
+	].filter(Boolean) as readonly {
+		label: string;
+		detail: string;
+		tone: AuditTone;
+	}[];
+
+	return (
+		<div className="rounded-md border bg-background/70 p-3 text-[10px]">
+			<div className="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(300px,0.85fr)] lg:items-start">
+				<div>
+					<div
+						className={cn(
+							"inline-flex items-center rounded-full border px-2 py-0.5 font-semibold uppercase tracking-wide",
+							missingItems.length > 0
+								? "border-amber-200 bg-amber-50 text-amber-900"
+								: "border-blue-200 bg-blue-50 text-blue-800",
+						)}
+					>
+						Executive audit summary
+					</div>
+					<h4 className="mt-2 text-sm font-semibold text-foreground">
+						{missingItems.length > 0
+							? "Evidence pack has review gaps"
+							: "Evidence pack covers the core research modules"}
+					</h4>
+					<p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+						{present} of {items.length} audit modules are present
+						{notApplicable > 0 ? ` (${notApplicable} not applicable)` : ""}.
+						The summary below keeps the main assurance tests visible before
+						the detailed ledgers, stress grids, and calibration tables.
+					</p>
+				</div>
+
+				<div className="grid grid-cols-2 gap-2">
+					<AuditHeadlineMetric
+						label="Evidence modules"
+						value={`${present}/${items.length}`}
+						detail={
+							missingItems.length > 0
+								? `${missingItems.length} gap${
+										missingItems.length === 1 ? "" : "s"
+									}`
+								: "complete core pack"
+						}
+						tone={evidenceTone}
+					/>
+					<AuditHeadlineMetric
+						label="Raw breach risk"
+						value={formatProbability(breachRisk)}
+						detail="pre-reaction fan"
+						tone={breachTone}
+					/>
+					<AuditHeadlineMetric
+						label="Post-reaction"
+						value={formatProbability(
+							audit.liveRisk.postReactionBreachProbability,
+						)}
+						detail={audit.liveRisk.topReactionPackageLabel ?? "no offset"}
+						tone={postReactionTone}
+					/>
+					<AuditHeadlineMetric
+						label="Borrowing stress"
+						value={audit.liveRisk.borrowingStressRating ?? "n/a"}
+						detail={
+							audit.liveRisk.borrowingRegimeLabel ??
+							(audit.scenario.borrowingAmountGbp > 0
+								? "no regime estimate"
+								: "no borrowing line")
+						}
+						tone={borrowingTone}
+					/>
+				</div>
+			</div>
+
+			{priorityPoints.length > 0 && (
+				<div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+					{priorityPoints.map((point) => (
+						<div
+							key={point.label}
+							className="border-l-2 border-border pl-2"
+						>
+							<div
+								className={cn(
+									"font-medium",
+									auditToneClassName(point.tone),
+								)}
+							>
+								{point.label}
+							</div>
+							<div className="mt-0.5 leading-snug text-muted-foreground">
+								{point.detail}
+							</div>
+						</div>
+					))}
+				</div>
+			)}
+		</div>
+	);
+}
+
+function AuditHeadlineMetric({
+	label,
+	value,
+	detail,
+	tone,
+}: {
+	label: string;
+	value: string;
+	detail: string;
+	tone: AuditTone;
+}) {
+	return (
+		<div className="rounded-sm border bg-muted/20 p-2">
+			<div className="uppercase tracking-wider text-muted-foreground">
+				{label}
+			</div>
+			<div
+				className={cn(
+					"mt-0.5 text-sm font-semibold tabular-nums",
+					auditToneClassName(tone),
+				)}
+			>
+				{value}
+			</div>
+			<div className="mt-0.5 leading-snug text-muted-foreground">
+				{detail}
 			</div>
 		</div>
 	);

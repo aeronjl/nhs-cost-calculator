@@ -80,6 +80,28 @@ const formatImpactPct = (n: number): string => {
 	return "0%";
 };
 
+const riskClassName = (
+	risk: BaselineComparison["diagnostics"]["riskRating"],
+): string =>
+	risk === "breach"
+		? "border-red-200 bg-red-50 text-red-800"
+		: risk === "tight"
+			? "border-amber-200 bg-amber-50 text-amber-900"
+			: risk === "watch"
+				? "border-yellow-200 bg-yellow-50 text-yellow-900"
+				: "border-blue-200 bg-blue-50 text-blue-800";
+
+const metricToneClassName = (
+	tone: "blue" | "amber" | "red" | "muted",
+): string =>
+	tone === "blue"
+		? "text-blue-700"
+		: tone === "amber"
+			? "text-amber-700"
+			: tone === "red"
+				? "text-red-700"
+				: "text-muted-foreground";
+
 export function BaselineComparisonPanel({
 	comparison,
 	fiscalRuleFan,
@@ -101,6 +123,33 @@ export function BaselineComparisonPanel({
 	const ruleBroken = adjustedStabilityHeadroom < 0;
 	const meaningfulShift =
 		years.some((y) => Math.abs(y.psnbShift) > 1_000_000_000);
+	const psnbDelta = lastYear.adjustedPsnb - lastYear.baselinePsnb;
+	const headroomDelta =
+		adjustedStabilityHeadroom - baseline.stabilityRuleHeadroom;
+	const psnbTone =
+		lastYear.psnbShift > 0
+			? "blue"
+			: lastYear.psnbShift < 0
+				? "amber"
+				: "muted";
+	const headroomTone = ruleBroken
+		? "red"
+		: headroomDelta > 0
+			? "blue"
+			: headroomDelta < 0
+				? "amber"
+				: "muted";
+	const psnbDirection =
+		lastYear.psnbShift > 0
+			? `improves final-year PSNB by ${formatBn(lastYear.psnbShift)}`
+			: lastYear.psnbShift < 0
+				? `worsens final-year PSNB by ${formatBn(Math.abs(lastYear.psnbShift))}`
+				: "leaves final-year PSNB broadly unchanged";
+	const headroomDirection = ruleYear
+		? ruleBroken
+			? `breaks the rule by ${formatBn(Math.abs(adjustedStabilityHeadroom))}`
+			: `leaves ${formatBn(adjustedStabilityHeadroom)} of rule headroom`
+		: "has no matched rule-year baseline";
 	const topReactionPackage = fiscalRuleFan?.reactionPackageMix
 		.filter((row) => row.count > 0)
 		.slice()
@@ -115,6 +164,93 @@ export function BaselineComparisonPanel({
 				<span className="text-[10px] text-muted-foreground">
 					{baseline.asOf} EFO
 				</span>
+			</div>
+
+			<div className="rounded-md border bg-background/70 p-3">
+				<div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)] lg:items-start">
+					<div>
+						<div
+							className={cn(
+								"inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+								riskClassName(diagnostics.riskRating),
+							)}
+						>
+							{diagnostics.riskRating} fiscal risk
+						</div>
+						<p className="mt-2 text-sm leading-snug text-foreground">
+							Against the {baseline.asOf} baseline, this scenario{" "}
+							<span className={cn("font-medium", metricToneClassName(psnbTone))}>
+								{psnbDirection}
+							</span>{" "}
+							and{" "}
+							<span
+								className={cn("font-medium", metricToneClassName(headroomTone))}
+							>
+								{headroomDirection}
+							</span>
+							.
+						</p>
+						<p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+							{diagnostics.note}
+						</p>
+					</div>
+					<div className="grid grid-cols-2 gap-2">
+						<ExecutiveMetric
+							label={`${lastYear.fiscalYear} PSNB move`}
+							value={formatBnDelta(psnbDelta)}
+							detail={`${formatPct(lastYear.baselinePsnbPctGdp)} → ${formatPct(
+								lastYear.adjustedPsnbPctGdp,
+							)} of GDP`}
+							tone={psnbTone}
+						/>
+						<ExecutiveMetric
+							label="Rule headroom"
+							value={formatBn(adjustedStabilityHeadroom)}
+							detail={`${formatBnDelta(headroomDelta)} vs baseline`}
+							tone={headroomTone}
+						/>
+						<ExecutiveMetric
+							label="Breach risk"
+							value={
+								fiscalRuleFan
+									? formatProbability(fiscalRuleFan.breachProbability)
+									: diagnostics.riskRating
+							}
+							detail={
+								fiscalRuleFan
+									? `${formatProbability(
+											fiscalRuleFan.postReactionBreachProbability,
+										)} after reaction`
+									: "central case only"
+							}
+							tone={
+								fiscalRuleFan && fiscalRuleFan.breachProbability > 0.25
+									? "red"
+									: fiscalRuleFan && fiscalRuleFan.breachProbability > 0.1
+										? "amber"
+										: diagnostics.riskRating === "breach"
+											? "red"
+											: diagnostics.riskRating === "tight"
+												? "amber"
+												: "blue"
+							}
+						/>
+						<ExecutiveMetric
+							label="Reaction need"
+							value={
+								diagnostics.policyReactionGbp > 0
+									? formatBn(diagnostics.policyReactionGbp)
+									: "none"
+							}
+							detail={
+								topReactionPackage
+									? `usually ${topReactionPackage.label}`
+									: "no offset package triggered"
+							}
+							tone={diagnostics.policyReactionGbp > 0 ? "amber" : "blue"}
+						/>
+					</div>
+				</div>
 			</div>
 
 			<div className="rounded-md border bg-background/60 p-3 space-y-3">
@@ -652,6 +788,37 @@ export function BaselineComparisonPanel({
 				includes announced policy. Encoding a scenario that replays a budget
 				already in the baseline would double-count.
 			</p>
+		</div>
+	);
+}
+
+function ExecutiveMetric({
+	label,
+	value,
+	detail,
+	tone,
+}: {
+	label: string;
+	value: string;
+	detail: string;
+	tone: "blue" | "amber" | "red" | "muted";
+}) {
+	return (
+		<div className="rounded-sm border bg-muted/20 p-2">
+			<div className="text-[9px] uppercase tracking-wider text-muted-foreground">
+				{label}
+			</div>
+			<div
+				className={cn(
+					"mt-0.5 text-sm font-semibold tabular-nums",
+					metricToneClassName(tone),
+				)}
+			>
+				{value}
+			</div>
+			<div className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+				{detail}
+			</div>
 		</div>
 	);
 }
