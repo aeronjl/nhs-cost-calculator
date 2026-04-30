@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+	type ReactNode,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import {
 	Check,
 	CheckCircle2,
@@ -552,19 +558,13 @@ export function ModelAuditPanel({ audit }: Props) {
 				)}
 
 				{borrowingScenarioComparison && (
-					<div
+					<AuditDisclosureSection
 						id={AUDIT_TARGETS.borrowingMatrix}
-						className="scroll-mt-24 rounded-sm border bg-muted/20 p-2 space-y-2"
+						title="Borrowing scenario matrix"
+						meta={`${formatBn(borrowingScenarioComparison.amountGbp)} over ${
+							borrowingScenarioComparison.years
+						} years`}
 					>
-						<div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-							<span className="font-medium text-foreground">
-								Borrowing scenario matrix
-							</span>
-							<span className="text-muted-foreground tabular-nums">
-								{formatBn(borrowingScenarioComparison.amountGbp)} over{" "}
-								{borrowingScenarioComparison.years} years
-							</span>
-						</div>
 						<div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
 							<Metric
 								label="Best headroom"
@@ -653,22 +653,15 @@ export function ModelAuditPanel({ audit }: Props) {
 								</tbody>
 							</table>
 						</div>
-					</div>
+					</AuditDisclosureSection>
 				)}
 
 				{macroStressLab && (
-					<div
+					<AuditDisclosureSection
 						id={AUDIT_TARGETS.macroStress}
-						className="scroll-mt-24 rounded-sm border bg-muted/20 p-2 space-y-2"
+						title="Macro stress lab"
+						meta={`rule year ${macroStressLab.ruleYear}`}
 					>
-						<div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-							<span className="font-medium text-foreground">
-								Macro stress lab
-							</span>
-							<span className="text-muted-foreground">
-								Rule year {macroStressLab.ruleYear}
-							</span>
-						</div>
 						<div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
 							<Metric
 								label="Central headroom"
@@ -733,23 +726,15 @@ export function ModelAuditPanel({ audit }: Props) {
 								</tbody>
 							</table>
 						</div>
-					</div>
+					</AuditDisclosureSection>
 				)}
 
 				{provenanceLedger.rows.length > 0 && (
-					<div
+					<AuditDisclosureSection
 						id={AUDIT_TARGETS.provenance}
-						className="scroll-mt-24 rounded-sm border bg-muted/20 p-2 space-y-2"
+						title="Scenario provenance ledger"
+						meta={`${provenanceLedger.sourceLinkedRows}/${provenanceLedger.rows.length} source-linked · ${provenanceLedger.rangeBackedRows} range-backed`}
 					>
-						<div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-							<span className="font-medium text-foreground">
-								Scenario provenance ledger
-							</span>
-							<span className="text-muted-foreground tabular-nums">
-								{provenanceLedger.sourceLinkedRows}/{provenanceLedger.rows.length}{" "}
-								source-linked · {provenanceLedger.rangeBackedRows} range-backed
-							</span>
-						</div>
 						<div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
 							<Metric
 								label="Behavioural adjustment"
@@ -851,10 +836,14 @@ export function ModelAuditPanel({ audit }: Props) {
 								</tbody>
 							</table>
 						</div>
-					</div>
+					</AuditDisclosureSection>
 				)}
 
-				<div id={AUDIT_TARGETS.calibration} className="scroll-mt-24 space-y-2">
+				<AuditDisclosureSection
+					id={AUDIT_TARGETS.calibration}
+					title="Calibration and backtests"
+					meta={`${calibration.length} calibrations`}
+				>
 					<div className="overflow-x-auto rounded-sm border bg-muted/20">
 						<table className="w-full min-w-[620px] tabular-nums">
 							<thead className="text-muted-foreground">
@@ -902,7 +891,7 @@ export function ModelAuditPanel({ audit }: Props) {
 							value={`${backtests.fiscalReactionPriorFit} vs ${backtests.fiscalReactionRuleOnlyFit} rule-only`}
 						/>
 					</div>
-				</div>
+				</AuditDisclosureSection>
 
 				{liveRisk.regimeProbabilities.length > 0 && (
 					<div
@@ -947,98 +936,104 @@ export function ModelAuditPanel({ audit }: Props) {
 				)}
 
 				{liveRisk.uncertaintyLayers.length > 0 && (
-					<div
+					<AuditDisclosureSection
 						id={AUDIT_TARGETS.uncertainty}
-						className="scroll-mt-24 overflow-x-auto rounded-sm border bg-muted/20"
+						title="Uncertainty layers"
+						meta={`${liveRisk.uncertaintyLayers.length} layers`}
 					>
-						<table className="w-full min-w-[560px] tabular-nums">
-							<thead className="text-muted-foreground">
-								<tr className="text-left">
-									<th className="px-2 py-1 font-medium">Risk layer</th>
-									<th className="px-2 py-1 font-medium">Breach</th>
-									<th className="px-2 py-1 font-medium">p5 headroom</th>
-									<th className="px-2 py-1 font-medium">p5 move</th>
-								</tr>
-							</thead>
-							<tbody>
-								{liveRisk.uncertaintyLayers.map((row) => (
-									<tr key={row.label} className="border-t border-border/60">
-										<td className="px-2 py-1 font-medium text-foreground">
-											{row.label}
-										</td>
-										<td className="px-2 py-1">
-											{formatProbability(row.breachProbability)}
-										</td>
-										<td className="px-2 py-1">
-											{formatBn(row.p5HeadroomGbp)}
-										</td>
-										<td
-											className={cn(
-												"px-2 py-1",
-												row.p5MoveGbp < -250_000_000
-													? "text-red-700"
-													: row.p5MoveGbp > 250_000_000
-														? "text-blue-700"
-														: "text-muted-foreground",
-											)}
-										>
-											{row.label === "Central path"
-												? "base"
-												: formatBnDelta(row.p5MoveGbp)}
-										</td>
+						<div className="overflow-x-auto rounded-sm border bg-background/70">
+							<table className="w-full min-w-[560px] tabular-nums">
+								<thead className="text-muted-foreground">
+									<tr className="text-left">
+										<th className="px-2 py-1 font-medium">Risk layer</th>
+										<th className="px-2 py-1 font-medium">Breach</th>
+										<th className="px-2 py-1 font-medium">p5 headroom</th>
+										<th className="px-2 py-1 font-medium">p5 move</th>
 									</tr>
-								))}
-							</tbody>
-						</table>
+								</thead>
+								<tbody>
+									{liveRisk.uncertaintyLayers.map((row) => (
+										<tr key={row.label} className="border-t border-border/60">
+											<td className="px-2 py-1 font-medium text-foreground">
+												{row.label}
+											</td>
+											<td className="px-2 py-1">
+												{formatProbability(row.breachProbability)}
+											</td>
+											<td className="px-2 py-1">
+												{formatBn(row.p5HeadroomGbp)}
+											</td>
+											<td
+												className={cn(
+													"px-2 py-1",
+													row.p5MoveGbp < -250_000_000
+														? "text-red-700"
+														: row.p5MoveGbp > 250_000_000
+															? "text-blue-700"
+															: "text-muted-foreground",
+												)}
+											>
+												{row.label === "Central path"
+													? "base"
+													: formatBnDelta(row.p5MoveGbp)}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
 						{liveRisk.largestDownsideLayerLabel && (
-							<div className="border-t px-2 py-1 text-muted-foreground">
+							<div className="text-muted-foreground">
 								Largest downside layer:{" "}
 								<span className="font-medium text-foreground">
 									{liveRisk.largestDownsideLayerLabel}
 								</span>
 							</div>
 						)}
-					</div>
+					</AuditDisclosureSection>
 				)}
 
 				{liveRisk.priorSensitivityRows.length > 0 && (
-					<div
+					<AuditDisclosureSection
 						id={AUDIT_TARGETS.priorSensitivity}
-						className="scroll-mt-24 overflow-x-auto rounded-sm border bg-muted/20"
+						title="Prior sensitivity"
+						meta={`${liveRisk.priorSensitivityRows.length} cases`}
 					>
-						<table className="w-full min-w-[560px] tabular-nums">
-							<thead className="text-muted-foreground">
-								<tr className="text-left">
-									<th className="px-2 py-1 font-medium">Prior</th>
-									<th className="px-2 py-1 font-medium">Dominant package</th>
-									<th className="px-2 py-1 font-medium">Trigger</th>
-									<th className="px-2 py-1 font-medium">Post-breach</th>
-									<th className="px-2 py-1 font-medium">p95 action</th>
-								</tr>
-							</thead>
-							<tbody>
-								{liveRisk.priorSensitivityRows.map((row) => (
-									<tr key={row.label} className="border-t border-border/60">
-										<td className="px-2 py-1 font-medium text-foreground">
-											{row.label}
-										</td>
-										<td className="px-2 py-1">
-											{row.dominantPackageLabel ?? "none"}
-										</td>
-										<td className="px-2 py-1">
-											{formatProbability(row.triggerProbability)}
-										</td>
-										<td className="px-2 py-1">
-											{formatProbability(row.postReactionBreachProbability)}
-										</td>
-										<td className="px-2 py-1">
-											{formatBn(row.p95GrossActionGbp)}
-										</td>
+						<div className="overflow-x-auto rounded-sm border bg-background/70">
+							<table className="w-full min-w-[560px] tabular-nums">
+								<thead className="text-muted-foreground">
+									<tr className="text-left">
+										<th className="px-2 py-1 font-medium">Prior</th>
+										<th className="px-2 py-1 font-medium">Dominant package</th>
+										<th className="px-2 py-1 font-medium">Trigger</th>
+										<th className="px-2 py-1 font-medium">Post-breach</th>
+										<th className="px-2 py-1 font-medium">p95 action</th>
 									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
+								</thead>
+								<tbody>
+									{liveRisk.priorSensitivityRows.map((row) => (
+										<tr key={row.label} className="border-t border-border/60">
+											<td className="px-2 py-1 font-medium text-foreground">
+												{row.label}
+											</td>
+											<td className="px-2 py-1">
+												{row.dominantPackageLabel ?? "none"}
+											</td>
+											<td className="px-2 py-1">
+												{formatProbability(row.triggerProbability)}
+											</td>
+											<td className="px-2 py-1">
+												{formatProbability(row.postReactionBreachProbability)}
+											</td>
+											<td className="px-2 py-1">
+												{formatBn(row.p95GrossActionGbp)}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					</AuditDisclosureSection>
 				)}
 
 				<ul className="space-y-1 border-t pt-2 text-muted-foreground leading-snug">
@@ -1266,6 +1261,40 @@ function AuditHeadlineMetric({
 				{detail}
 			</div>
 		</div>
+	);
+}
+
+function AuditDisclosureSection({
+	id,
+	title,
+	meta,
+	children,
+	defaultOpen = false,
+}: {
+	id?: string;
+	title: string;
+	meta?: string;
+	children: ReactNode;
+	defaultOpen?: boolean;
+}) {
+	return (
+		<details
+			id={id}
+			open={defaultOpen}
+			className="scroll-mt-24 rounded-sm border bg-muted/20 p-2"
+		>
+			<summary className="cursor-pointer">
+				<div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+					<span className="font-medium text-foreground">{title}</span>
+					{meta && (
+						<span className="text-muted-foreground tabular-nums">
+							{meta}
+						</span>
+					)}
+				</div>
+			</summary>
+			<div className="mt-2 space-y-2">{children}</div>
+		</details>
 	);
 }
 

@@ -343,13 +343,20 @@ export function BaselineComparisonPanel({
 						)}
 						{fiscalRuleUncertaintyDecomposition &&
 							fiscalRuleUncertaintyDecomposition.layers.length > 1 && (
-								<div className="mt-1.5 rounded-sm bg-muted/40 px-2 py-1.5 text-[10px] text-muted-foreground">
-									<div className="mb-1 flex items-baseline justify-between gap-2">
+								<details className="mt-1.5 rounded-sm border bg-muted/30 px-2 py-1.5 text-[10px] text-muted-foreground">
+									<summary className="cursor-pointer list-none">
+										<div className="flex items-baseline justify-between gap-2">
+											<span className="font-medium text-foreground">
+												Show fiscal uncertainty decomposition
+											</span>
+											<span className="tabular-nums">
+												{fiscalRuleUncertaintyDecomposition.samples} draws
+											</span>
+										</div>
+									</summary>
+									<div className="mt-2 mb-1 flex items-baseline justify-between gap-2">
 										<span className="font-medium text-foreground">
 											Uncertainty decomposition
-										</span>
-										<span className="tabular-nums">
-											{fiscalRuleUncertaintyDecomposition.samples} draws
 										</span>
 									</div>
 									<div className="overflow-x-auto">
@@ -428,7 +435,7 @@ export function BaselineComparisonPanel({
 										Negative p5 moves add downside headroom risk; positive
 										moves show mitigation from the policy-reaction branch.
 									</div>
-								</div>
+								</details>
 							)}
 						{fiscalRuleFan &&
 							fiscalRuleFan.policyReactionTriggeredProbability > 0 && (
@@ -467,13 +474,20 @@ export function BaselineComparisonPanel({
 							)}
 						{fiscalRulePriorSensitivity &&
 							fiscalRulePriorSensitivity.rows.length > 1 && (
-								<div className="mt-1.5 rounded-sm bg-muted/40 px-2 py-1.5 text-[10px] text-muted-foreground">
-									<div className="mb-1 flex items-baseline justify-between gap-2">
+								<details className="mt-1.5 rounded-sm border bg-muted/30 px-2 py-1.5 text-[10px] text-muted-foreground">
+									<summary className="cursor-pointer list-none">
+										<div className="flex items-baseline justify-between gap-2">
+											<span className="font-medium text-foreground">
+												Show reaction-prior sensitivity
+											</span>
+											<span className="tabular-nums">
+												{fiscalRulePriorSensitivity.samples} draws each
+											</span>
+										</div>
+									</summary>
+									<div className="mt-2 mb-1 flex items-baseline justify-between gap-2">
 										<span className="font-medium text-foreground">
 											Prior sensitivity
-										</span>
-										<span className="tabular-nums">
-											{fiscalRulePriorSensitivity.samples} draws each
 										</span>
 									</div>
 									<div className="overflow-x-auto">
@@ -576,7 +590,7 @@ export function BaselineComparisonPanel({
 										Priors change the reaction branch, not the raw
 										pre-reaction fiscal-risk fan.
 									</div>
-								</div>
+								</details>
 							)}
 					</div>
 				)}
@@ -628,102 +642,114 @@ export function BaselineComparisonPanel({
 						</div>
 					)}
 					{policyReactionOptions.length > 0 && (
-						<div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-							{policyReactionOptions.map((option) => (
-								<div
-									key={option.id}
-									className="rounded-sm border bg-muted/30 px-2 py-1.5 text-[10px]"
-								>
-									<div className="flex items-baseline justify-between gap-2">
-										<span className="font-medium text-foreground">
-											{option.label}
-										</span>
-										<span className="tabular-nums text-muted-foreground">
-											{Math.round(option.taxShare * 100)}/
-											{Math.round(option.spendingShare * 100)}
-										</span>
-									</div>
-									<div className="mt-1 grid grid-cols-3 gap-1 tabular-nums text-muted-foreground">
-										<div>
-											<div className="uppercase tracking-wider">Action</div>
-											<div className="font-medium text-foreground">
-												{formatBn(option.annualGrossTighteningGbp)}
-											</div>
-										</div>
-										<div>
-											<div className="uppercase tracking-wider">GDP drag</div>
-											<div className="font-medium text-foreground">
-												{formatBn(option.horizonGdpDragGbp)}
-											</div>
-										</div>
-										<div>
-											<div className="uppercase tracking-wider">Debt</div>
-											<div className="font-medium text-foreground">
-												{formatPct(option.debtGdpAtHorizon)}
-											</div>
-										</div>
-									</div>
-									<div className="mt-1 text-muted-foreground leading-snug">
-										<span className="font-medium text-foreground">
-											Package:{" "}
-										</span>
-										{policyReactionPackageSummary(option.package)}
-									</div>
-									{option.package.residualGapGbp > 250_000_000 && (
-										<div className="mt-1 text-red-700 leading-snug">
-											Residual gap after plausible caps:{" "}
-											{formatBn(option.package.residualGapGbp)}
-										</div>
-									)}
-									<div className="mt-1 text-muted-foreground leading-snug">
-										<span className="font-medium text-foreground">
-											Who pays:{" "}
-										</span>
-										D1{" "}
-										{formatHouseholdGbp(
-											option.package.incidence.bottomDecile
-												.perHouseholdGbp,
-										)}{" "}
-										· D5{" "}
-										{formatHouseholdGbp(
-											option.package.incidence.middleDecile
-												.perHouseholdGbp,
-										)}{" "}
-										· D10{" "}
-										{formatHouseholdGbp(
-											option.package.incidence.topDecile
-												.perHouseholdGbp,
-										)}
-										{" · "}
-										{option.package.incidence.progressivity}
-									</div>
-									{option.package.incidence.hardestHitHousehold && (
-										<div className="mt-1 text-muted-foreground leading-snug">
-											Hardest archetype:{" "}
-											<span className="font-medium text-foreground">
-												{
-													option.package.incidence
-														.hardestHitHousehold.label
-												}
-											</span>{" "}
-											{formatHouseholdGbp(
-												option.package.incidence
-													.hardestHitHousehold.impactGbp,
-											)}{" "}
-											(
-											{formatImpactPct(
-												option.package.incidence
-													.hardestHitHousehold.incomeShare,
-											)}
-											)
-										</div>
-									)}
-									<div className="mt-1 text-muted-foreground leading-snug">
-										{option.description}
-									</div>
+						<details className="mt-2 rounded-sm border bg-muted/30 p-2 text-[10px] text-muted-foreground">
+							<summary className="cursor-pointer list-none">
+								<div className="flex items-baseline justify-between gap-2">
+									<span className="font-medium text-foreground">
+										Show reaction package options
+									</span>
+									<span className="tabular-nums">
+										{policyReactionOptions.length} options
+									</span>
 								</div>
-							))}
-						</div>
+							</summary>
+							<div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+								{policyReactionOptions.map((option) => (
+									<div
+										key={option.id}
+										className="rounded-sm border bg-background/70 px-2 py-1.5 text-[10px]"
+									>
+										<div className="flex items-baseline justify-between gap-2">
+											<span className="font-medium text-foreground">
+												{option.label}
+											</span>
+											<span className="tabular-nums text-muted-foreground">
+												{Math.round(option.taxShare * 100)}/
+												{Math.round(option.spendingShare * 100)}
+											</span>
+										</div>
+										<div className="mt-1 grid grid-cols-3 gap-1 tabular-nums text-muted-foreground">
+											<div>
+												<div className="uppercase tracking-wider">Action</div>
+												<div className="font-medium text-foreground">
+													{formatBn(option.annualGrossTighteningGbp)}
+												</div>
+											</div>
+											<div>
+												<div className="uppercase tracking-wider">GDP drag</div>
+												<div className="font-medium text-foreground">
+													{formatBn(option.horizonGdpDragGbp)}
+												</div>
+											</div>
+											<div>
+												<div className="uppercase tracking-wider">Debt</div>
+												<div className="font-medium text-foreground">
+													{formatPct(option.debtGdpAtHorizon)}
+												</div>
+											</div>
+										</div>
+										<div className="mt-1 text-muted-foreground leading-snug">
+											<span className="font-medium text-foreground">
+												Package:{" "}
+											</span>
+											{policyReactionPackageSummary(option.package)}
+										</div>
+										{option.package.residualGapGbp > 250_000_000 && (
+											<div className="mt-1 text-red-700 leading-snug">
+												Residual gap after plausible caps:{" "}
+												{formatBn(option.package.residualGapGbp)}
+											</div>
+										)}
+										<div className="mt-1 text-muted-foreground leading-snug">
+											<span className="font-medium text-foreground">
+												Who pays:{" "}
+											</span>
+											D1{" "}
+											{formatHouseholdGbp(
+												option.package.incidence.bottomDecile
+													.perHouseholdGbp,
+											)}{" "}
+											· D5{" "}
+											{formatHouseholdGbp(
+												option.package.incidence.middleDecile
+													.perHouseholdGbp,
+											)}{" "}
+											· D10{" "}
+											{formatHouseholdGbp(
+												option.package.incidence.topDecile
+													.perHouseholdGbp,
+											)}
+											{" · "}
+											{option.package.incidence.progressivity}
+										</div>
+										{option.package.incidence.hardestHitHousehold && (
+											<div className="mt-1 text-muted-foreground leading-snug">
+												Hardest archetype:{" "}
+												<span className="font-medium text-foreground">
+													{
+														option.package.incidence
+															.hardestHitHousehold.label
+													}
+												</span>{" "}
+												{formatHouseholdGbp(
+													option.package.incidence
+														.hardestHitHousehold.impactGbp,
+												)}{" "}
+												(
+												{formatImpactPct(
+													option.package.incidence
+														.hardestHitHousehold.incomeShare,
+												)}
+												)
+											</div>
+										)}
+										<div className="mt-1 text-muted-foreground leading-snug">
+											{option.description}
+										</div>
+									</div>
+								))}
+							</div>
+						</details>
 					)}
 				</div>
 			</div>

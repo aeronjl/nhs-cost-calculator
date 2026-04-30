@@ -53,6 +53,7 @@ describe("OutputRail report chrome", () => {
 		expect(html).toContain("Detailed analysis");
 		expect(html).toContain("fiscal risk");
 		expect(html).toContain("Rule headroom");
+		expect(html).toContain("Show fiscal uncertainty decomposition");
 		expect(html).not.toContain("Expand all");
 		expect(html).not.toContain('aria-expanded="false"');
 	});
