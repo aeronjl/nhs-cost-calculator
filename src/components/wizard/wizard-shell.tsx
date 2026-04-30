@@ -171,10 +171,26 @@ export function WizardShell({
 	};
 
 	const applyPolicyScenario = (preset: PolicyScenarioPreset) => {
+		const lines = buildPolicyScenarioLines(preset);
+		const nextState = {
+			...state,
+			step: 5,
+			goal: preset.goal,
+			committedScenario: lines,
+			previewLines: [],
+			era: preset.era,
+			baselineMode: preset.baselineMode ?? state.baselineMode,
+			policyScenarioId: preset.id,
+		};
+		const newUrl = buildWizardUrl(
+			new URLSearchParams(searchParams.toString()),
+			encodeWizardState(nextState),
+		);
+		router.replace(newUrl, { scroll: false });
 		if (preset.era !== state.era) actions.setEra(preset.era);
 		if (preset.baselineMode) actions.setBaselineMode(preset.baselineMode);
 		actions.setGoal(preset.goal);
-		actions.replaceScenario(buildPolicyScenarioLines(preset));
+		actions.replaceScenario(lines);
 		actions.setPolicyScenarioId(preset.id);
 		actions.setStep(5);
 	};

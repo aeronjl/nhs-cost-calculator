@@ -49,6 +49,12 @@ const formatBnDelta = (n: number): string => {
 
 const formatPct = (n: number): string => `${n.toFixed(1)}%`;
 
+const formatAxisBn = (n: number): string => {
+	const abs = Math.abs(n);
+	const sign = n < 0 ? "−" : "";
+	return `${sign}£${(abs / 1_000_000_000).toFixed(abs >= 100_000_000_000 ? 0 : 1)}bn`;
+};
+
 const formatSignedPp = (n: number): string => {
 	const sign = n > 0 ? "+" : n < 0 ? "−" : "";
 	return `${sign}${Math.abs(n).toFixed(2)}pp`;
@@ -252,6 +258,8 @@ export function BaselineComparisonPanel({
 					</div>
 				</div>
 			</div>
+
+			<FiscalCounterfactualChart comparison={comparison} />
 
 			<div className="rounded-md border bg-background/60 p-3 space-y-3">
 				<div>
@@ -814,6 +822,329 @@ export function BaselineComparisonPanel({
 				includes announced policy. Encoding a scenario that replays a budget
 				already in the baseline would double-count.
 			</p>
+		</div>
+	);
+}
+
+function FiscalCounterfactualChart({
+	comparison,
+}: {
+	comparison: BaselineComparison;
+}) {
+	const { years, baseline, policyReactionPath } = comparison;
+	if (years.length === 0) return null;
+
+	const finalYear = years[years.length - 1]!;
+	const scenarioImprovesPsnb =
+		finalYear.adjustedPsnb <= finalYear.baselinePsnb;
+	const scenarioColour = scenarioImprovesPsnb ? "#2563eb" : "#d97706";
+	const reactionByYear = new Map(
+		policyReactionPath.map((year) => [year.fiscalYear, year]),
+	);
+	const hasReactionPath = policyReactionPath.length > 0;
+	const psnbSeries = [
+		{
+			label: "current-policy baseline",
+			values: years.map((year) => year.baselinePsnb),
+			color: "#6b7280",
+		},
+		{
+			label: "policy scenario",
+			values: years.map((year) => year.adjustedPsnb),
+			color: scenarioColour,
+		},
+		...(hasReactionPath
+			? [
+					{
+						label: "after modelled reaction",
+						values: years.map(
+							(year) =>
+								reactionByYear.get(year.fiscalYear)?.correctedPsnb ??
+								year.adjustedPsnb,
+						),
+						color: "#dc2626",
+						dashed: true,
+					},
+				]
+			: []),
+	];
+	const debtSeries = [
+		{
+			label: "OBR baseline debt:GDP",
+			values: years.map((year) => year.baselineDebtGdp),
+			color: "#6b7280",
+		},
+		{
+			label: "policy scenario debt:GDP",
+			values: years.map((year) => year.adjustedDebtGdp),
+			color: scenarioColour,
+		},
+		...(hasReactionPath
+			? [
+					{
+						label: "after modelled reaction",
+						values: years.map(
+							(year) =>
+								reactionByYear.get(year.fiscalYear)?.correctedDebtGdp ??
+								year.adjustedDebtGdp,
+						),
+						color: "#dc2626",
+						dashed: true,
+					},
+				]
+			: []),
+	];
+
+	return (
+		<div className="rounded-md border bg-background/70 p-3">
+			<div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+				<div>
+					<div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+						Fiscal counterfactual paths
+					</div>
+					<p className="mt-1 text-xs leading-snug text-muted-foreground">
+						Baseline is the OBR current-policy path; scenario lines show the
+						counterfactual after applying the chosen policy package.
+					</p>
+				</div>
+				<div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+					<ChartLegendItem color="#6b7280" label="current-policy baseline" />
+					<ChartLegendItem color={scenarioColour} label="policy scenario" />
+					{hasReactionPath && (
+						<ChartLegendItem
+							color="#dc2626"
+							label="after modelled reaction"
+							dashed
+						/>
+					)}
+					<span className="inline-flex items-center gap-1">
+						<span className="h-3 border-l border-dashed border-foreground/50" />
+						rule year
+					</span>
+				</div>
+			</div>
+			<div className="mt-3 grid gap-3 lg:grid-cols-2">
+				<CounterfactualPathChart
+					title="PSNB path"
+					subtitle="Lower line means less borrowing."
+					ariaLabel="PSNB baseline and scenario counterfactual path"
+					years={years.map((year) => year.fiscalYear)}
+					ruleFiscalYear={baseline.stabilityRuleAt}
+					series={psnbSeries}
+					gapColor={scenarioColour}
+					formatValue={formatAxisBn}
+				/>
+				<CounterfactualPathChart
+					title="Debt:GDP path"
+					subtitle="Scenario debt stock relative to the OBR path."
+					ariaLabel="Debt to GDP baseline and scenario counterfactual path"
+					years={years.map((year) => year.fiscalYear)}
+					ruleFiscalYear={baseline.stabilityRuleAt}
+					series={debtSeries}
+					gapColor={scenarioColour}
+					formatValue={formatPct}
+				/>
+			</div>
+		</div>
+	);
+}
+
+function ChartLegendItem({
+	color,
+	label,
+	dashed = false,
+}: {
+	color: string;
+	label: string;
+	dashed?: boolean;
+}) {
+	return (
+		<span className="inline-flex items-center gap-1">
+			<span
+				className="inline-block h-0 w-4 border-t-2"
+				style={{
+					borderColor: color,
+					borderTopStyle: dashed ? "dashed" : "solid",
+				}}
+			/>
+			{label}
+		</span>
+	);
+}
+
+type CounterfactualPathSeries = {
+	label: string;
+	values: readonly number[];
+	color: string;
+	dashed?: boolean;
+};
+
+function CounterfactualPathChart({
+	title,
+	subtitle,
+	ariaLabel,
+	years,
+	ruleFiscalYear,
+	series,
+	gapColor,
+	formatValue,
+}: {
+	title: string;
+	subtitle: string;
+	ariaLabel: string;
+	years: readonly string[];
+	ruleFiscalYear: string;
+	series: readonly CounterfactualPathSeries[];
+	gapColor: string;
+	formatValue: (value: number) => string;
+}) {
+	if (years.length === 0 || series.length === 0) return null;
+
+	const width = 320;
+	const height = 120;
+	const padX = 12;
+	const padY = 10;
+	const innerWidth = width - padX * 2;
+	const innerHeight = height - padY * 2;
+	const allValues = series.flatMap((item) => [...item.values]);
+	const rawMin = Math.min(...allValues);
+	const rawMax = Math.max(...allValues);
+	const rawRange = rawMax - rawMin;
+	const padding = rawRange > 0 ? rawRange * 0.16 : Math.max(Math.abs(rawMax), 1) * 0.08;
+	const min = rawMin - padding;
+	const max = rawMax + padding;
+	const range = max - min || 1;
+	const xAt = (index: number): number =>
+		padX + (innerWidth * index) / Math.max(1, years.length - 1);
+	const yAt = (value: number): number =>
+		padY + innerHeight - ((value - min) / range) * innerHeight;
+	const pointsFor = (values: readonly number[]): string =>
+		values.map((value, index) => `${xAt(index)},${yAt(value)}`).join(" ");
+	const reversePointsFor = (values: readonly number[]): string =>
+		values
+			.map((value, index) => ({ value, index }))
+			.reverse()
+			.map(({ value, index }) => `${xAt(index)},${yAt(value)}`)
+			.join(" ");
+	const linePath = (values: readonly number[]): string =>
+		values
+			.map((value, index) => `${index === 0 ? "M" : "L"} ${xAt(index)} ${yAt(value)}`)
+			.join(" ");
+	const baselineValues = series[0]?.values ?? [];
+	const scenarioValues = series[1]?.values ?? [];
+	const gapPolygon =
+		baselineValues.length === scenarioValues.length
+			? `${pointsFor(baselineValues)} ${reversePointsFor(scenarioValues)}`
+			: "";
+	const ruleIndex = years.findIndex((year) => year === ruleFiscalYear);
+
+	return (
+		<div className="rounded-sm border bg-muted/20 p-2">
+			<div className="flex items-start justify-between gap-2">
+				<div>
+					<div className="text-xs font-medium">{title}</div>
+					<div className="text-[10px] text-muted-foreground">
+						{subtitle}
+					</div>
+				</div>
+				<div className="text-right text-[10px] tabular-nums text-muted-foreground">
+					<div>{formatValue(rawMax)}</div>
+					<div>{formatValue(rawMin)}</div>
+				</div>
+			</div>
+			<svg
+				viewBox={`0 0 ${width} ${height}`}
+				className="mt-2 h-36 w-full"
+				preserveAspectRatio="none"
+				role="img"
+				aria-label={ariaLabel}
+			>
+				<line
+					x1={padX}
+					x2={width - padX}
+					y1={yAt(rawMax)}
+					y2={yAt(rawMax)}
+					stroke="currentColor"
+					strokeWidth="0.6"
+					vectorEffect="non-scaling-stroke"
+					className="text-border"
+				/>
+				<line
+					x1={padX}
+					x2={width - padX}
+					y1={yAt(rawMin)}
+					y2={yAt(rawMin)}
+					stroke="currentColor"
+					strokeWidth="0.6"
+					vectorEffect="non-scaling-stroke"
+					className="text-border"
+				/>
+				{gapPolygon && (
+					<polygon points={gapPolygon} fill={gapColor} opacity="0.1" />
+				)}
+				{ruleIndex >= 0 && (
+					<line
+						x1={xAt(ruleIndex)}
+						x2={xAt(ruleIndex)}
+						y1={padY}
+						y2={height - padY}
+						stroke="currentColor"
+						strokeDasharray="4 3"
+						strokeWidth="0.8"
+						vectorEffect="non-scaling-stroke"
+						className="text-foreground/50"
+					/>
+				)}
+				{series.map((item) => (
+					<path
+						key={item.label}
+						d={linePath(item.values)}
+						fill="none"
+						stroke={item.color}
+						strokeWidth={item.label.includes("baseline") ? 1.4 : 2}
+						strokeDasharray={item.dashed ? "5 3" : undefined}
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						vectorEffect="non-scaling-stroke"
+					/>
+				))}
+				{series.flatMap((item) =>
+					item.values.map((value, index) => (
+						<circle
+							key={`${item.label}-${years[index]}`}
+							cx={xAt(index)}
+							cy={yAt(value)}
+							r="2"
+							fill={item.color}
+							vectorEffect="non-scaling-stroke"
+						>
+							<title>{`${item.label} · ${years[index]}: ${formatValue(value)}`}</title>
+						</circle>
+					)),
+				)}
+			</svg>
+			<div
+				className="mt-1 grid gap-1 text-[9px] tabular-nums text-muted-foreground"
+				style={{ gridTemplateColumns: `repeat(${years.length}, minmax(0, 1fr))` }}
+			>
+				{years.map((year, index) => (
+					<span
+						key={year}
+						className={cn(
+							"min-w-0 truncate",
+							index === 0
+								? "text-left"
+								: index === years.length - 1
+									? "text-right"
+									: "text-center",
+							year === ruleFiscalYear && "font-medium text-foreground",
+						)}
+						title={year === ruleFiscalYear ? `${year} rule year` : year}
+					>
+						{year}
+					</span>
+				))}
+			</div>
 		</div>
 	);
 }
