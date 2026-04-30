@@ -189,6 +189,8 @@ The OBR baseline comparison also runs a joint macro-fiscal fan. Each draw sample
 
 When the scenario includes positive borrowing, each fiscal-rule fan draw also samples the borrowing stress regime and feeds the resulting yield overlay through the scenario projection. This is still reduced-form rather than a full OBR economy forecast, but it makes fiscal-rule risk probabilistic instead of treating the central headroom estimate as certain.
 
+The fan also carries an endogenous policy-reaction branch. The headline breach and headroom bands are still reported before discretionary offsets, so the raw fiscal risk remains visible. Separately, any draw that breaches the rule or leaves very thin headroom selects a stress-contingent offset package: credibility/rate-stress draws favour tax-led action, inflationary draws favour spending-led restraint, and normal tight-headroom draws use the balanced mix. The selected package is appended to the original scenario and reprojected through the same GE loop, so its GDP drag, CPI/Bank Rate effects, debt/GDP change, gilt-yield feedback, and borrowing-cost feedback all affect the post-reaction headroom and debt bands. If package caps bind, the residual policy gap remains in the post-reaction branch.
+
 ## Market Reaction Loop
 
 Large borrowing packages also receive an endogenous market-reaction path. The central path applies the static debt/GDP and issuance risk premium. The market-reaction path then carries forward an additional credibility premium when debt/GDP, refinancing exposure, or the size of the issuance package cross risk thresholds:

@@ -322,6 +322,65 @@ describe("projectFiscalRuleFan", () => {
 		expect(switched.centralHeadroomGbp).toBe(continuousOnly.centralHeadroomGbp);
 	});
 
+	it("projects endogenous policy-reaction branches inside the fiscal-rule fan", () => {
+		const fan = projectFiscalRuleFan(
+			evaluateScenario([
+				{
+					id: "borrow",
+					type: "borrow",
+					leverId: "",
+					magnitude: 80_000_000_000,
+					borrowingContext: {
+						fiscalEvent: "unscored",
+						duration: "persistent",
+					},
+				},
+			]),
+			TEST_BASELINE,
+			300,
+			7,
+		);
+		expect(fan.policyReactionTriggeredProbability).toBeGreaterThan(0);
+		expect(fan.endogenousReactionGrossBand.p95).toBeGreaterThan(0);
+		expect(fan.postReactionHeadroomBand.p50).toBeGreaterThan(
+			fan.headroomBand.p50,
+		);
+		expect(fan.postReactionBreachProbability).toBeLessThanOrEqual(
+			fan.breachProbability,
+		);
+		expect(
+			fan.reactionPackageMix.reduce((sum, row) => sum + row.count, 0),
+		).toBeGreaterThan(0);
+		expect(
+			fan.reactionPackageMix.some(
+				(row) => row.id === "tax-led" && row.count > 0,
+			),
+		).toBe(true);
+	});
+
+	it("can disable endogenous policy-reaction branches for diagnostics", () => {
+		const result = evaluateScenario([
+			{
+				id: "borrow",
+				type: "borrow",
+				leverId: "",
+				magnitude: 80_000_000_000,
+			},
+		]);
+		const fan = projectFiscalRuleFan(
+			result,
+			TEST_BASELINE,
+			200,
+			7,
+			{},
+			{ policyReactionTree: false },
+		);
+		expect(fan.policyReactionTriggeredProbability).toBe(0);
+		expect(fan.endogenousReactionGrossBand.p95).toBe(0);
+		expect(fan.postReactionHeadroomBand).toEqual(fan.headroomBand);
+		expect(fan.postReactionBreachProbability).toBe(fan.breachProbability);
+	});
+
 	it("uses borrowing context inside the fiscal-rule regime fan", () => {
 		const scored = evaluateScenario([
 			{

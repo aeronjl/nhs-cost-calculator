@@ -59,6 +59,10 @@ export function BaselineComparisonPanel({ comparison, fiscalRuleFan }: Props) {
 	const ruleBroken = adjustedStabilityHeadroom < 0;
 	const meaningfulShift =
 		years.some((y) => Math.abs(y.psnbShift) > 1_000_000_000);
+	const topReactionPackage = fiscalRuleFan?.reactionPackageMix
+		.filter((row) => row.count > 0)
+		.slice()
+		.sort((a, b) => b.count - a.count)[0];
 
 	return (
 		<div className="space-y-2">
@@ -159,6 +163,41 @@ export function BaselineComparisonPanel({ comparison, fiscalRuleFan }: Props) {
 								.
 							</div>
 						)}
+						{fiscalRuleFan &&
+							fiscalRuleFan.policyReactionTriggeredProbability > 0 && (
+								<div className="mt-1.5 rounded-sm bg-muted/40 px-2 py-1 text-[10px] text-muted-foreground">
+									Endogenous reaction branch:{" "}
+									<span className="font-medium text-foreground">
+										{formatProbability(
+											fiscalRuleFan.policyReactionTriggeredProbability,
+										)}
+									</span>{" "}
+									of draws trigger offsets
+									{topReactionPackage
+										? `, most often ${topReactionPackage.label}`
+										: ""}
+									. Post-reaction breach risk{" "}
+									<span
+										className={cn(
+											"font-medium",
+											fiscalRuleFan.postReactionBreachProbability > 0.25
+												? "text-red-700"
+												: fiscalRuleFan.postReactionBreachProbability > 0.1
+													? "text-amber-700"
+													: "text-foreground",
+										)}
+									>
+										{formatProbability(
+											fiscalRuleFan.postReactionBreachProbability,
+										)}
+									</span>
+									; p95 gross action{" "}
+									<span className="font-medium text-foreground">
+										{formatBn(fiscalRuleFan.endogenousReactionGrossBand.p95)}
+									</span>
+									.
+								</div>
+							)}
 					</div>
 				)}
 

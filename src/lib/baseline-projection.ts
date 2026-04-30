@@ -26,6 +26,7 @@ import {
 	type ProjectionAssumptions,
 	type ScenarioResult,
 	type YearProjection,
+	evaluateScenario,
 	projectScenarioWithGEFeedback,
 } from "./scenario";
 import {
@@ -44,6 +45,7 @@ import {
 	buildPolicyReactionPackage,
 	type PolicyReactionOptionId,
 	type PolicyReactionPackage,
+	policyReactionPackageToScenarioLines,
 } from "./policy-reaction-packages";
 
 export interface BaselineRelativeYear {
@@ -132,12 +134,31 @@ export interface FiscalRuleFan {
 	ruleYearPsnbBand: PercentileBand;
 	ruleYearDebtGdpBand: PercentileBand;
 	policyReactionBand: PercentileBand;
+	policyReactionTriggeredProbability: number;
+	endogenousReactionGrossBand: PercentileBand;
+	endogenousReactionGdpDragBand: PercentileBand;
+	endogenousReactionResidualGapBand: PercentileBand;
+	postReactionBreachProbability: number;
+	postReactionTightOrBreachProbability: number;
+	postReactionDebtRisingProbability: number;
+	postReactionHeadroomBand: PercentileBand;
+	postReactionRuleYearPsnbBand: PercentileBand;
+	postReactionRuleYearDebtGdpBand: PercentileBand;
+	postReactionPolicyReactionBand: PercentileBand;
+	reactionPackageMix: readonly {
+		id: PolicyReactionOptionId;
+		label: string;
+		count: number;
+		probability: number;
+	}[];
 	centralHeadroomGbp: number;
 	centralRiskRating: FiscalRiskRating;
 }
 
 export interface FiscalRuleFanOptions {
 	regimeSwitching?: boolean;
+	policyReactionTree?: boolean;
+	policyReactionPackage?: PolicyReactionOptionId | "stress-contingent";
 }
 
 export const evaluateFiscalRuleDiagnostics = (
@@ -425,6 +446,49 @@ const borrowingRegimeForScenario = (
 	});
 };
 
+interface FiscalRuleDrawState {
+	growthShock: number;
+	inflationShock: number;
+	giltShock: number;
+	bankRateShock: number;
+	regimeOverlay: number;
+	commonShock: number;
+}
+
+const policyReactionPrototypeById = (id: PolicyReactionOptionId) =>
+	POLICY_REACTION_PROTOTYPES.find((prototype) => prototype.id === id) ??
+	POLICY_REACTION_PROTOTYPES[0]!;
+
+const selectEndogenousPolicyReactionId = (
+	comparison: BaselineComparison,
+	draw: FiscalRuleDrawState,
+	mode: PolicyReactionOptionId | "stress-contingent" | undefined,
+): PolicyReactionOptionId | null => {
+	if (comparison.diagnostics.policyReactionGbp <= 0) return null;
+	if (mode && mode !== "stress-contingent") return mode;
+	const rateStress = draw.giltShock + draw.bankRateShock + draw.regimeOverlay;
+	if (
+		comparison.diagnostics.stabilityRuleBreached &&
+		(rateStress > 0.01 || comparison.diagnostics.policyReactionGbp > 20_000_000_000)
+	) {
+		return "tax-led";
+	}
+	if (draw.inflationShock > 0.01 && draw.growthShock > -0.006) {
+		return "spending-led";
+	}
+	return "balanced";
+};
+
+const drawReactionYieldRelief = (
+	pkg: PolicyReactionPackage,
+	targetCorrectionGbp: number,
+	regimeOverlay: number,
+): number => {
+	if (targetCorrectionGbp <= 0 || regimeOverlay <= 0) return 0;
+	const closureRatio = Math.min(1, pkg.effectiveCorrectionGbp / targetCorrectionGbp);
+	return Math.min(0.005, regimeOverlay * closureRatio * 0.6);
+};
+
 export const projectFiscalRuleFan = (
 	result: ScenarioResult,
 	baseline: OBRBaseline = OBR_BASELINE,
@@ -445,9 +509,26 @@ export const projectFiscalRuleFan = (
 	const ruleYearPsnbSamples: number[] = [];
 	const ruleYearDebtGdpSamples: number[] = [];
 	const policyReactionSamples: number[] = [];
+	const postReactionHeadroomSamples: number[] = [];
+	const postReactionRuleYearPsnbSamples: number[] = [];
+	const postReactionRuleYearDebtGdpSamples: number[] = [];
+	const postReactionPolicyReactionSamples: number[] = [];
+	const endogenousReactionGrossSamples: number[] = [];
+	const endogenousReactionGdpDragSamples: number[] = [];
+	const endogenousReactionResidualGapSamples: number[] = [];
+	const reactionPackageCounts: Record<PolicyReactionOptionId, number> = {
+		balanced: 0,
+		"tax-led": 0,
+		"spending-led": 0,
+		delayed: 0,
+	};
 	let breachCount = 0;
 	let tightOrBreachCount = 0;
 	let debtRisingCount = 0;
+	let postReactionBreachCount = 0;
+	let postReactionTightOrBreachCount = 0;
+	let postReactionDebtRisingCount = 0;
+	let reactionTriggeredCount = 0;
 	const borrowingRegime =
 		options.regimeSwitching === false
 			? null
@@ -476,26 +557,27 @@ export const projectFiscalRuleFan = (
 			return year.gdp * persistentPsnbErrorPctGdp;
 		});
 		const sampled = sampledBaseline(baseline, growthShock, psnbErrorsGbp);
+		const drawAssumptions: Partial<ProjectionAssumptions> = {
+			...assumptions,
+			nominalGrowth: Math.max(
+				0,
+				(assumptions.nominalGrowth ?? 0.04) + growthShock,
+			),
+			inflation: Math.max(
+				-0.01,
+				(assumptions.inflation ?? 0.03) + inflationShock,
+			),
+			bankRate: Math.max(
+				-0.005,
+				(assumptions.bankRate ?? 0.0375) + bankRateShock,
+			),
+			yieldCurveShift:
+				(assumptions.yieldCurveShift ?? 0) + giltShock + regimeOverlay,
+		};
 		const projection = projectScenarioWithGEFeedback(
 			result,
 			sampled.years.length,
-			{
-				...assumptions,
-				nominalGrowth: Math.max(
-					0,
-					(assumptions.nominalGrowth ?? 0.04) + growthShock,
-				),
-				inflation: Math.max(
-					-0.01,
-					(assumptions.inflation ?? 0.03) + inflationShock,
-				),
-				bankRate: Math.max(
-					-0.005,
-					(assumptions.bankRate ?? 0.0375) + bankRateShock,
-				),
-				yieldCurveShift:
-					(assumptions.yieldCurveShift ?? 0) + giltShock + regimeOverlay,
-			},
+			drawAssumptions,
 		).withFeedback;
 		const comparison = projectAgainstBaseline(projection, sampled);
 		const ruleYear = comparison.ruleYear ?? comparison.years.at(-1);
@@ -511,6 +593,90 @@ export const projectFiscalRuleFan = (
 			tightOrBreachCount++;
 		}
 		if (comparison.diagnostics.debtProxyRisingAtHorizon) debtRisingCount++;
+
+		let postReactionComparison = comparison;
+		let reactionGrossGbp = 0;
+		let reactionGdpDragGbp = 0;
+		let reactionResidualGapGbp = 0;
+		const selectedReactionId =
+			options.policyReactionTree === false
+				? null
+				: selectEndogenousPolicyReactionId(comparison, {
+						growthShock,
+						inflationShock,
+						giltShock,
+						bankRateShock,
+						regimeOverlay,
+						commonShock,
+					}, options.policyReactionPackage);
+		if (selectedReactionId) {
+			reactionTriggeredCount++;
+			reactionPackageCounts[selectedReactionId]++;
+			const prototype = policyReactionPrototypeById(selectedReactionId);
+			const reactionPackage = buildPolicyReactionPackage(
+				prototype,
+				comparison.diagnostics.policyReactionGbp,
+				sampled.years.length,
+			);
+			const reactionLines = policyReactionPackageToScenarioLines(
+				reactionPackage,
+				`fan-${sample}-${selectedReactionId}`,
+			);
+			const yieldRelief = drawReactionYieldRelief(
+				reactionPackage,
+				comparison.diagnostics.policyReactionGbp,
+				regimeOverlay,
+			);
+			const reactedResult = evaluateScenario([
+				...result.lines.map((evaluation) => evaluation.line),
+				...reactionLines,
+			]);
+			const reactedProjection = projectScenarioWithGEFeedback(
+				reactedResult,
+				sampled.years.length,
+				{
+					...drawAssumptions,
+					yieldCurveShift:
+						(drawAssumptions.yieldCurveShift ?? 0) - yieldRelief,
+				},
+			).withFeedback;
+			postReactionComparison = projectAgainstBaseline(
+				reactedProjection,
+				sampled,
+			);
+			reactionGrossGbp = reactionPackage.staticTighteningGbp;
+			reactionGdpDragGbp = reactionPackage.gdpDragGbp;
+			reactionResidualGapGbp = reactionPackage.residualGapGbp;
+		}
+		const postReactionRuleYear =
+			postReactionComparison.ruleYear ?? postReactionComparison.years.at(-1);
+		postReactionHeadroomSamples.push(
+			postReactionComparison.adjustedStabilityHeadroom,
+		);
+		postReactionRuleYearPsnbSamples.push(
+			postReactionRuleYear?.adjustedPsnb ?? 0,
+		);
+		postReactionRuleYearDebtGdpSamples.push(
+			postReactionRuleYear?.adjustedDebtGdp ?? 0,
+		);
+		postReactionPolicyReactionSamples.push(
+			postReactionComparison.diagnostics.policyReactionGbp,
+		);
+		endogenousReactionGrossSamples.push(reactionGrossGbp);
+		endogenousReactionGdpDragSamples.push(reactionGdpDragGbp);
+		endogenousReactionResidualGapSamples.push(reactionResidualGapGbp);
+		if (postReactionComparison.diagnostics.stabilityRuleBreached) {
+			postReactionBreachCount++;
+		}
+		if (
+			postReactionComparison.diagnostics.riskRating === "tight" ||
+			postReactionComparison.diagnostics.riskRating === "breach"
+		) {
+			postReactionTightOrBreachCount++;
+		}
+		if (postReactionComparison.diagnostics.debtProxyRisingAtHorizon) {
+			postReactionDebtRisingCount++;
+		}
 	}
 
 	return {
@@ -522,6 +688,30 @@ export const projectFiscalRuleFan = (
 		ruleYearPsnbBand: computeBand(ruleYearPsnbSamples),
 		ruleYearDebtGdpBand: computeBand(ruleYearDebtGdpSamples),
 		policyReactionBand: computeBand(policyReactionSamples),
+		policyReactionTriggeredProbability: reactionTriggeredCount / samples,
+		endogenousReactionGrossBand: computeBand(endogenousReactionGrossSamples),
+		endogenousReactionGdpDragBand: computeBand(endogenousReactionGdpDragSamples),
+		endogenousReactionResidualGapBand: computeBand(
+			endogenousReactionResidualGapSamples,
+		),
+		postReactionBreachProbability: postReactionBreachCount / samples,
+		postReactionTightOrBreachProbability:
+			postReactionTightOrBreachCount / samples,
+		postReactionDebtRisingProbability: postReactionDebtRisingCount / samples,
+		postReactionHeadroomBand: computeBand(postReactionHeadroomSamples),
+		postReactionRuleYearPsnbBand: computeBand(postReactionRuleYearPsnbSamples),
+		postReactionRuleYearDebtGdpBand: computeBand(
+			postReactionRuleYearDebtGdpSamples,
+		),
+		postReactionPolicyReactionBand: computeBand(
+			postReactionPolicyReactionSamples,
+		),
+		reactionPackageMix: POLICY_REACTION_PROTOTYPES.map((prototype) => ({
+			id: prototype.id,
+			label: prototype.label,
+			count: reactionPackageCounts[prototype.id],
+			probability: reactionPackageCounts[prototype.id] / samples,
+		})),
 		centralHeadroomGbp: central.adjustedStabilityHeadroom,
 		centralRiskRating: central.diagnostics.riskRating,
 	};

@@ -699,3 +699,14 @@ export const policyReactionPackageSummary = (
 			.join(", ") + suffix
 	);
 };
+
+export const policyReactionPackageToScenarioLines = (
+	pkg: PolicyReactionPackage,
+	prefix = "policy-reaction",
+): ScenarioLine[] =>
+	pkg.components.map((component, index) => ({
+		id: `${prefix}-${index + 1}-${component.leverId}`,
+		type: component.type,
+		leverId: component.leverId,
+		magnitude: component.magnitude,
+	}));
