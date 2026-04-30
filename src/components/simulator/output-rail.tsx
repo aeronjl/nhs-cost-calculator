@@ -605,13 +605,13 @@ export function OutputRail({
 							aria-labelledby={`report-tab-${item.id}`}
 							hidden={!selected}
 							className={cn(
-								"scroll-mt-20 p-3",
+								"scroll-mt-20 p-3 sm:p-4",
 								!selected && "hidden",
 							)}
 						>
 							{selected && (
-								<div className="space-y-3">
-									<div className="space-y-1">
+								<div className="mx-auto w-full max-w-6xl space-y-4">
+									<div className="max-w-3xl space-y-1">
 										<h3 className="text-sm font-semibold">
 											{item.panelTitle}
 										</h3>
@@ -621,113 +621,135 @@ export function OutputRail({
 									</div>
 
 									{activeSection === "trajectory" && (
-										<>
-											<MultiYearProjection
-												projection={projection}
-												bands={projectionBands}
-											/>
-											<BaselineComparisonPanel
-												comparison={baselineComparison}
-												fiscalRuleFan={fiscalRuleFan}
-												fiscalRulePriorSensitivity={
-													fiscalRulePriorSensitivity
-												}
-												fiscalRuleUncertaintyDecomposition={
-													fiscalRuleUncertaintyDecomposition
-												}
-											/>
-										</>
+										<div className="grid gap-3 xl:grid-cols-[minmax(300px,0.7fr)_minmax(0,1.3fr)] xl:items-start">
+											<div className="min-w-0 xl:sticky xl:top-20">
+												<MultiYearProjection
+													projection={projection}
+													bands={projectionBands}
+												/>
+											</div>
+											<div className="min-w-0">
+												<BaselineComparisonPanel
+													comparison={baselineComparison}
+													fiscalRuleFan={fiscalRuleFan}
+													fiscalRulePriorSensitivity={
+														fiscalRulePriorSensitivity
+													}
+													fiscalRuleUncertaintyDecomposition={
+														fiscalRuleUncertaintyDecomposition
+													}
+												/>
+											</div>
+										</div>
 									)}
 
 									{activeSection === "who-pays" && (
-										<>
-											<DistributionalImpact
-												distribution={distribution}
-											/>
-											<MicrosimulationPanel result={result} />
-											<HouseholdImpactPanel result={result} />
-											<ComparisonsAffordedList
-												items={items}
-												caption={
-													result.net > 0
-														? "Full list — what the net surplus could fund:"
-														: result.net < 0
-															? "Full list — equivalent costs:"
-															: undefined
-												}
-												emptyMessage={null}
-											/>
-										</>
+										<div className="grid gap-3 xl:grid-cols-[minmax(300px,0.82fr)_minmax(0,1.18fr)] xl:items-start">
+											<div className="min-w-0 space-y-3">
+												<DistributionalImpact
+													distribution={distribution}
+												/>
+												{items.length > 0 && (
+													<div className="rounded-md border bg-background/60 p-3">
+														<ComparisonsAffordedList
+															items={items}
+															caption={
+																result.net > 0
+																	? "Full list — what the net surplus could fund:"
+																	: result.net < 0
+																		? "Full list — equivalent costs:"
+																		: undefined
+															}
+															emptyMessage={null}
+														/>
+													</div>
+												)}
+											</div>
+											<div className="min-w-0 space-y-3">
+												<MicrosimulationPanel result={result} />
+												<HouseholdImpactPanel result={result} />
+											</div>
+										</div>
 									)}
 
 									{activeSection === "macro" && (
-										<>
-											<MacroTierBreakdown
-												staticNet={result.net}
-												dynamic={dynamic}
-												dynamicGapSignificant={
-													dynamicGapSignificant
-												}
-												macro={macro}
-												macroGapSignificant={
-													macroGapSignificant
-												}
-												geYear1={geYear1}
-												geGap={geGap}
-												geGapSignificant={
-													geGapSignificant
-												}
-											/>
-											{bandWidthSignificant && (
-												<div className="space-y-1 rounded-md border bg-background/60 p-2 text-[11px] leading-snug">
-													<div className="text-xs font-medium">
-														Confidence band
+										<div className="grid gap-3 xl:grid-cols-[minmax(280px,0.75fr)_minmax(0,1.25fr)] xl:items-start">
+											<div className="min-w-0 space-y-3 xl:max-w-[520px]">
+												<MacroTierBreakdown
+													staticNet={result.net}
+													dynamic={dynamic}
+													dynamicGapSignificant={
+														dynamicGapSignificant
+													}
+													macro={macro}
+													macroGapSignificant={
+														macroGapSignificant
+													}
+													geYear1={geYear1}
+													geGap={geGap}
+													geGapSignificant={
+														geGapSignificant
+													}
+												/>
+												{bandWidthSignificant && (
+													<div className="space-y-1 rounded-md border bg-background/60 p-2 text-[11px] leading-snug">
+														<div className="text-xs font-medium">
+															Confidence band
+														</div>
+														<div className="text-muted-foreground">
+															90% CI:{" "}
+															<span className="tabular-nums text-foreground">
+																£
+																{Math.round(
+																	band.p5,
+																).toLocaleString()}
+															</span>{" "}
+															—{" "}
+															<span className="tabular-nums text-foreground">
+																£
+																{Math.round(
+																	band.p95,
+																).toLocaleString()}
+															</span>
+														</div>
+														<div className="text-[10px] text-muted-foreground">
+															1000-draw Monte Carlo over
+															per-lever yield distributions
+															(HMRC ranges where stated,
+															±10% otherwise).
+														</div>
 													</div>
-													<div className="text-muted-foreground">
-														90% CI:{" "}
-														<span className="tabular-nums text-foreground">
-															£
-															{Math.round(
-																band.p5,
-															).toLocaleString()}
-														</span>{" "}
-														—{" "}
-														<span className="tabular-nums text-foreground">
-															£
-															{Math.round(
-																band.p95,
-															).toLocaleString()}
-														</span>
-													</div>
-													<div className="text-[10px] text-muted-foreground">
-														1000-draw Monte Carlo over
-														per-lever yield distributions
-														(HMRC ranges where stated,
-														±10% otherwise).
-													</div>
-												</div>
-											)}
-											<MacroStatePanel
-												path={macroPath}
-												convergence={{
-													iterations: ge.iterations,
-													converged: ge.converged,
-													maxChangeGbp: ge.maxChangeGbp,
-												}}
-											/>
-										</>
+												)}
+											</div>
+											<div className="min-w-0">
+												<MacroStatePanel
+													path={macroPath}
+													convergence={{
+														iterations: ge.iterations,
+														converged: ge.converged,
+														maxChangeGbp: ge.maxChangeGbp,
+													}}
+												/>
+											</div>
+										</div>
 									)}
 
 									{activeSection === "stress" && macroStressLab && (
-										<MacroStressLabPanel lab={macroStressLab} />
+										<div className="min-w-0">
+											<MacroStressLabPanel lab={macroStressLab} />
+										</div>
 									)}
 
 									{activeSection === "assumptions" && (
-										<ScenarioAssumptions lines={result.lines} />
+										<div className="max-w-5xl">
+											<ScenarioAssumptions lines={result.lines} />
+										</div>
 									)}
 
 									{activeSection === "audit" && modelAudit && (
-										<ModelAuditPanel audit={modelAudit} />
+										<div className="min-w-0">
+											<ModelAuditPanel audit={modelAudit} />
+										</div>
 									)}
 								</div>
 							)}

@@ -35,9 +35,8 @@ import {
 // line from its methodology) plus a popover trigger for the full alternatives
 // / range / source.
 //
-// Lives next to the comparisons-afforded list in the right rail so the
-// "lead with the headline, expose assumptions on demand" principle is
-// always visible — assumptions are not behind a tab the user has to find.
+// Lives in the report's assumptions tab so power users can scan line-level
+// caveats without stretching each entry across the full results page.
 
 interface Props {
 	lines: readonly LineEvaluation[];
@@ -57,7 +56,7 @@ export function ScenarioAssumptions({ lines }: Props) {
 				</span>
 			</div>
 
-			<ul className="space-y-2">
+			<ul className="grid gap-2 xl:grid-cols-2 xl:items-start">
 				{lines.map((ev) => (
 					<AssumptionItem key={ev.line.id} evaluation={ev} />
 				))}
