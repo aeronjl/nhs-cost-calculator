@@ -1,5 +1,6 @@
 "use client";
 
+import { type PointerEvent, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type {
 	BaselineComparison,
@@ -8,6 +9,7 @@ import type {
 	FiscalRuleUncertaintyDecomposition,
 } from "@/lib/baseline-projection";
 import { policyReactionPackageSummary } from "@/lib/policy-reaction-packages";
+import { pointerToYearIndex, useYearFocus } from "@/lib/year-focus";
 
 // Renders the scenario's impact against OBR's "do-nothing" baseline.
 //
@@ -1198,6 +1200,36 @@ function CounterfactualPathChart({
 		return `${item.label} · ${years[index]}: ${formatValue(value)}${delta}`;
 	};
 
+	const { year: focusedYear, setYear, clear } = useYearFocus();
+	const svgRef = useRef<SVGSVGElement | null>(null);
+	const handlePointerMove = (event: PointerEvent<SVGSVGElement>) => {
+		const svg = svgRef.current;
+		if (!svg) return;
+		const next = pointerToYearIndex({
+			clientX: event.clientX,
+			rect: svg.getBoundingClientRect(),
+			years: years.length,
+			padX,
+			innerWidth,
+			viewBoxWidth: width,
+		});
+		if (next !== null) setYear(next);
+	};
+	const focusedIndex =
+		focusedYear !== null && focusedYear >= 1 && focusedYear <= years.length
+			? focusedYear - 1
+			: null;
+	const focusedFiscalYear =
+		focusedIndex !== null ? years[focusedIndex] ?? null : null;
+	const focusedBaseline =
+		focusedIndex !== null ? baselineValues[focusedIndex] ?? null : null;
+	const focusedScenario =
+		focusedIndex !== null ? scenarioValues[focusedIndex] ?? null : null;
+	const focusedDelta =
+		focusedBaseline !== null && focusedScenario !== null
+			? focusedScenario - focusedBaseline
+			: null;
+
 	return (
 		<div className="rounded-sm border bg-muted/20 p-2">
 			<div className="flex items-start justify-between gap-2">
@@ -1232,11 +1264,15 @@ function CounterfactualPathChart({
 				</span>
 			</div>
 			<svg
+				ref={svgRef}
 				viewBox={`0 0 ${width} ${height}`}
-				className="mt-2 h-36 w-full"
+				className="mt-2 h-36 w-full touch-none"
 				preserveAspectRatio="none"
 				role="img"
 				aria-label={ariaLabel}
+				onPointerMove={handlePointerMove}
+				onPointerLeave={clear}
+				onPointerDown={handlePointerMove}
 			>
 				<line
 					x1={padX}
@@ -1326,41 +1362,97 @@ function CounterfactualPathChart({
 					/>
 				))}
 				{series.flatMap((item) =>
-					item.values.map((value, index) => (
-						<circle
-							key={`${item.label}-${years[index]}`}
-							cx={xAt(index)}
-							cy={yAt(value)}
-							r="2"
-							fill={item.color}
-							vectorEffect="non-scaling-stroke"
-						>
-							<title>{tooltipFor(item, value, index)}</title>
-						</circle>
-					)),
+					item.values.map((value, index) => {
+						const isFocused = focusedIndex === index;
+						return (
+							<circle
+								key={`${item.label}-${years[index]}`}
+								cx={xAt(index)}
+								cy={yAt(value)}
+								r={isFocused ? 3 : 2}
+								fill={item.color}
+								stroke={isFocused ? "white" : undefined}
+								strokeWidth={isFocused ? 0.8 : 0}
+								vectorEffect="non-scaling-stroke"
+							>
+								<title>{tooltipFor(item, value, index)}</title>
+							</circle>
+						);
+					}),
+				)}
+				{focusedIndex !== null && (
+					<line
+						x1={xAt(focusedIndex)}
+						x2={xAt(focusedIndex)}
+						y1={padY}
+						y2={height - padY}
+						stroke="currentColor"
+						strokeWidth="0.8"
+						strokeDasharray="2 2"
+						vectorEffect="non-scaling-stroke"
+						className="text-foreground/70 pointer-events-none"
+					/>
 				)}
 			</svg>
+			{focusedFiscalYear && (
+				<div
+					className="mt-1 flex flex-wrap items-baseline justify-between gap-2 rounded-sm border bg-background/60 px-2 py-1 text-[10px]"
+					aria-live="polite"
+				>
+					<span className="text-[9px] uppercase tracking-wider text-muted-foreground">
+						{focusedFiscalYear}
+					</span>
+					<span className="tabular-nums">
+						<span className="text-muted-foreground">baseline </span>
+						<span className="font-medium text-foreground">
+							{focusedBaseline !== null ? formatValue(focusedBaseline) : "—"}
+						</span>
+						<span className="text-muted-foreground"> · scenario </span>
+						<span className="font-medium text-foreground">
+							{focusedScenario !== null ? formatValue(focusedScenario) : "—"}
+						</span>
+					</span>
+					{focusedDelta !== null && (
+						<span
+							className={cn(
+								"tabular-nums font-medium",
+								focusedDelta < 0
+									? "text-blue-700"
+									: focusedDelta > 0
+										? "text-amber-700"
+										: "text-muted-foreground",
+							)}
+						>
+							{formatDeltaValue(focusedDelta)}
+						</span>
+					)}
+				</div>
+			)}
 			<div
 				className="mt-1 grid gap-1 text-[9px] tabular-nums text-muted-foreground"
 				style={{ gridTemplateColumns: `repeat(${years.length}, minmax(0, 1fr))` }}
 			>
-				{years.map((year, index) => (
-					<span
-						key={year}
-						className={cn(
-							"min-w-0 truncate",
-							index === 0
-								? "text-left"
-								: index === years.length - 1
-									? "text-right"
-									: "text-center",
-							year === ruleFiscalYear && "font-medium text-foreground",
-						)}
-						title={year === ruleFiscalYear ? `${year} rule year` : year}
-					>
-						{year}
-					</span>
-				))}
+				{years.map((year, index) => {
+					const isFocused = focusedIndex === index;
+					return (
+						<span
+							key={year}
+							className={cn(
+								"min-w-0 truncate",
+								index === 0
+									? "text-left"
+									: index === years.length - 1
+										? "text-right"
+										: "text-center",
+								year === ruleFiscalYear && "font-medium text-foreground",
+								isFocused && "font-semibold text-foreground",
+							)}
+							title={year === ruleFiscalYear ? `${year} rule year` : year}
+						>
+							{year}
+						</span>
+					);
+				})}
 			</div>
 			<CounterfactualEndpointLabels
 				title={title}

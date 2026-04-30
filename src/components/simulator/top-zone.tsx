@@ -11,6 +11,7 @@ import type {
 	YearProjection,
 } from "@/lib/scenario";
 import type { MicrosimAggregate } from "@/lib/microsim/impact";
+import { composeScenarioNarrative } from "@/lib/scenario-narrative";
 import { formatCount } from "@/app/utils/formatters";
 
 // "Top zone" — the always-visible essential-info summary at the top of the
@@ -88,6 +89,12 @@ export function TopZone({
 					: "steady"
 			: null;
 
+	const narrative = composeScenarioNarrative({
+		result,
+		distribution,
+		microsim,
+	});
+
 	return (
 		<section className="rounded-lg border bg-background shadow-sm overflow-hidden">
 			<div className="grid lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)]">
@@ -109,6 +116,14 @@ export function TopZone({
 							{direction}
 						</span>
 					</div>
+					{narrative && (
+						<p
+							aria-label="Plain-English scenario summary"
+							className="text-sm leading-snug text-foreground/90 max-w-prose"
+						>
+							{narrative}
+						</p>
+					)}
 					<div
 						className={cn(
 							"text-4xl sm:text-5xl font-semibold tabular-nums leading-none",

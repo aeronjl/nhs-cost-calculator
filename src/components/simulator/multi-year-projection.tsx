@@ -1,8 +1,10 @@
 "use client";
 
+import { type PointerEvent, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { PercentileBand } from "@/lib/uncertainty";
 import type { YearProjection } from "@/lib/scenario";
+import { pointerToYearIndex, useYearFocus } from "@/lib/year-focus";
 
 // Compact multi-year projection display. Shows year-1 / year-N net + a
 // fan-chart sparkline with 50% and 90% confidence bands when available
@@ -207,6 +209,32 @@ function ProjectionFanChart({
 	const baseY = height / 2;
 	const dx = width / Math.max(1, projection.length - 1);
 
+	const { year: focusedYear, setYear, clear } = useYearFocus();
+	const svgRef = useRef<SVGSVGElement | null>(null);
+	const handlePointerMove = (event: PointerEvent<SVGSVGElement>) => {
+		const svg = svgRef.current;
+		if (!svg) return;
+		const next = pointerToYearIndex({
+			clientX: event.clientX,
+			rect: svg.getBoundingClientRect(),
+			years: projection.length,
+			padX: 0,
+			innerWidth: width,
+			viewBoxWidth: width,
+		});
+		if (next !== null) setYear(next);
+	};
+
+	const focusedIndex =
+		focusedYear !== null && focusedYear >= 1 && focusedYear <= projection.length
+			? focusedYear - 1
+			: null;
+	const focusedProjection =
+		focusedIndex !== null ? projection[focusedIndex] ?? null : null;
+	const focusedBand =
+		focusedIndex !== null && bands ? bands[focusedIndex]?.band ?? null : null;
+	const focusedX = focusedIndex !== null ? focusedIndex * dx : null;
+
 	// Map net £ → y coordinate (positive = up = blue/freed).
 	const toY = (n: number): number => baseY - (n / maxAbs) * (baseY * 0.85);
 
@@ -240,30 +268,44 @@ function ProjectionFanChart({
 		.map((p, i) => `${i * dx},${toY(p.net)}`)
 		.join(" ");
 
+	const headlineYear = focusedProjection ?? projection.at(-1) ?? null;
+	const headlineLabel = focusedProjection
+		? `Y${focusedProjection.year}`
+		: `Y${projection.at(-1)?.year ?? projection.length}`;
+
 	return (
 		<div className="rounded-sm border bg-background/80 p-2">
 			<div className="flex items-baseline justify-between gap-2">
 				<div>
 					<div className="text-xs font-medium">Scenario effect fan</div>
 					<div className="text-[10px] text-muted-foreground">
-						Net effect versus the no-policy baseline.
+						{focusedProjection
+							? `Hovering year ${focusedProjection.year} — release to follow the cursor.`
+							: "Net effect versus the no-policy baseline. Hover to scrub years."}
 					</div>
 				</div>
 				<div
 					className={cn(
 						"text-right text-xs font-semibold tabular-nums",
-						valueToneClassName(projection.at(-1)?.net ?? 0),
+						valueToneClassName(headlineYear?.net ?? 0),
 					)}
 				>
-					{formatBn(projection.at(-1)?.net ?? 0)}
+					<span className="text-[9px] uppercase tracking-wider text-muted-foreground mr-1">
+						{headlineLabel}
+					</span>
+					{formatBn(headlineYear?.net ?? 0)}
 				</div>
 			</div>
 			<svg
+				ref={svgRef}
 				viewBox={`0 0 ${width} ${height}`}
-				className="mt-2 h-16 w-full"
+				className="mt-2 h-16 w-full touch-none"
 				preserveAspectRatio="none"
 				role="img"
 				aria-label="Scenario effect fan chart versus no-policy baseline"
+				onPointerMove={handlePointerMove}
+				onPointerLeave={clear}
+				onPointerDown={handlePointerMove}
 			>
 				<title>Scenario effect fan chart versus no-policy baseline</title>
 				{bands && band90Path && (
@@ -300,20 +342,40 @@ function ProjectionFanChart({
 				>
 					<title>central scenario path</title>
 				</polyline>
-				{projection.map((p, i) => (
-					<circle
-						key={p.year}
-						cx={i * dx}
-						cy={toY(p.net)}
-						r="1.4"
-						className={p.net >= 0 ? "fill-blue-600" : "fill-amber-600"}
+				{focusedX !== null && (
+					<line
+						x1={focusedX}
+						x2={focusedX}
+						y1={0}
+						y2={height}
+						stroke="currentColor"
+						strokeDasharray="2 2"
+						strokeWidth="0.6"
 						vectorEffect="non-scaling-stroke"
-					>
-						<title>{`Year ${p.year}: ${formatBn(
-							p.net,
-						)} versus no-policy baseline`}</title>
-					</circle>
-				))}
+						className="text-foreground/60 pointer-events-none"
+					/>
+				)}
+				{projection.map((p, i) => {
+					const isFocused = focusedIndex === i;
+					return (
+						<circle
+							key={p.year}
+							cx={i * dx}
+							cy={toY(p.net)}
+							r={isFocused ? 2.6 : 1.4}
+							className={cn(
+								p.net >= 0 ? "fill-blue-600" : "fill-amber-600",
+								isFocused && "stroke-background",
+							)}
+							strokeWidth={isFocused ? 0.8 : 0}
+							vectorEffect="non-scaling-stroke"
+						>
+							<title>{`Year ${p.year}: ${formatBn(
+								p.net,
+							)} versus no-policy baseline`}</title>
+						</circle>
+					);
+				})}
 			</svg>
 			<div
 				className="mt-1 grid gap-1 text-[9px] tabular-nums text-muted-foreground"
@@ -321,25 +383,47 @@ function ProjectionFanChart({
 					gridTemplateColumns: `repeat(${projection.length}, minmax(0, 1fr))`,
 				}}
 			>
-				{projection.map((p, index) => (
-					<span
-						key={p.year}
-						className={cn(
-							"min-w-0 truncate",
-							index === 0
-								? "text-left"
-								: index === projection.length - 1
-									? "text-right"
-									: "text-center",
-						)}
-					>
-						Y{p.year}
+				{projection.map((p, index) => {
+					const isFocused = focusedIndex === index;
+					return (
+						<span
+							key={p.year}
+							className={cn(
+								"min-w-0 truncate",
+								index === 0
+									? "text-left"
+									: index === projection.length - 1
+										? "text-right"
+										: "text-center",
+								isFocused && "font-semibold text-foreground",
+							)}
+						>
+							Y{p.year}
+						</span>
+					);
+				})}
+			</div>
+			{focusedProjection ? (
+				<div className="mt-1 flex items-baseline justify-between gap-2 text-[9px] tabular-nums">
+					<span className="text-muted-foreground">
+						Y{focusedProjection.year} central{" "}
+						<span className="font-medium text-foreground">
+							{formatBn(focusedProjection.net)}
+						</span>
 					</span>
-				))}
-			</div>
-			<div className="mt-1 text-[9px] text-muted-foreground">
-				baseline = £0
-			</div>
+					{focusedBand ? (
+						<span className="text-muted-foreground">
+							90% {formatBn(focusedBand.p5)} – {formatBn(focusedBand.p95)}
+						</span>
+					) : (
+						<span className="text-muted-foreground">central only</span>
+					)}
+				</div>
+			) : (
+				<div className="mt-1 text-[9px] text-muted-foreground">
+					baseline = £0
+				</div>
+			)}
 		</div>
 	);
 }

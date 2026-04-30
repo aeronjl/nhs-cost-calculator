@@ -1,7 +1,9 @@
 "use client";
 
+import { type PointerEvent, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { MacroState } from "@/lib/scenario";
+import { pointerToYearIndex, useYearFocus } from "@/lib/year-focus";
 
 // Renders the year-by-year macro state of the scenario: CPI deviation, GDP
 // deviation, debt:GDP shift, Bank Rate response, and gilt yield response.
@@ -298,6 +300,42 @@ function MacroStatePathChart({
 				? "#d97706"
 				: "#6b7280";
 
+	const { year: focusedYear, setYear, clear } = useYearFocus();
+	const svgRef = useRef<SVGSVGElement | null>(null);
+	const handlePointerMove = (event: PointerEvent<SVGSVGElement>) => {
+		const svg = svgRef.current;
+		if (!svg) return;
+		const next = pointerToYearIndex({
+			clientX: event.clientX,
+			rect: svg.getBoundingClientRect(),
+			years: values.length,
+			padX,
+			innerWidth,
+			viewBoxWidth: width,
+		});
+		if (next !== null) setYear(next);
+	};
+	const focusedIndex =
+		focusedYear !== null && focusedYear >= 1 && focusedYear <= values.length
+			? focusedYear - 1
+			: null;
+	const focusedValue =
+		focusedIndex !== null ? values[focusedIndex] ?? null : null;
+	const headlineValue = focusedValue ?? finalValue;
+	const headlineLabel = focusedIndex !== null
+		? `Y${path[focusedIndex]?.year ?? focusedIndex + 1}`
+		: `Y${path.at(-1)?.year ?? values.length}`;
+	const headlineTone =
+		focusedValue !== null
+			? focusedValue > 0
+				? positiveTone
+				: focusedValue < 0
+					? positiveTone === "blue"
+						? "amber"
+						: "blue"
+					: "muted"
+			: finalTone;
+
 	return (
 		<div className="rounded-md border bg-background/60 p-2">
 			<div className="flex items-start justify-between gap-2">
@@ -310,22 +348,29 @@ function MacroStatePathChart({
 				<div
 					className={cn(
 						"text-right text-xs font-semibold tabular-nums",
-						finalTone === "blue"
+						headlineTone === "blue"
 							? "text-blue-700"
-							: finalTone === "amber"
+							: headlineTone === "amber"
 								? "text-amber-700"
 								: "text-muted-foreground",
 					)}
 				>
-					{formatValue(finalValue)}
+					<span className="mr-1 text-[9px] uppercase tracking-wider text-muted-foreground">
+						{headlineLabel}
+					</span>
+					{formatValue(headlineValue)}
 				</div>
 			</div>
 			<svg
+				ref={svgRef}
 				viewBox={`0 0 ${width} ${height}`}
-				className="mt-2 h-20 w-full"
+				className="mt-2 h-20 w-full touch-none"
 				preserveAspectRatio="none"
 				role="img"
 				aria-label={ariaLabel}
+				onPointerMove={handlePointerMove}
+				onPointerLeave={clear}
+				onPointerDown={handlePointerMove}
 			>
 				<line
 					x1={padX}
@@ -352,23 +397,51 @@ function MacroStatePathChart({
 					strokeLinejoin="round"
 					vectorEffect="non-scaling-stroke"
 				/>
-				{values.map((value, index) => (
-					<circle
-						key={`${title}-${path[index]?.year ?? index}`}
-						cx={xAt(index)}
-						cy={yAt(value)}
-						r={index === values.length - 1 ? 2.4 : 1.6}
-						fill={color}
+				{values.map((value, index) => {
+					const isFocused = focusedIndex === index;
+					return (
+						<circle
+							key={`${title}-${path[index]?.year ?? index}`}
+							cx={xAt(index)}
+							cy={yAt(value)}
+							r={isFocused ? 3 : index === values.length - 1 ? 2.4 : 1.6}
+							fill={color}
+							stroke={isFocused ? "white" : undefined}
+							strokeWidth={isFocused ? 0.8 : 0}
+							vectorEffect="non-scaling-stroke"
+						>
+							<title>{`${title} · year ${path[index]?.year ?? index + 1}: ${formatValue(value)} vs baseline`}</title>
+						</circle>
+					);
+				})}
+				{focusedIndex !== null && (
+					<line
+						x1={xAt(focusedIndex)}
+						x2={xAt(focusedIndex)}
+						y1={padY}
+						y2={height - padY}
+						stroke="currentColor"
+						strokeDasharray="2 2"
+						strokeWidth="0.8"
 						vectorEffect="non-scaling-stroke"
-					>
-						<title>{`${title} · year ${path[index]?.year ?? index + 1}: ${formatValue(value)} vs baseline`}</title>
-					</circle>
-				))}
+						className="text-foreground/60 pointer-events-none"
+					/>
+				)}
 			</svg>
 			<div className="mt-1 flex justify-between text-[9px] tabular-nums text-muted-foreground">
-				<span>Y{path[0]?.year ?? 1}</span>
+				<span
+					className={cn(focusedIndex === 0 && "font-semibold text-foreground")}
+				>
+					Y{path[0]?.year ?? 1}
+				</span>
 				<span>baseline = 0</span>
-				<span>Y{path.at(-1)?.year ?? values.length}</span>
+				<span
+					className={cn(
+						focusedIndex === values.length - 1 && "font-semibold text-foreground",
+					)}
+				>
+					Y{path.at(-1)?.year ?? values.length}
+				</span>
 			</div>
 		</div>
 	);

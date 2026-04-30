@@ -65,6 +65,7 @@ import { MultiYearProjection } from "./multi-year-projection";
 import { ScenarioAssumptions } from "./scenario-assumptions";
 import { TopZone } from "./top-zone";
 import { WhoPaysOverview } from "./who-pays-overview";
+import { YearFocusProvider } from "@/lib/year-focus";
 
 // Output rail with progressive disclosure:
 //
@@ -543,6 +544,7 @@ export function OutputRail({
 	const year5 = projection[projection.length - 1];
 
 	return (
+		<YearFocusProvider>
 		<div className="space-y-4">
 			{/* Top zone: always-visible essential summary */}
 			<div id={sectionHash("summary")} className="scroll-mt-20">
@@ -869,6 +871,7 @@ export function OutputRail({
 				})}
 			</section>
 		</div>
+		</YearFocusProvider>
 	);
 }
 
