@@ -13,6 +13,7 @@ import {
 } from "./borrowing-regime";
 import { auditFiscalReactionBacktests } from "./fiscal-reaction-backtest";
 import type {
+	BaselineComparison,
 	FiscalRuleFan,
 	FiscalRulePriorSensitivity,
 	FiscalRuleUncertaintyDecomposition,
@@ -50,6 +51,34 @@ export interface ModelAuditScenarioSummary {
 	stabilityRuleAt: string;
 }
 
+export interface ModelAuditBaselineComparisonYear {
+	fiscalYear: string;
+	baselinePsnbGbp: number;
+	scenarioPsnbShiftGbp: number;
+	adjustedPsnbGbp: number;
+	baselinePsnbPctGdp: number;
+	adjustedPsnbPctGdp: number;
+	baselineDebtGdpPct: number;
+	adjustedDebtGdpPct: number;
+	debtStockDeltaGbp: number;
+}
+
+export interface ModelAuditFiscalRuleComparison {
+	stabilityRuleAt: string;
+	baselineHeadroomGbp: number;
+	adjustedHeadroomGbp: number;
+	consolidationRequiredGbp: number;
+	riskRating: BaselineComparison["diagnostics"]["riskRating"];
+	debtProxyRisingAtHorizon: boolean;
+	debtProxyShiftPpAtHorizon: number;
+	policyReactionGbp: number;
+}
+
+export interface ModelAuditBaselineComparison {
+	years: readonly ModelAuditBaselineComparisonYear[];
+	rule: ModelAuditFiscalRuleComparison;
+}
+
 export interface ModelAuditRegimeProbability {
 	id: string;
 	label: string;
@@ -85,10 +114,24 @@ export interface ModelAuditLiveRiskSummary {
 
 export interface ModelAuditEvidencePack {
 	scenario: ModelAuditScenarioSummary;
+	baselineComparison: ModelAuditBaselineComparison | null;
 	calibration: readonly ModelAuditCalibrationItem[];
 	backtests: ModelAuditBacktestSummary;
 	liveRisk: ModelAuditLiveRiskSummary;
 	limitations: readonly string[];
+}
+
+export interface ModelAuditExportOptions {
+	generatedAt?: string;
+	shareUrl?: string;
+	title?: string;
+}
+
+export interface ModelAuditExportBundle {
+	schemaVersion: 1;
+	generatedAt: string;
+	shareUrl?: string;
+	audit: ModelAuditEvidencePack;
 }
 
 const auctionCalibration = auctionDemandCalibration as {
@@ -142,15 +185,49 @@ const largestDownsideLayerLabel = (
 	return layer && layer.p5DeltaFromPreviousGbp < 0 ? layer.label : null;
 };
 
+const buildBaselineComparisonSummary = (
+	comparison: BaselineComparison | undefined,
+): ModelAuditBaselineComparison | null => {
+	if (!comparison) return null;
+	return {
+		years: comparison.years.map((year) => ({
+			fiscalYear: year.fiscalYear,
+			baselinePsnbGbp: year.baselinePsnb,
+			scenarioPsnbShiftGbp: year.psnbShift,
+			adjustedPsnbGbp: year.adjustedPsnb,
+			baselinePsnbPctGdp: year.baselinePsnbPctGdp,
+			adjustedPsnbPctGdp: year.adjustedPsnbPctGdp,
+			baselineDebtGdpPct: year.baselineDebtGdp,
+			adjustedDebtGdpPct: year.adjustedDebtGdp,
+			debtStockDeltaGbp: year.debtStockDeltaGbp,
+		})),
+		rule: {
+			stabilityRuleAt: comparison.baseline.stabilityRuleAt,
+			baselineHeadroomGbp: comparison.baseline.stabilityRuleHeadroom,
+			adjustedHeadroomGbp: comparison.adjustedStabilityHeadroom,
+			consolidationRequiredGbp:
+				comparison.diagnostics.consolidationRequiredGbp,
+			riskRating: comparison.diagnostics.riskRating,
+			debtProxyRisingAtHorizon:
+				comparison.diagnostics.debtProxyRisingAtHorizon,
+			debtProxyShiftPpAtHorizon:
+				comparison.diagnostics.debtProxyShiftPpAtHorizon,
+			policyReactionGbp: comparison.diagnostics.policyReactionGbp,
+		},
+	};
+};
+
 export const buildModelAuditEvidencePack = ({
 	result,
 	baseline,
+	baselineComparison,
 	fiscalRuleFan,
 	fiscalRulePriorSensitivity,
 	fiscalRuleUncertaintyDecomposition,
 }: {
 	result: ScenarioResult;
 	baseline: OBRBaseline;
+	baselineComparison?: BaselineComparison;
 	fiscalRuleFan?: FiscalRuleFan;
 	fiscalRulePriorSensitivity?: FiscalRulePriorSensitivity;
 	fiscalRuleUncertaintyDecomposition?: FiscalRuleUncertaintyDecomposition;
@@ -187,6 +264,7 @@ export const buildModelAuditEvidencePack = ({
 			baselineAsOf: baseline.asOf,
 			stabilityRuleAt: baseline.stabilityRuleAt,
 		},
+		baselineComparison: buildBaselineComparisonSummary(baselineComparison),
 		calibration: [
 			{
 				label: "Borrowing balance-sheet calibration",
@@ -269,4 +347,255 @@ export const buildModelAuditEvidencePack = ({
 			"Distributional incidence is explicit where available; unmodelled lines are left out rather than allocated arbitrarily.",
 		],
 	};
+};
+
+const formatGbp = (n: number): string => {
+	const abs = Math.abs(n);
+	const sign = n < 0 ? "-" : "";
+	if (abs >= 1_000_000_000)
+		return `${sign}£${(abs / 1_000_000_000).toFixed(1)}bn`;
+	if (abs >= 1_000_000) return `${sign}£${Math.round(abs / 1_000_000)}m`;
+	return `${sign}£${Math.round(abs).toLocaleString()}`;
+};
+
+const formatSignedGbp = (n: number): string => {
+	const sign = n > 0 ? "+" : n < 0 ? "-" : "";
+	return `${sign}${formatGbp(Math.abs(n))}`;
+};
+
+const formatProbability = (n: number | null): string =>
+	n === null ? "n/a" : `${Math.round(n * 100)}%`;
+
+const formatPct = (n: number): string => `${n.toFixed(1)}%`;
+
+const formatSignedPp = (n: number): string => {
+	const sign = n > 0 ? "+" : n < 0 ? "-" : "";
+	return `${sign}${Math.abs(n).toFixed(2)}pp`;
+};
+
+const formatBp = (n: number | null): string =>
+	n === null ? "n/a" : `${Math.round(n)}bp`;
+
+const md = (value: string | number | boolean | null): string =>
+	String(value ?? "n/a").replace(/\|/g, "\\|");
+
+const markdownTable = (
+	headers: readonly string[],
+	rows: readonly (readonly (string | number | boolean | null)[])[],
+): string => {
+	const header = `| ${headers.map(md).join(" | ")} |`;
+	const divider = `| ${headers.map(() => "---").join(" | ")} |`;
+	const body = rows.map((row) => `| ${row.map(md).join(" | ")} |`);
+	return [header, divider, ...body].join("\n");
+};
+
+export const buildModelAuditExportBundle = (
+	audit: ModelAuditEvidencePack,
+	options: ModelAuditExportOptions = {},
+): ModelAuditExportBundle => {
+	const generatedAt = options.generatedAt ?? new Date().toISOString();
+	return {
+		schemaVersion: 1,
+		generatedAt,
+		...(options.shareUrl ? { shareUrl: options.shareUrl } : {}),
+		audit,
+	};
+};
+
+export const buildModelAuditJsonExport = (
+	audit: ModelAuditEvidencePack,
+	options: ModelAuditExportOptions = {},
+): string => JSON.stringify(buildModelAuditExportBundle(audit, options), null, 2);
+
+export const buildModelAuditMarkdownAppendix = (
+	audit: ModelAuditEvidencePack,
+	options: ModelAuditExportOptions = {},
+): string => {
+	const bundle = buildModelAuditExportBundle(audit, options);
+	const title = options.title ?? "Model Audit Research Appendix";
+	const scenario = audit.scenario;
+	const liveRisk = audit.liveRisk;
+	const sections: string[] = [
+		`# ${title}`,
+		`Generated: ${bundle.generatedAt}`,
+	];
+
+	if (bundle.shareUrl) sections.push(`Share URL: ${bundle.shareUrl}`);
+
+	sections.push(
+		"## Scenario",
+		markdownTable(
+			["Metric", "Value"],
+			[
+				["Scenario lines", scenario.lineCount],
+				[
+					"Composition",
+					`${scenario.taxLineCount} tax / ${scenario.programmeLineCount} programme / ${scenario.borrowingLineCount} borrowing`,
+				],
+				["Borrowing amount", formatGbp(scenario.borrowingAmountGbp)],
+				["Methodology range coverage", scenario.methodologyRangeCoverage],
+				["Behavioural tax lines", scenario.behaviouralTaxLines],
+				["Overridden lines", scenario.overriddenLineCount],
+				["Baseline", `${scenario.baselineAsOf} EFO`],
+				["Stability-rule year", scenario.stabilityRuleAt],
+			],
+		),
+	);
+
+	if (audit.baselineComparison) {
+		const { years, rule } = audit.baselineComparison;
+		sections.push(
+			"## Baseline vs Scenario",
+			markdownTable(
+				[
+					"Fiscal year",
+					"Baseline PSNB",
+					"Scenario shift",
+					"Adjusted PSNB",
+					"Baseline debt/GDP",
+					"Adjusted debt/GDP",
+				],
+				years.map((year) => [
+					year.fiscalYear,
+					formatGbp(year.baselinePsnbGbp),
+					formatSignedGbp(year.scenarioPsnbShiftGbp),
+					formatGbp(year.adjustedPsnbGbp),
+					formatPct(year.baselineDebtGdpPct),
+					formatPct(year.adjustedDebtGdpPct),
+				]),
+			),
+			markdownTable(
+				["Fiscal-rule check", "Value"],
+				[
+					["Rule year", rule.stabilityRuleAt],
+					["Baseline headroom", formatGbp(rule.baselineHeadroomGbp)],
+					["Adjusted headroom", formatGbp(rule.adjustedHeadroomGbp)],
+					[
+						"Consolidation required",
+						formatGbp(rule.consolidationRequiredGbp),
+					],
+					["Risk rating", rule.riskRating],
+					["Debt proxy rising", rule.debtProxyRisingAtHorizon],
+					[
+						"Debt proxy shift",
+						formatSignedPp(rule.debtProxyShiftPpAtHorizon),
+					],
+					["Policy reaction", formatGbp(rule.policyReactionGbp)],
+				],
+			),
+		);
+	}
+
+	sections.push(
+		"## Calibration Evidence",
+		markdownTable(
+			["Calibration", "As of", "Coverage", "Source"],
+			audit.calibration.map((item) => [
+				item.label,
+				item.asOf,
+				item.coverage,
+				item.sourceLabel,
+			]),
+		),
+		"## Historical Backtests",
+		markdownTable(
+			["Metric", "Result"],
+			[
+				["Borrowing central fit", audit.backtests.borrowingCentralFit],
+				[
+					"Borrowing overlay fit",
+					`${audit.backtests.borrowingOverlayFit}; mean miss ${formatBp(
+						audit.backtests.borrowingMeanOverlayMissBp,
+					)}`,
+				],
+				[
+					"Borrowing regime classifier",
+					`${audit.backtests.borrowingRegimeClassifierFit}; mean labelled probability ${formatProbability(
+						audit.backtests.borrowingRegimeMeanLabelProbability,
+					)}`,
+				],
+				[
+					"Fiscal reaction fit",
+					`${audit.backtests.fiscalReactionPriorFit}; rule-only ${audit.backtests.fiscalReactionRuleOnlyFit}`,
+				],
+				[
+					"Prior changed rows",
+					audit.backtests.fiscalReactionPriorChangedRows,
+				],
+			],
+		),
+		"## Live Risk",
+		markdownTable(
+			["Metric", "Value"],
+			[
+				["Raw breach risk", formatProbability(liveRisk.breachProbability)],
+				[
+					"Post-reaction breach risk",
+					formatProbability(liveRisk.postReactionBreachProbability),
+				],
+				["Top reaction package", liveRisk.topReactionPackageLabel],
+				["Borrowing regime", liveRisk.borrowingRegimeLabel],
+				["Borrowing stress rating", liveRisk.borrowingStressRating],
+				[
+					"Expected peak borrowing pressure",
+					formatBp(liveRisk.borrowingExpectedPeakPressureBp),
+				],
+				["Largest downside layer", liveRisk.largestDownsideLayerLabel],
+			],
+		),
+	);
+
+	if (liveRisk.regimeProbabilities.length > 0) {
+		sections.push(
+			"### Borrowing Regime Probabilities",
+			markdownTable(
+				["Regime", "Probability", "Overlay", "Nearest episode"],
+				liveRisk.regimeProbabilities.map((row) => [
+					row.label,
+					formatProbability(row.probability),
+					formatBp(row.expectedOverlayBp),
+					row.nearestEpisode,
+				]),
+			),
+		);
+	}
+
+	if (liveRisk.priorSensitivityRows.length > 0) {
+		sections.push(
+			"### Prior Sensitivity",
+			markdownTable(
+				["Prior", "Dominant package", "Trigger", "Post-breach", "p95 action"],
+				liveRisk.priorSensitivityRows.map((row) => [
+					row.label,
+					row.dominantPackageLabel,
+					formatProbability(row.triggerProbability),
+					formatProbability(row.postReactionBreachProbability),
+					formatGbp(row.p95GrossActionGbp),
+				]),
+			),
+		);
+	}
+
+	if (liveRisk.uncertaintyLayers.length > 0) {
+		sections.push(
+			"### Uncertainty Decomposition",
+			markdownTable(
+				["Layer", "Breach", "p5 headroom", "p50 headroom", "p5 move"],
+				liveRisk.uncertaintyLayers.map((row) => [
+					row.label,
+					formatProbability(row.breachProbability),
+					formatGbp(row.p5HeadroomGbp),
+					formatGbp(row.p50HeadroomGbp),
+					row.label === "Central path" ? "base" : formatSignedGbp(row.p5MoveGbp),
+				]),
+			),
+		);
+	}
+
+	sections.push(
+		"## Limitations",
+		audit.limitations.map((limitation) => `- ${limitation}`).join("\n"),
+	);
+
+	return `${sections.join("\n\n")}\n`;
 };

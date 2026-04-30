@@ -1,15 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { OBR_BASELINE } from "@/data/baseline/obr-baseline";
 import {
+	projectAgainstBaseline,
 	projectFiscalRuleFan,
 	projectFiscalRulePriorSensitivity,
 	projectFiscalRuleUncertaintyDecomposition,
 } from "./baseline-projection";
-import { buildModelAuditEvidencePack } from "./model-audit";
-import { evaluateScenario } from "./scenario";
+import {
+	buildModelAuditEvidencePack,
+	buildModelAuditJsonExport,
+	buildModelAuditMarkdownAppendix,
+} from "./model-audit";
+import { evaluateScenario, projectScenarioWithGEFeedback } from "./scenario";
 
 describe("model audit evidence pack", () => {
-	it("collects scenario, calibration, backtest, regime, and risk evidence", () => {
+	const buildBorrowingAudit = () => {
 		const result = evaluateScenario([
 			{
 				id: "borrow",
@@ -22,6 +27,11 @@ describe("model audit evidence pack", () => {
 				},
 			},
 		]);
+		const ge = projectScenarioWithGEFeedback(result, OBR_BASELINE.years.length);
+		const baselineComparison = projectAgainstBaseline(
+			ge.withFeedback,
+			OBR_BASELINE,
+		);
 		const fiscalRuleFan = projectFiscalRuleFan(result, OBR_BASELINE, 120, 7);
 		const fiscalRulePriorSensitivity = projectFiscalRulePriorSensitivity(
 			result,
@@ -35,14 +45,26 @@ describe("model audit evidence pack", () => {
 		const audit = buildModelAuditEvidencePack({
 			result,
 			baseline: OBR_BASELINE,
+			baselineComparison,
 			fiscalRuleFan,
 			fiscalRulePriorSensitivity,
 			fiscalRuleUncertaintyDecomposition,
 		});
+		return { audit, baselineComparison };
+	};
+
+	it("collects scenario, baseline comparison, calibration, backtest, regime, and risk evidence", () => {
+		const { audit, baselineComparison } = buildBorrowingAudit();
 
 		expect(audit.scenario.lineCount).toBe(1);
 		expect(audit.scenario.borrowingLineCount).toBe(1);
 		expect(audit.scenario.borrowingAmountGbp).toBe(80_000_000_000);
+		expect(audit.baselineComparison?.years).toHaveLength(
+			OBR_BASELINE.years.length,
+		);
+		expect(audit.baselineComparison?.rule.adjustedHeadroomGbp).toBe(
+			baselineComparison.adjustedStabilityHeadroom,
+		);
 		expect(audit.calibration.map((item) => item.label)).toContain(
 			"Borrowing balance-sheet calibration",
 		);
@@ -67,5 +89,32 @@ describe("model audit evidence pack", () => {
 			"Policy reaction",
 		]);
 		expect(audit.limitations.length).toBeGreaterThan(0);
+	});
+
+	it("exports a deterministic markdown appendix and JSON evidence bundle", () => {
+		const { audit } = buildBorrowingAudit();
+		const generatedAt = "2026-04-30T12:00:00.000Z";
+		const shareUrl =
+			"https://example.test/sandbox?scenario=b::80000000000&editor=stack";
+
+		const markdown = buildModelAuditMarkdownAppendix(audit, {
+			generatedAt,
+			shareUrl,
+		});
+		expect(markdown).toContain("# Model Audit Research Appendix");
+		expect(markdown).toContain(`Generated: ${generatedAt}`);
+		expect(markdown).toContain(`Share URL: ${shareUrl}`);
+		expect(markdown).toContain("| Fiscal year | Baseline PSNB |");
+		expect(markdown).toContain("## Calibration Evidence");
+		expect(markdown).toContain("### Uncertainty Decomposition");
+
+		const json = buildModelAuditJsonExport(audit, { generatedAt, shareUrl });
+		const parsed = JSON.parse(json);
+		expect(parsed.schemaVersion).toBe(1);
+		expect(parsed.generatedAt).toBe(generatedAt);
+		expect(parsed.shareUrl).toBe(shareUrl);
+		expect(parsed.audit.baselineComparison.years).toHaveLength(
+			OBR_BASELINE.years.length,
+		);
 	});
 });

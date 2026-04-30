@@ -1,4 +1,19 @@
-import type { ModelAuditEvidencePack } from "@/lib/model-audit";
+"use client";
+
+import { useMemo, useState } from "react";
+import {
+	Check,
+	Download,
+	FileJson,
+	FileText,
+	Link as LinkIcon,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+	buildModelAuditJsonExport,
+	buildModelAuditMarkdownAppendix,
+	type ModelAuditEvidencePack,
+} from "@/lib/model-audit";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -26,27 +41,117 @@ const formatBnDelta = (n: number): string => {
 const formatProbability = (n: number | null): string =>
 	n === null ? "n/a" : `${Math.round(n * 100)}%`;
 
+const formatPct = (n: number): string => `${n.toFixed(1)}%`;
+
+const formatSignedPp = (n: number): string => {
+	const sign = n > 0 ? "+" : n < 0 ? "−" : "";
+	return `${sign}${Math.abs(n).toFixed(2)}pp`;
+};
+
 const formatBp = (n: number | null): string =>
 	n === null ? "n/a" : `${Math.round(n)}bp`;
+
+const exportFilename = (kind: "md" | "json", generatedAt: string): string =>
+	`model-audit-${generatedAt.slice(0, 10)}.${kind}`;
+
+const downloadTextFile = (
+	filename: string,
+	body: string,
+	mimeType: string,
+) => {
+	const blob = new Blob([body], { type: mimeType });
+	const url = URL.createObjectURL(blob);
+	const anchor = document.createElement("a");
+	anchor.href = url;
+	anchor.download = filename;
+	document.body.appendChild(anchor);
+	anchor.click();
+	anchor.remove();
+	window.setTimeout(() => URL.revokeObjectURL(url), 0);
+};
 
 export function ModelAuditPanel({ audit }: Props) {
 	const {
 		scenario,
+		baselineComparison,
 		calibration,
 		backtests,
 		liveRisk,
 		limitations,
 	} = audit;
+	const [copied, setCopied] = useState(false);
+	const generatedAt = useMemo(() => new Date().toISOString(), [audit]);
+
+	const currentShareUrl = () =>
+		typeof window === "undefined" ? undefined : window.location.href;
+
+	const downloadAppendix = (kind: "md" | "json") => {
+		const shareUrl = currentShareUrl();
+		const body =
+			kind === "md"
+				? buildModelAuditMarkdownAppendix(audit, { generatedAt, shareUrl })
+				: buildModelAuditJsonExport(audit, { generatedAt, shareUrl });
+		downloadTextFile(
+			exportFilename(kind, generatedAt),
+			body,
+			kind === "md" ? "text/markdown;charset=utf-8" : "application/json",
+		);
+	};
+
+	const copyShareUrl = async () => {
+		const shareUrl = currentShareUrl();
+		if (!shareUrl || !navigator.clipboard) return;
+		try {
+			await navigator.clipboard.writeText(shareUrl);
+			setCopied(true);
+			window.setTimeout(() => setCopied(false), 1600);
+		} catch {
+			setCopied(false);
+		}
+	};
 
 	return (
 		<div className="space-y-2">
-			<div className="flex items-baseline justify-between">
+			<div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between">
 				<h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
 					Model audit
 				</h3>
-				<span className="text-[10px] text-muted-foreground">
-					evidence pack
-				</span>
+				<div className="flex flex-wrap items-center gap-1.5">
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						className="h-7 px-2 text-[10px]"
+						onClick={copyShareUrl}
+					>
+						{copied ? <Check aria-hidden="true" /> : <LinkIcon aria-hidden="true" />}
+						{copied ? "Copied" : "Link"}
+					</Button>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						className="h-7 px-2 text-[10px]"
+						onClick={() => downloadAppendix("md")}
+					>
+						<FileText aria-hidden="true" />
+						MD
+					</Button>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						className="h-7 px-2 text-[10px]"
+						onClick={() => downloadAppendix("json")}
+					>
+						<FileJson aria-hidden="true" />
+						JSON
+					</Button>
+					<span className="inline-flex h-7 items-center gap-1 text-[10px] text-muted-foreground">
+						<Download aria-hidden="true" className="size-3" />
+						evidence pack
+					</span>
+				</div>
 			</div>
 
 			<div className="rounded-md border bg-background/60 p-3 space-y-3 text-[10px]">
@@ -97,6 +202,103 @@ export function ModelAuditPanel({ audit }: Props) {
 						strong
 					/>
 				</div>
+
+				{baselineComparison && (
+					<div className="rounded-sm border bg-muted/20 p-2 space-y-2">
+						<div className="flex items-baseline justify-between gap-2">
+							<span className="font-medium text-foreground">
+								Baseline vs scenario
+							</span>
+							<span
+								className={cn(
+									"uppercase tracking-wider",
+									baselineComparison.rule.riskRating === "breach"
+										? "text-red-700"
+										: baselineComparison.rule.riskRating === "tight"
+											? "text-amber-700"
+											: "text-muted-foreground",
+								)}
+							>
+								{baselineComparison.rule.riskRating}
+							</span>
+						</div>
+						<div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+							<Metric
+								label="Rule headroom"
+								value={`${formatBn(
+									baselineComparison.rule.baselineHeadroomGbp,
+								)} → ${formatBn(
+									baselineComparison.rule.adjustedHeadroomGbp,
+								)}`}
+								strong
+							/>
+							<Metric
+								label="Consolidation"
+								value={formatBn(
+									baselineComparison.rule.consolidationRequiredGbp,
+								)}
+								strong
+							/>
+							<Metric
+								label="Debt proxy shift"
+								value={formatSignedPp(
+									baselineComparison.rule.debtProxyShiftPpAtHorizon,
+								)}
+								strong
+							/>
+						</div>
+						<div className="overflow-x-auto rounded-sm border bg-background/70">
+							<table className="w-full min-w-[680px] tabular-nums">
+								<thead className="text-muted-foreground">
+									<tr className="text-left">
+										<th className="px-2 py-1 font-medium">Year</th>
+										<th className="px-2 py-1 font-medium">Baseline PSNB</th>
+										<th className="px-2 py-1 font-medium">Scenario shift</th>
+										<th className="px-2 py-1 font-medium">Adjusted PSNB</th>
+										<th className="px-2 py-1 font-medium">Debt/GDP</th>
+										<th className="px-2 py-1 font-medium">Adjusted debt/GDP</th>
+									</tr>
+								</thead>
+								<tbody>
+									{baselineComparison.years.map((year) => (
+										<tr
+											key={year.fiscalYear}
+											className="border-t border-border/60"
+										>
+											<td className="px-2 py-1 font-medium text-foreground">
+												{year.fiscalYear}
+											</td>
+											<td className="px-2 py-1">
+												{formatBn(year.baselinePsnbGbp)}
+											</td>
+											<td
+												className={cn(
+													"px-2 py-1",
+													year.scenarioPsnbShiftGbp > 0
+														? "text-blue-700"
+														: year.scenarioPsnbShiftGbp < 0
+															? "text-amber-700"
+															: "text-muted-foreground",
+												)}
+											>
+												{formatBnDelta(year.scenarioPsnbShiftGbp)}
+											</td>
+											<td className="px-2 py-1">
+												{formatBn(year.adjustedPsnbGbp)}
+											</td>
+											<td className="px-2 py-1">
+												{formatPct(year.baselineDebtGdpPct)}
+											</td>
+											<td className="px-2 py-1">
+												{formatPct(year.adjustedDebtGdpPct)}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				)}
 
 				<div className="overflow-x-auto rounded-sm border bg-muted/20">
 					<table className="w-full min-w-[620px] tabular-nums">

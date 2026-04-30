@@ -177,6 +177,7 @@ export function OutputRail({
 				? buildModelAuditEvidencePack({
 						result,
 						baseline,
+						baselineComparison,
 						fiscalRuleFan,
 						fiscalRulePriorSensitivity,
 						fiscalRuleUncertaintyDecomposition,
@@ -184,6 +185,7 @@ export function OutputRail({
 				: undefined,
 		[
 			baseline,
+			baselineComparison,
 			fiscalRuleFan,
 			fiscalRulePriorSensitivity,
 			fiscalRuleUncertaintyDecomposition,
