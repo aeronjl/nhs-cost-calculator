@@ -841,7 +841,7 @@ function FiscalCounterfactualChart({
 	fiscalRuleFan?: FiscalRuleFan;
 	fiscalRuleUncertaintyDecomposition?: FiscalRuleUncertaintyDecomposition;
 }) {
-	const { years, baseline, policyReactionPath } = comparison;
+	const { years, policyReactionPath } = comparison;
 	if (years.length === 0) return null;
 
 	const finalYear = years[years.length - 1]!;
@@ -856,6 +856,14 @@ function FiscalCounterfactualChart({
 		!!fiscalRuleFan &&
 		fiscalRuleFan.policyReactionTriggeredProbability > 0 &&
 		fiscalRuleFan.pathBands.length === years.length;
+	const ruleYear = comparison.ruleYear ?? years.at(-1)!;
+	const ruleFiscalYear = ruleYear.fiscalYear;
+	const rulePsnbDelta = ruleYear.adjustedPsnb - ruleYear.baselinePsnb;
+	const ruleDebtDelta = ruleYear.adjustedDebtGdp - ruleYear.baselineDebtGdp;
+	const psnbRuleTone =
+		rulePsnbDelta < 0 ? "blue" : rulePsnbDelta > 0 ? "amber" : "muted";
+	const debtRuleTone =
+		ruleDebtDelta < 0 ? "blue" : ruleDebtDelta > 0 ? "amber" : "muted";
 	const psnbSeries = [
 		{
 			label: "current-policy baseline",
@@ -957,7 +965,7 @@ function FiscalCounterfactualChart({
 					subtitle="Lower line means less borrowing."
 					ariaLabel="PSNB baseline and scenario counterfactual path"
 					years={years.map((year) => year.fiscalYear)}
-					ruleFiscalYear={baseline.stabilityRuleAt}
+					ruleFiscalYear={ruleFiscalYear}
 					series={psnbSeries}
 					gapColor={scenarioColour}
 					fanBand={fiscalRuleFan?.pathBands.map((year) => year.psnbBand)}
@@ -970,13 +978,22 @@ function FiscalCounterfactualChart({
 					}
 					fanColor={scenarioColour}
 					formatValue={formatAxisBn}
+					formatDeltaValue={formatBnDelta}
+					ruleCallout={{
+						label: `${ruleFiscalYear} PSNB delta`,
+						value: formatBnDelta(rulePsnbDelta),
+						detail: `${formatBn(ruleYear.baselinePsnb)} baseline -> ${formatBn(
+							ruleYear.adjustedPsnb,
+						)} scenario`,
+						tone: psnbRuleTone,
+					}}
 				/>
 				<CounterfactualPathChart
 					title="Debt:GDP path"
 					subtitle="Scenario debt stock relative to the OBR path."
 					ariaLabel="Debt to GDP baseline and scenario counterfactual path"
 					years={years.map((year) => year.fiscalYear)}
-					ruleFiscalYear={baseline.stabilityRuleAt}
+					ruleFiscalYear={ruleFiscalYear}
 					series={debtSeries}
 					gapColor={scenarioColour}
 					fanBand={fiscalRuleFan?.pathBands.map((year) => year.debtGdpBand)}
@@ -989,6 +1006,15 @@ function FiscalCounterfactualChart({
 					}
 					fanColor={scenarioColour}
 					formatValue={formatPct}
+					formatDeltaValue={formatSignedPp}
+					ruleCallout={{
+						label: `${ruleFiscalYear} debt:GDP delta`,
+						value: formatSignedPp(ruleDebtDelta),
+						detail: `${formatPct(ruleYear.baselineDebtGdp)} baseline -> ${formatPct(
+							ruleYear.adjustedDebtGdp,
+						)} scenario`,
+						tone: debtRuleTone,
+					}}
 				/>
 			</div>
 			{fiscalRuleUncertaintyDecomposition && (
@@ -1045,6 +1071,13 @@ type CounterfactualPathBand = {
 	p95: number;
 };
 
+type CounterfactualRuleCallout = {
+	label: string;
+	value: string;
+	detail: string;
+	tone: "blue" | "amber" | "red" | "muted";
+};
+
 function CounterfactualPathChart({
 	title,
 	subtitle,
@@ -1057,6 +1090,8 @@ function CounterfactualPathChart({
 	postReactionFanBand,
 	fanColor,
 	formatValue,
+	formatDeltaValue,
+	ruleCallout,
 }: {
 	title: string;
 	subtitle: string;
@@ -1069,6 +1104,8 @@ function CounterfactualPathChart({
 	postReactionFanBand?: readonly CounterfactualPathBand[];
 	fanColor: string;
 	formatValue: (value: number) => string;
+	formatDeltaValue: (value: number) => string;
+	ruleCallout: CounterfactualRuleCallout;
 }) {
 	if (years.length === 0 || series.length === 0) return null;
 
@@ -1134,6 +1171,24 @@ function CounterfactualPathChart({
 		"p5",
 	);
 	const ruleIndex = years.findIndex((year) => year === ruleFiscalYear);
+	const ruleBaselineValue =
+		ruleIndex >= 0 ? baselineValues[ruleIndex] : undefined;
+	const ruleScenarioValue =
+		ruleIndex >= 0 ? scenarioValues[ruleIndex] : undefined;
+	const showRuleDeltaSegment =
+		ruleBaselineValue !== undefined && ruleScenarioValue !== undefined;
+	const tooltipFor = (
+		item: CounterfactualPathSeries,
+		value: number,
+		index: number,
+	): string => {
+		const baselineValue = baselineValues[index];
+		const delta =
+			item === series[0] || baselineValue === undefined
+				? ""
+				: ` (${formatDeltaValue(value - baselineValue)} vs baseline)`;
+		return `${item.label} · ${years[index]}: ${formatValue(value)}${delta}`;
+	};
 
 	return (
 		<div className="rounded-sm border bg-muted/20 p-2">
@@ -1148,6 +1203,25 @@ function CounterfactualPathChart({
 					<div>{formatValue(rawMax)}</div>
 					<div>{formatValue(rawMin)}</div>
 				</div>
+			</div>
+			<div
+				className="mt-2 flex flex-col gap-1 rounded-sm border bg-background/70 px-2 py-1.5 sm:flex-row sm:items-baseline sm:justify-between"
+				aria-label={`${ruleCallout.label}: ${ruleCallout.value} versus baseline`}
+			>
+				<span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+					{ruleCallout.label}
+				</span>
+				<span
+					className={cn(
+						"text-xs font-semibold tabular-nums",
+						metricToneClassName(ruleCallout.tone),
+					)}
+				>
+					{ruleCallout.value}
+				</span>
+				<span className="text-[10px] tabular-nums text-muted-foreground sm:text-right">
+					{ruleCallout.detail}
+				</span>
 			</div>
 			<svg
 				viewBox={`0 0 ${width} ${height}`}
@@ -1211,6 +1285,23 @@ function CounterfactualPathChart({
 						className="text-foreground/50"
 					/>
 				)}
+				{showRuleDeltaSegment && (
+					<line
+						x1={xAt(ruleIndex)}
+						x2={xAt(ruleIndex)}
+						y1={yAt(ruleBaselineValue)}
+						y2={yAt(ruleScenarioValue)}
+						stroke={gapColor}
+						strokeWidth="2.4"
+						vectorEffect="non-scaling-stroke"
+						strokeLinecap="round"
+						opacity="0.8"
+					>
+						<title>{`${ruleFiscalYear} scenario delta: ${formatDeltaValue(
+							ruleScenarioValue - ruleBaselineValue,
+						)} vs baseline`}</title>
+					</line>
+				)}
 				{series.map((item) => (
 					<path
 						key={item.label}
@@ -1234,7 +1325,7 @@ function CounterfactualPathChart({
 							fill={item.color}
 							vectorEffect="non-scaling-stroke"
 						>
-							<title>{`${item.label} · ${years[index]}: ${formatValue(value)}`}</title>
+							<title>{tooltipFor(item, value, index)}</title>
 						</circle>
 					)),
 				)}

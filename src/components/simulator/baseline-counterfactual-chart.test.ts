@@ -49,6 +49,10 @@ describe("BaselineComparisonPanel counterfactual chart", () => {
 		expect(html).toContain("Fiscal counterfactual paths");
 		expect(html).toContain("current-policy baseline");
 		expect(html).toContain("policy scenario");
+		expect(html).toContain("PSNB delta");
+		expect(html).toContain("debt:GDP delta");
+		expect(html).toContain("scenario delta");
+		expect(html).toContain("vs baseline");
 		expect(html).toContain("90% pre-reaction fan");
 		expect(html).toContain("90% post-reaction fan");
 		expect(html).toContain("Rule-year uncertainty layers");
