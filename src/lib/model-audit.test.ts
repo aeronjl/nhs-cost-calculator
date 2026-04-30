@@ -14,6 +14,26 @@ import {
 import { buildMacroStressLab } from "./macro-stress-lab";
 import { evaluateScenario, projectScenarioWithGEFeedback } from "./scenario";
 
+const markdownTables = (markdown: string): readonly (readonly string[])[] => {
+	const tables: string[][] = [];
+	let current: string[] = [];
+	for (const line of markdown.split("\n")) {
+		if (line.startsWith("| ") && line.endsWith(" |")) {
+			current.push(line);
+			continue;
+		}
+		if (current.length > 0) {
+			tables.push(current);
+			current = [];
+		}
+	}
+	if (current.length > 0) tables.push(current);
+	return tables;
+};
+
+const markdownCellCount = (line: string): number =>
+	line.replace(/\\\|/g, "").split("|").length - 2;
+
 describe("model audit evidence pack", () => {
 	const buildBorrowingAudit = () => {
 		const result = evaluateScenario([
@@ -131,7 +151,7 @@ describe("model audit evidence pack", () => {
 		const { audit } = buildBorrowingAudit();
 		const generatedAt = "2026-04-30T12:00:00.000Z";
 		const shareUrl =
-			"https://example.test/sandbox?scenario=b::80000000000&editor=stack";
+			"https://example.test/?wstep=5&wiz=b:80000000000";
 
 		const markdown = buildModelAuditMarkdownAppendix(audit, {
 			generatedAt,
@@ -148,17 +168,115 @@ describe("model audit evidence pack", () => {
 		expect(markdown).toContain("## Scenario Provenance Ledger");
 		expect(markdown).toContain("## Calibration Evidence");
 		expect(markdown).toContain("### Uncertainty Decomposition");
+		expect(markdown).toContain("## Limitations");
+
+		const tables = markdownTables(markdown);
+		expect(tables.length).toBeGreaterThan(10);
+		for (const table of tables) {
+			const counts = table.map(markdownCellCount);
+			expect(new Set(counts).size).toBe(1);
+			expect(counts[0]).toBeGreaterThanOrEqual(2);
+		}
 
 		const json = buildModelAuditJsonExport(audit, { generatedAt, shareUrl });
 		const parsed = JSON.parse(json);
 		expect(parsed.schemaVersion).toBe(1);
 		expect(parsed.generatedAt).toBe(generatedAt);
 		expect(parsed.shareUrl).toBe(shareUrl);
+		expect(parsed.audit.scenario).toEqual(audit.scenario);
 		expect(parsed.audit.baselineComparison.years).toHaveLength(
 			OBR_BASELINE.years.length,
 		);
 		expect(parsed.audit.borrowingScenarioComparison.rows).toHaveLength(6);
 		expect(parsed.audit.macroStressLab.parameters).toHaveLength(6);
 		expect(parsed.audit.provenanceLedger.rows).toHaveLength(1);
+		expect(parsed.audit.liveRisk.priorSensitivityRows).toHaveLength(4);
+		expect(
+			parsed.audit.liveRisk.uncertaintyLayers.map(
+				(row: { label: string }) => row.label,
+			),
+		).toEqual([
+			"Central path",
+			"Baseline forecast error",
+			"Macro shocks",
+			"Borrowing regime",
+			"Policy reaction",
+		]);
+		expect(
+			parsed.audit.calibration.map((item: { label: string }) => item.label),
+		).toEqual(audit.calibration.map((item) => item.label));
+	});
+
+	it("exports top-level research appendix payloads with the same evidence contract", () => {
+		const { audit } = buildBorrowingAudit();
+		const generatedAt = "2026-04-30T12:30:00.000Z";
+		const shareUrl =
+			"https://example.test/?wstep=5&wiz=b:80000000000#report-audit";
+
+		const markdown = buildModelAuditMarkdownAppendix(audit, {
+			generatedAt,
+			shareUrl,
+			title: "Research Appendix",
+		});
+		expect(markdown).toContain("# Research Appendix");
+		expect(markdown).toContain(`Generated: ${generatedAt}`);
+		expect(markdown).toContain(`Share URL: ${shareUrl}`);
+		for (const section of [
+			"## Scenario",
+			"## Baseline vs Scenario",
+			"## Borrowing Scenario Matrix",
+			"## Macro Stress Lab",
+			"## Scenario Provenance Ledger",
+			"## Calibration Evidence",
+			"## Historical Backtests",
+			"## Live Risk",
+			"### Borrowing Regime Probabilities",
+			"### Prior Sensitivity",
+			"### Uncertainty Decomposition",
+			"## Limitations",
+		]) {
+			expect(markdown).toContain(section);
+		}
+
+		const json = JSON.parse(
+			buildModelAuditJsonExport(audit, { generatedAt, shareUrl }),
+		);
+		expect(json.audit.baselineComparison.rule).toEqual(
+			audit.baselineComparison?.rule,
+		);
+		expect(json.audit.borrowingScenarioComparison).toMatchObject({
+			amountGbp: audit.borrowingScenarioComparison?.amountGbp,
+			years: audit.borrowingScenarioComparison?.years,
+			bestHeadroomRowLabel:
+				audit.borrowingScenarioComparison?.bestHeadroomRowLabel,
+			worstBreachRowLabel:
+				audit.borrowingScenarioComparison?.worstBreachRowLabel,
+			highestInterestRowLabel:
+				audit.borrowingScenarioComparison?.highestInterestRowLabel,
+		});
+		expect(
+			json.audit.macroStressLab.parameters.map((row: { id: string }) => row.id),
+		).toEqual(audit.macroStressLab?.parameters.map((row) => row.id));
+		expect(json.audit.provenanceLedger).toMatchObject({
+			sourceLinkedRows: audit.provenanceLedger.sourceLinkedRows,
+			rangeBackedRows: audit.provenanceLedger.rangeBackedRows,
+			behaviouralRows: audit.provenanceLedger.behaviouralRows,
+		});
+		expect(json.audit.provenanceLedger.rows[0]).toMatchObject({
+			description: audit.provenanceLedger.rows[0]?.description,
+			sourceLabel: audit.provenanceLedger.rows[0]?.sourceLabel,
+			methodologyAsOf: audit.provenanceLedger.rows[0]?.methodologyAsOf,
+			riskContributionLabel:
+				audit.provenanceLedger.rows[0]?.riskContributionLabel,
+		});
+		expect(json.audit.liveRisk).toMatchObject({
+			breachProbability: audit.liveRisk.breachProbability,
+			postReactionBreachProbability:
+				audit.liveRisk.postReactionBreachProbability,
+			topReactionPackageLabel: audit.liveRisk.topReactionPackageLabel,
+			borrowingRegimeLabel: audit.liveRisk.borrowingRegimeLabel,
+			borrowingStressRating: audit.liveRisk.borrowingStressRating,
+			largestDownsideLayerLabel: audit.liveRisk.largestDownsideLayerLabel,
+		});
 	});
 });
