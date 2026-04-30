@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, Download, Link as LinkIcon } from "lucide-react";
+import {
+	Check,
+	Download,
+	FileJson,
+	FileText,
+	Link as LinkIcon,
+} from "lucide-react";
 import { ComparisonsAffordedList } from "@/components/ui/comparisons-afforded-list";
 import type { ResolvedComparison } from "@/data/comparisons";
 import { comparisonsCovered } from "@/lib/counterfactual";
@@ -28,7 +34,11 @@ import {
 	type MicrosimAggregate,
 } from "@/lib/microsim/impact";
 import { generatePopulation } from "@/lib/microsim/population";
-import { buildModelAuditEvidencePack } from "@/lib/model-audit";
+import {
+	buildModelAuditEvidencePack,
+	buildModelAuditJsonExport,
+	buildModelAuditMarkdownAppendix,
+} from "@/lib/model-audit";
 import { buildMacroStressLab } from "@/lib/macro-stress-lab";
 import { BaselineComparisonPanel } from "./baseline-comparison";
 import { CollapsibleSection } from "./collapsible-section";
@@ -96,6 +106,25 @@ const SECTION_NAV: readonly {
 ];
 
 const sectionHash = (id: SectionId | "summary") => `report-${id}`;
+
+const appendixFilename = (kind: "md" | "json", generatedAt: string): string =>
+	`research-appendix-${generatedAt.slice(0, 10)}.${kind}`;
+
+const downloadTextFile = (
+	filename: string,
+	body: string,
+	mimeType: string,
+) => {
+	const blob = new Blob([body], { type: mimeType });
+	const url = URL.createObjectURL(blob);
+	const anchor = document.createElement("a");
+	anchor.href = url;
+	anchor.download = filename;
+	document.body.appendChild(anchor);
+	anchor.click();
+	anchor.remove();
+	window.setTimeout(() => URL.revokeObjectURL(url), 0);
+};
 
 export function OutputRail({
 	scenario,
@@ -170,6 +199,12 @@ export function OutputRail({
 		} catch {
 			setCopied(false);
 		}
+	};
+	const currentReportUrl = (): string | undefined => {
+		if (typeof window === "undefined") return undefined;
+		const url = new URL(window.location.href);
+		url.hash = "";
+		return url.toString();
 	};
 	const goToSection = (id: SectionId | "summary") => {
 		const hash = sectionHash(id);
@@ -260,6 +295,34 @@ export function OutputRail({
 			scenario.length,
 		],
 	);
+	const buildResearchAppendixAudit = () =>
+		buildModelAuditEvidencePack({
+			result,
+			baseline,
+			baselineComparison,
+			macroStressLab: macroStressLab ?? buildMacroStressLab(result, baseline),
+			fiscalRuleFan,
+			fiscalRulePriorSensitivity,
+			fiscalRuleUncertaintyDecomposition,
+		});
+	const downloadResearchAppendix = (kind: "md" | "json") => {
+		const generatedAt = new Date().toISOString();
+		const audit = buildResearchAppendixAudit();
+		const shareUrl = currentReportUrl();
+		const body =
+			kind === "md"
+				? buildModelAuditMarkdownAppendix(audit, {
+						generatedAt,
+						shareUrl,
+						title: "Research Appendix",
+					})
+				: buildModelAuditJsonExport(audit, { generatedAt, shareUrl });
+		downloadTextFile(
+			appendixFilename(kind, generatedAt),
+			body,
+			kind === "md" ? "text/markdown;charset=utf-8" : "application/json",
+		);
+	};
 	const geYear1 = ge.withFeedback[0]?.net ?? 0;
 	const macroYear1 = ge.noFeedback[0]?.net ?? 0;
 	const geGap = geYear1 - macroYear1;
@@ -348,11 +411,27 @@ export function OutputRail({
 						</button>
 						<button
 							type="button"
+							onClick={() => downloadResearchAppendix("md")}
+							className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+						>
+							<FileText aria-hidden="true" className="size-3" />
+							Appendix MD
+						</button>
+						<button
+							type="button"
+							onClick={() => downloadResearchAppendix("json")}
+							className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+						>
+							<FileJson aria-hidden="true" className="size-3" />
+							JSON
+						</button>
+						<button
+							type="button"
 							onClick={() => goToSection("audit")}
 							className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
 						>
 							<Download aria-hidden="true" className="size-3" />
-							Export
+							Audit panel
 						</button>
 					</div>
 				</div>
