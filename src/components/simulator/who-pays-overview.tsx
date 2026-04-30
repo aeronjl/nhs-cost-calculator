@@ -167,15 +167,15 @@ export function WhoPaysOverview({ distribution, microsim, result }: Props) {
 								aria-label="Synthetic household split versus current-policy baseline"
 							>
 								<span
-									className="bg-blue-600"
+									className="bg-blue-600 transition-[width] duration-300 ease-out"
 									style={{ width: formatStylePct(microsim.winners * 100) }}
 								/>
 								<span
-									className="bg-slate-400"
+									className="bg-slate-400 transition-[width] duration-300 ease-out"
 									style={{ width: formatStylePct(microsim.unaffected * 100) }}
 								/>
 								<span
-									className="bg-amber-500"
+									className="bg-amber-500 transition-[width] duration-300 ease-out"
 									style={{ width: formatStylePct(microsim.losers * 100) }}
 								/>
 							</div>
@@ -396,7 +396,7 @@ function RepresentativeHouseholdBars({
 							<span className="absolute left-1/2 top-0 h-full w-px bg-foreground/30" />
 							<span
 								className={cn(
-									"absolute top-0 h-full rounded-sm",
+									"absolute top-0 h-full rounded-sm transition-[width] duration-300 ease-out",
 									amount > 0
 										? "left-1/2 bg-amber-500"
 										: "right-1/2 bg-blue-600",

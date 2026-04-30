@@ -1,6 +1,6 @@
 "use client";
 
-import { type PointerEvent, useRef } from "react";
+import { type PointerEvent, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { PercentileBand } from "@/lib/uncertainty";
 import type {
@@ -8,6 +8,7 @@ import type {
 	ScenarioBandContribution,
 	YearProjection,
 } from "@/lib/scenario";
+import { useAnimatedValues } from "@/lib/use-animated-values";
 import { pointerToYearIndex, useYearFocus } from "@/lib/year-focus";
 import { PerLeverComposition } from "./per-lever-composition";
 
@@ -284,37 +285,59 @@ function ProjectionFanChart({
 		focusedIndex !== null && bands ? bands[focusedIndex]?.band ?? null : null;
 	const focusedX = focusedIndex !== null ? focusedIndex * dx : null;
 
+	// Animated arrays for path morphing on scenario edits.
+	const centralValues = useMemo(
+		() => projection.map((p) => p.net),
+		[projection],
+	);
+	const animatedCentral = useAnimatedValues(centralValues);
+	const bandP5 = useMemo(
+		() => bands?.map((b) => b.band.p5) ?? [],
+		[bands],
+	);
+	const bandP25 = useMemo(
+		() => bands?.map((b) => b.band.p25) ?? [],
+		[bands],
+	);
+	const bandP75 = useMemo(
+		() => bands?.map((b) => b.band.p75) ?? [],
+		[bands],
+	);
+	const bandP95 = useMemo(
+		() => bands?.map((b) => b.band.p95) ?? [],
+		[bands],
+	);
+	const animatedP5 = useAnimatedValues(bandP5);
+	const animatedP25 = useAnimatedValues(bandP25);
+	const animatedP75 = useAnimatedValues(bandP75);
+	const animatedP95 = useAnimatedValues(bandP95);
+
 	// Map net £ → y coordinate (positive = up = blue/freed).
 	const toY = (n: number): number => baseY - (n / maxAbs) * (baseY * 0.85);
 
-	// Build polygon paths for the bands (90% and 50%).
+	// Build polygon paths for the bands (90% and 50%) from the animated
+	// percentile arrays — the polygons morph as the underlying samples change.
 	const buildBandPath = (
-		hi: (i: number) => number,
-		lo: (i: number) => number,
+		hi: readonly number[],
+		lo: readonly number[],
 	): string => {
-		if (!bands || bands.length === 0) return "";
-		const top = bands.map((b, i) => `${i * dx},${toY(hi(i))}`).join(" ");
-		const bot = [...bands]
+		if (hi.length === 0 || lo.length === 0) return "";
+		const len = Math.min(hi.length, lo.length);
+		const top = hi.slice(0, len).map((v, i) => `${i * dx},${toY(v)}`).join(" ");
+		const bot = lo
+			.slice(0, len)
+			.map((v, i) => ({ v, i }))
 			.reverse()
-			.map((b, ri) => {
-				const i = bands.length - 1 - ri;
-				return `${i * dx},${toY(lo(i))}`;
-			})
+			.map(({ v, i }) => `${i * dx},${toY(v)}`)
 			.join(" ");
 		return `${top} ${bot}`;
 	};
 
-	const band90Path = buildBandPath(
-		(i) => bands![i]!.band.p95,
-		(i) => bands![i]!.band.p5,
-	);
-	const band50Path = buildBandPath(
-		(i) => bands![i]!.band.p75,
-		(i) => bands![i]!.band.p25,
-	);
+	const band90Path = buildBandPath(animatedP95, animatedP5);
+	const band50Path = buildBandPath(animatedP75, animatedP25);
 
-	const points = projection
-		.map((p, i) => `${i * dx},${toY(p.net)}`)
+	const points = animatedCentral
+		.map((v, i) => `${i * dx},${toY(v)}`)
 		.join(" ");
 
 	const headlineYear = focusedProjection ?? projection.at(-1) ?? null;
@@ -406,11 +429,12 @@ function ProjectionFanChart({
 				)}
 				{projection.map((p, i) => {
 					const isFocused = focusedIndex === i;
+					const animatedNet = animatedCentral[i] ?? p.net;
 					return (
 						<circle
 							key={p.year}
 							cx={i * dx}
-							cy={toY(p.net)}
+							cy={toY(animatedNet)}
 							r={isFocused ? 2.6 : 1.4}
 							className={cn(
 								p.net >= 0 ? "fill-blue-600" : "fill-amber-600",

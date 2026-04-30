@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { useAnimatedValues } from "@/lib/use-animated-values";
 import type {
 	ScenarioDynamic,
 	ScenarioMacro,
@@ -176,30 +177,38 @@ function MacroBridgeChart({
 	macroNet: number;
 	geNet: number;
 }) {
+	const targetValues = [staticNet, dynamicNet, macroNet, geNet];
+	const animatedStageValues = useAnimatedValues(targetValues);
+	const stageValueAt = (i: number, fallback: number): number =>
+		animatedStageValues[i] ?? fallback;
 	const stages = [
 		{
 			id: "static",
 			label: "Ready-reckoner",
 			detail: "linear static score",
-			value: staticNet,
+			targetValue: staticNet,
+			value: stageValueAt(0, staticNet),
 		},
 		{
 			id: "dynamic",
 			label: "Behavioural response",
 			detail: "marginal-rate elasticities",
-			value: dynamicNet,
+			targetValue: dynamicNet,
+			value: stageValueAt(1, dynamicNet),
 		},
 		{
 			id: "macro",
 			label: "Scope B macro",
 			detail: "GDP, CPI, rates, debt",
-			value: macroNet,
+			targetValue: macroNet,
+			value: stageValueAt(2, macroNet),
 		},
 		{
 			id: "ge",
 			label: "Scope C GE",
 			detail: "feedback loop",
-			value: geNet,
+			targetValue: geNet,
+			value: stageValueAt(3, geNet),
 		},
 	] as const;
 

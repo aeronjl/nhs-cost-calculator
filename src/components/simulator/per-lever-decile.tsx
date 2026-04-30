@@ -237,7 +237,7 @@ function DecileRow({
 						return (
 							<span
 								key={`${decile}-${seg.id}-neg`}
-								className="absolute top-0 bottom-0"
+								className="absolute top-0 bottom-0 transition-[left,width] duration-300 ease-out"
 								style={{
 									left: formatStylePct(leftCursor),
 									width: formatStylePct(w),
@@ -257,7 +257,7 @@ function DecileRow({
 						const node = (
 							<span
 								key={`${decile}-${seg.id}-pos`}
-								className="absolute top-0 bottom-0"
+								className="absolute top-0 bottom-0 transition-[left,width] duration-300 ease-out"
 								style={{
 									left: formatStylePct(leftCursor),
 									width: formatStylePct(w),

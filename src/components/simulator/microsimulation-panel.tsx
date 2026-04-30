@@ -118,17 +118,17 @@ function HeadlineWinnersLosers({ agg }: { agg: MicrosimAggregate }) {
 			</div>
 			<div className="flex h-2 rounded-sm overflow-hidden bg-muted/40 mb-1.5">
 				<div
-					className="bg-blue-500"
+					className="bg-blue-500 transition-[width] duration-300 ease-out"
 					style={{ width: `${agg.winners * 100}%` }}
 					aria-label={`${formatPctRound(agg.winners)} households gain`}
 				/>
 				<div
-					className="bg-muted-foreground/30"
+					className="bg-muted-foreground/30 transition-[width] duration-300 ease-out"
 					style={{ width: `${agg.unaffected * 100}%` }}
 					aria-label={`${formatPctRound(agg.unaffected)} unaffected`}
 				/>
 				<div
-					className="bg-amber-500"
+					className="bg-amber-500 transition-[width] duration-300 ease-out"
 					style={{ width: `${agg.losers * 100}%` }}
 					aria-label={`${formatPctRound(agg.losers)} households lose`}
 				/>
@@ -187,7 +187,7 @@ function DecileTable({ agg }: { agg: MicrosimAggregate }) {
 							<div className="flex-1 h-3 relative bg-muted/30 rounded-sm overflow-hidden">
 								<div
 									className={cn(
-										"absolute top-0 bottom-0",
+										"absolute top-0 bottom-0 transition-[width] duration-300 ease-out",
 										mean > 0 ? "left-1/2" : "right-1/2",
 										meanColour,
 									)}

@@ -108,7 +108,7 @@ function DecileChart({
 							<div className="flex-1 h-3.5 relative bg-muted/30 rounded-sm overflow-hidden">
 								<div
 									className={cn(
-										"absolute top-0 bottom-0",
+										"absolute top-0 bottom-0 transition-[width] duration-300 ease-out",
 										isLoss
 											? "left-1/2 bg-amber-500"
 											: "right-1/2 bg-blue-500",

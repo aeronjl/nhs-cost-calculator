@@ -14,6 +14,7 @@ import {
 	evaluateScenario,
 	projectScenarioOverYears,
 } from "@/lib/scenario";
+import { useAnimatedValues } from "@/lib/use-animated-values";
 import { ANNOTATED_BUDGETS } from "@/data/budgets/annotated";
 import type { OBRBaseline } from "@/data/baseline/obr-baseline";
 import { policyReactionPackageSummary } from "@/lib/policy-reaction-packages";
@@ -1297,8 +1298,25 @@ function CounterfactualPathChart({
 					band.map((year) => year[low]),
 				)}`
 			: "";
-	const baselineValues = series[0]?.values ?? [];
-	const scenarioValues = series[1]?.values ?? [];
+	// Animate up to four series independently. Path morphing on data change
+	// makes scenario edits feel continuous instead of snapping. Slot 0 is
+	// baseline, 1 is scenario, 2 is reaction (when present), 3 is the
+	// historical-comparison overlay.
+	const animatedSeriesValues0 = useAnimatedValues(series[0]?.values ?? []);
+	const animatedSeriesValues1 = useAnimatedValues(series[1]?.values ?? []);
+	const animatedSeriesValues2 = useAnimatedValues(series[2]?.values ?? []);
+	const animatedSeriesValues3 = useAnimatedValues(series[3]?.values ?? []);
+	const animatedSeries: readonly (readonly number[])[] = [
+		animatedSeriesValues0,
+		animatedSeriesValues1,
+		animatedSeriesValues2,
+		animatedSeriesValues3,
+	];
+	const valuesForSeries = (idx: number): readonly number[] =>
+		(animatedSeries[idx] ?? []) as readonly number[];
+
+	const baselineValues = valuesForSeries(0);
+	const scenarioValues = valuesForSeries(1);
 	const gapPolygon =
 		baselineValues.length === scenarioValues.length
 			? `${pointsFor(baselineValues)} ${reversePointsFor(scenarioValues)}`
@@ -1478,27 +1496,32 @@ function CounterfactualPathChart({
 						)} vs baseline`}</title>
 					</line>
 				)}
-				{series.map((item) => (
-					<path
-						key={item.label}
-						d={linePath(item.values)}
-						fill="none"
-						stroke={item.color}
-						strokeWidth={item.label.includes("baseline") ? 1.4 : 2}
-						strokeDasharray={item.dashed ? "5 3" : undefined}
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						vectorEffect="non-scaling-stroke"
-					/>
-				))}
-				{series.flatMap((item) =>
-					item.values.map((value, index) => {
+				{series.map((item, idx) => {
+					const animated = valuesForSeries(idx);
+					return (
+						<path
+							key={item.label}
+							d={linePath(animated.length > 0 ? animated : item.values)}
+							fill="none"
+							stroke={item.color}
+							strokeWidth={item.label.includes("baseline") ? 1.4 : 2}
+							strokeDasharray={item.dashed ? "5 3" : undefined}
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							vectorEffect="non-scaling-stroke"
+						/>
+					);
+				})}
+				{series.flatMap((item, idx) => {
+					const animated = valuesForSeries(idx);
+					return item.values.map((value, index) => {
 						const isFocused = focusedIndex === index;
+						const yValue = animated[index] ?? value;
 						return (
 							<circle
 								key={`${item.label}-${years[index]}`}
 								cx={xAt(index)}
-								cy={yAt(value)}
+								cy={yAt(yValue)}
 								r={isFocused ? 3 : 2}
 								fill={item.color}
 								stroke={isFocused ? "white" : undefined}
@@ -1508,8 +1531,8 @@ function CounterfactualPathChart({
 								<title>{tooltipFor(item, value, index)}</title>
 							</circle>
 						);
-					}),
-				)}
+					});
+				})}
 				{focusedIndex !== null && (
 					<line
 						x1={xAt(focusedIndex)}
