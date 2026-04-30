@@ -41,6 +41,9 @@ const formatGbp = (n: number): string => {
 	return `£${Math.round(abs).toLocaleString()}`;
 };
 
+const formatStylePct = (n: number): string =>
+	`${Number.isFinite(n) ? n.toFixed(4) : "0.0000"}%`;
+
 const significantState = (s: MacroState): boolean =>
 	Math.abs(s.cpiDeviationPp) > 0.005 ||
 	Math.abs(s.gdpDeviationPct) > 0.005 ||
@@ -72,88 +75,52 @@ export function MacroStatePanel({ path, convergence }: Props) {
 				</span>
 			</div>
 
-			<div className="rounded-md border bg-background/60 overflow-hidden">
-				<table className="w-full tabular-nums text-[10px]">
-					<thead>
-						<tr className="bg-muted/30 text-muted-foreground">
-							<th className="text-left px-2 py-1">Year</th>
-							<th className="text-right px-2 py-1">CPI</th>
-							<th className="text-right px-2 py-1">GDP</th>
-							<th className="text-right px-2 py-1">Debt:GDP</th>
-							<th className="text-right px-2 py-1">Bank</th>
-							<th className="text-right px-2 py-1 pr-2">Gilt</th>
-						</tr>
-					</thead>
-					<tbody>
-						{path.map((s) => (
-							<tr key={s.year} className="border-t">
-								<td className="px-2 py-1 text-muted-foreground">
-									{s.year}
-								</td>
-								<td
-									className={cn(
-										"text-right px-2 py-1",
-										s.cpiDeviationPp > 0.01
-											? "text-amber-700"
-											: s.cpiDeviationPp < -0.01
-												? "text-blue-700"
-												: "",
-									)}
-								>
-									{formatPp(s.cpiDeviationPp)}
-								</td>
-								<td
-									className={cn(
-										"text-right px-2 py-1",
-										s.gdpDeviationPct > 0.01
-											? "text-blue-700"
-											: s.gdpDeviationPct < -0.01
-												? "text-amber-700"
-												: "",
-									)}
-								>
-									{formatPct(s.gdpDeviationPct)}
-								</td>
-								<td
-									className={cn(
-										"text-right px-2 py-1",
-										s.debtGdpDeviationPp > 0.01
-											? "text-amber-700"
-											: s.debtGdpDeviationPp < -0.01
-												? "text-blue-700"
-												: "",
-									)}
-								>
-									{formatPp(s.debtGdpDeviationPp, 2)}
-								</td>
-								<td
-									className={cn(
-										"text-right px-2 py-1 pr-2",
-										s.bankRateDeviationPp > 0.001
-											? "text-amber-700"
-											: s.bankRateDeviationPp < -0.001
-												? "text-blue-700"
-												: "",
-									)}
-								>
-									{formatPp(s.bankRateDeviationPp, 3)}
-								</td>
-								<td
-									className={cn(
-										"text-right px-2 py-1 pr-2",
-										s.giltYieldDeviationPp > 0.001
-											? "text-amber-700"
-											: s.giltYieldDeviationPp < -0.001
-												? "text-blue-700"
-												: "",
-									)}
-								>
-									{formatPp(s.giltYieldDeviationPp, 3)}
-								</td>
-							</tr>
-						))}
-					</tbody>
-				</table>
+			<div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+				<MacroStatePathChart
+					title="GDP"
+					subtitle="output gap"
+					path={path}
+					values={path.map((s) => s.gdpDeviationPct)}
+					formatValue={(value) => formatPct(value, 2)}
+					positiveTone="blue"
+					ariaLabel="GDP deviation path versus baseline"
+				/>
+				<MacroStatePathChart
+					title="CPI"
+					subtitle="price level"
+					path={path}
+					values={path.map((s) => s.cpiDeviationPp)}
+					formatValue={(value) => formatPp(value, 2)}
+					positiveTone="amber"
+					ariaLabel="CPI deviation path versus baseline"
+				/>
+				<MacroStatePathChart
+					title="Debt:GDP"
+					subtitle="debt proxy"
+					path={path}
+					values={path.map((s) => s.debtGdpDeviationPp)}
+					formatValue={(value) => formatPp(value, 2)}
+					positiveTone="amber"
+					ariaLabel="Debt to GDP deviation path versus baseline"
+				/>
+				<MacroStatePathChart
+					title="Bank Rate"
+					subtitle="policy response"
+					path={path}
+					values={path.map((s) => s.bankRateDeviationPp)}
+					formatValue={(value) => formatPp(value, 3)}
+					positiveTone="amber"
+					ariaLabel="Bank Rate deviation path versus baseline"
+				/>
+				<MacroStatePathChart
+					title="Gilt yield"
+					subtitle="market rate"
+					path={path}
+					values={path.map((s) => s.giltYieldDeviationPp)}
+					formatValue={(value) => formatPp(value, 3)}
+					positiveTone="amber"
+					ariaLabel="Gilt yield deviation path versus baseline"
+				/>
 			</div>
 
 			<p className="text-[10px] text-muted-foreground leading-snug">
@@ -171,6 +138,238 @@ export function MacroStatePanel({ path, convergence }: Props) {
 				per-line yields and borrowing costs
 				{convergenceText}
 			</p>
+
+			<details className="rounded-md border bg-background/60 text-[10px] text-muted-foreground">
+				<summary className="cursor-pointer list-none px-2 py-1.5">
+					<div className="flex items-baseline justify-between gap-2">
+						<span className="font-medium text-foreground">
+							Show year-by-year macro state table
+						</span>
+						<span className="tabular-nums">{path.length} years</span>
+					</div>
+				</summary>
+				<div className="overflow-x-auto border-t">
+					<table className="w-full min-w-[520px] tabular-nums">
+						<thead>
+							<tr className="bg-muted/30 text-muted-foreground">
+								<th className="text-left px-2 py-1">Year</th>
+								<th className="text-right px-2 py-1">CPI</th>
+								<th className="text-right px-2 py-1">GDP</th>
+								<th className="text-right px-2 py-1">Debt:GDP</th>
+								<th className="text-right px-2 py-1">Bank</th>
+								<th className="text-right px-2 py-1 pr-2">Gilt</th>
+							</tr>
+						</thead>
+						<tbody>
+							{path.map((s) => (
+								<tr key={s.year} className="border-t">
+									<td className="px-2 py-1 text-muted-foreground">
+										{s.year}
+									</td>
+									<td
+										className={cn(
+											"text-right px-2 py-1",
+											s.cpiDeviationPp > 0.01
+												? "text-amber-700"
+												: s.cpiDeviationPp < -0.01
+													? "text-blue-700"
+													: "",
+										)}
+									>
+										{formatPp(s.cpiDeviationPp)}
+									</td>
+									<td
+										className={cn(
+											"text-right px-2 py-1",
+											s.gdpDeviationPct > 0.01
+												? "text-blue-700"
+												: s.gdpDeviationPct < -0.01
+													? "text-amber-700"
+													: "",
+										)}
+									>
+										{formatPct(s.gdpDeviationPct)}
+									</td>
+									<td
+										className={cn(
+											"text-right px-2 py-1",
+											s.debtGdpDeviationPp > 0.01
+												? "text-amber-700"
+												: s.debtGdpDeviationPp < -0.01
+													? "text-blue-700"
+													: "",
+										)}
+									>
+										{formatPp(s.debtGdpDeviationPp, 2)}
+									</td>
+									<td
+										className={cn(
+											"text-right px-2 py-1 pr-2",
+											s.bankRateDeviationPp > 0.001
+												? "text-amber-700"
+												: s.bankRateDeviationPp < -0.001
+													? "text-blue-700"
+													: "",
+										)}
+									>
+										{formatPp(s.bankRateDeviationPp, 3)}
+									</td>
+									<td
+										className={cn(
+											"text-right px-2 py-1 pr-2",
+											s.giltYieldDeviationPp > 0.001
+												? "text-amber-700"
+												: s.giltYieldDeviationPp < -0.001
+													? "text-blue-700"
+													: "",
+										)}
+									>
+										{formatPp(s.giltYieldDeviationPp, 3)}
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			</details>
+		</div>
+	);
+}
+
+function MacroStatePathChart({
+	title,
+	subtitle,
+	path,
+	values,
+	formatValue,
+	positiveTone,
+	ariaLabel,
+}: {
+	title: string;
+	subtitle: string;
+	path: readonly MacroState[];
+	values: readonly number[];
+	formatValue: (value: number) => string;
+	positiveTone: "blue" | "amber";
+	ariaLabel: string;
+}) {
+	const width = 160;
+	const height = 72;
+	const padX = 8;
+	const padY = 8;
+	const innerWidth = width - padX * 2;
+	const innerHeight = height - padY * 2;
+	const rawMin = Math.min(...values, 0);
+	const rawMax = Math.max(...values, 0);
+	const rawRange = rawMax - rawMin;
+	const padding =
+		rawRange > 0 ? rawRange * 0.18 : Math.max(Math.abs(rawMax), 0.01);
+	const min = rawMin - padding;
+	const max = rawMax + padding;
+	const range = max - min || 1;
+	const xAt = (index: number): number =>
+		padX + (innerWidth * index) / Math.max(1, values.length - 1);
+	const yAt = (value: number): number =>
+		padY + innerHeight - ((value - min) / range) * innerHeight;
+	const points = values
+		.map((value, index) => `${index === 0 ? "M" : "L"} ${xAt(index)} ${yAt(value)}`)
+		.join(" ");
+	const areaPoints =
+		values.length > 0
+			? [
+					`${xAt(0)},${yAt(0)}`,
+					...values.map((value, index) => `${xAt(index)},${yAt(value)}`),
+					`${xAt(values.length - 1)},${yAt(0)}`,
+				].join(" ")
+			: "";
+	const finalValue = values[values.length - 1] ?? 0;
+	const finalTone =
+		finalValue > 0
+			? positiveTone
+			: finalValue < 0
+				? positiveTone === "blue"
+					? "amber"
+					: "blue"
+				: "muted";
+	const color =
+		finalTone === "blue"
+			? "#2563eb"
+			: finalTone === "amber"
+				? "#d97706"
+				: "#6b7280";
+
+	return (
+		<div className="rounded-md border bg-background/60 p-2">
+			<div className="flex items-start justify-between gap-2">
+				<div className="min-w-0">
+					<div className="truncate text-xs font-medium">{title}</div>
+					<div className="truncate text-[10px] text-muted-foreground">
+						{subtitle}
+					</div>
+				</div>
+				<div
+					className={cn(
+						"text-right text-xs font-semibold tabular-nums",
+						finalTone === "blue"
+							? "text-blue-700"
+							: finalTone === "amber"
+								? "text-amber-700"
+								: "text-muted-foreground",
+					)}
+				>
+					{formatValue(finalValue)}
+				</div>
+			</div>
+			<svg
+				viewBox={`0 0 ${width} ${height}`}
+				className="mt-2 h-20 w-full"
+				preserveAspectRatio="none"
+				role="img"
+				aria-label={ariaLabel}
+			>
+				<line
+					x1={padX}
+					x2={width - padX}
+					y1={yAt(0)}
+					y2={yAt(0)}
+					stroke="currentColor"
+					strokeDasharray="3 3"
+					strokeWidth="0.8"
+					vectorEffect="non-scaling-stroke"
+					className="text-foreground/35"
+				/>
+				{areaPoints && (
+					<polygon points={areaPoints} fill={color} opacity="0.1">
+						<title>{`${title} deviation area versus baseline`}</title>
+					</polygon>
+				)}
+				<path
+					d={points}
+					fill="none"
+					stroke={color}
+					strokeWidth="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					vectorEffect="non-scaling-stroke"
+				/>
+				{values.map((value, index) => (
+					<circle
+						key={`${title}-${path[index]?.year ?? index}`}
+						cx={xAt(index)}
+						cy={yAt(value)}
+						r={index === values.length - 1 ? 2.4 : 1.6}
+						fill={color}
+						vectorEffect="non-scaling-stroke"
+					>
+						<title>{`${title} · year ${path[index]?.year ?? index + 1}: ${formatValue(value)} vs baseline`}</title>
+					</circle>
+				))}
+			</svg>
+			<div className="mt-1 flex justify-between text-[9px] tabular-nums text-muted-foreground">
+				<span>Y{path[0]?.year ?? 1}</span>
+				<span>baseline = 0</span>
+				<span>Y{path.at(-1)?.year ?? values.length}</span>
+			</div>
 		</div>
 	);
 }
