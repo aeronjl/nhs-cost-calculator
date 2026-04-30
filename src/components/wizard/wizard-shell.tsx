@@ -14,6 +14,7 @@ import {
 	STEP_LABELS,
 	STEPS,
 	WIZARD_PARAMS,
+	buildWizardUrl,
 	decodeWizardState,
 	encodeWizardState,
 	useWizardState,
@@ -137,14 +138,13 @@ export function WizardShell({
 	useEffect(() => {
 		const handle = setTimeout(() => {
 			const encoded = encodeWizardState(state);
-			const params = new URLSearchParams(searchParams.toString());
-			for (const k of WIZARD_PARAMS) params.delete(k);
-			for (const [k, v] of Object.entries(encoded)) params.set(k, v);
-			const qs = params.toString();
 			// Wizard is mounted at / now (was /wizard before the route swap).
-			// Writing back to /wizard would chain through the permanent
-			// redirect at /wizard/page.tsx, producing a redirect loop.
-			const newUrl = qs ? `/?${qs}` : "/";
+			// The canonical writer also strips legacy simulator params so old
+			// ?scenario= links hydrate into clean ?wiz=&wstep= report links.
+			const newUrl = buildWizardUrl(
+				new URLSearchParams(searchParams.toString()),
+				encoded,
+			);
 			const currentUrl =
 				typeof window !== "undefined"
 					? window.location.pathname + window.location.search

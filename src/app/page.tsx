@@ -3,9 +3,22 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { loadResolvedBaseline } from "@/data/baseline/obr-baseline";
 import { loadResolvedOutturns } from "@/data/historical/era-baselines";
-import { loadResolvedComparisons } from "@/data/comparisons";
+import {
+	loadResolvedComparisons,
+	type ResolvedComparison,
+} from "@/data/comparisons";
 import { resolveSimulatorState } from "@/lib/url-state";
-import { evaluateScenario, serializeScenario } from "@/lib/scenario";
+import {
+	type ScenarioLine,
+	deserializeScenario,
+	evaluateScenario,
+	serializeScenario,
+} from "@/lib/scenario";
+import {
+	GOAL_DEFINITIONS,
+	type WizardGoal,
+	materialiseGoalLine,
+} from "@/lib/wizard-goals";
 import { getUsdPerGbp } from "@/lib/fx";
 import { WizardShell } from "@/components/wizard/wizard-shell";
 import { formatMoney } from "./utils/formatters";
@@ -89,6 +102,22 @@ const isWizardShare = (
 			params.wiz,
 	);
 
+const resolveReportScenario = (
+	params: Record<string, string | undefined>,
+	comparisons: readonly ResolvedComparison[],
+): ScenarioLine[] => {
+	const wizardLines = params.wiz ? deserializeScenario(params.wiz) : [];
+	const goal =
+		params.wgoal && params.wgoal in GOAL_DEFINITIONS
+			? (params.wgoal as WizardGoal)
+			: null;
+	const goalLine = materialiseGoalLine(goal);
+	if (wizardLines.length > 0 || goalLine) {
+		return goalLine ? [goalLine, ...wizardLines] : wizardLines;
+	}
+	return resolveSimulatorState(params, comparisons).scenario;
+};
+
 const buildReferenceRedirect = (
 	params: Record<string, string | undefined>,
 ): string => {
@@ -111,9 +140,9 @@ export async function generateMetadata({
 	let description =
 		"A guided walk-through of UK fiscal-policy decisions. Real-time impact, explicit constraints, ends in a full fiscal report.";
 
-	const sim = resolveSimulatorState(params, comparisons);
-	if (sim.scenario.length > 0) {
-		const result = evaluateScenario(sim.scenario);
+	const scenario = resolveReportScenario(params, comparisons);
+	if (scenario.length > 0) {
+		const result = evaluateScenario(scenario);
 		const direction =
 			result.net > 0
 				? "frees"
@@ -122,9 +151,9 @@ export async function generateMetadata({
 					: "balanced";
 		title =
 			result.net === 0
-				? `Fiscal scenario (${sim.scenario.length} line${sim.scenario.length === 1 ? "" : "s"}): balanced`
+				? `Fiscal scenario (${scenario.length} line${scenario.length === 1 ? "" : "s"}): balanced`
 				: `Fiscal scenario: ${direction} ${formatMoney(Math.abs(Math.round(result.net)), "GBP")}`;
-		description = `${sim.scenario.length} fiscal lever change${sim.scenario.length === 1 ? "" : "s"}. View the report at NHSCostCalculator.com.`;
+		description = `${scenario.length} fiscal lever change${scenario.length === 1 ? "" : "s"}. View the report at NHSCostCalculator.com.`;
 	}
 
 	return {

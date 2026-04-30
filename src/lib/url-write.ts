@@ -19,6 +19,15 @@ export function buildUrl(
 	return qs ? `/?${qs}` : "/";
 }
 
+// Legacy comparison-calculator namespace. The reference route still decodes
+// these, but report URLs should scrub them when canonicalising wizard state.
+export const COMPARISON_PARAMS = [
+	"id",
+	"q",
+	"a",
+	"slice",
+] as const;
+
 // Legacy param names — kept exported for back-compat decoders. Writers no
 // longer emit these; everything writes the unified `SIMULATOR_PARAMS` set.
 export const TRADE_OFF_PARAMS = [
