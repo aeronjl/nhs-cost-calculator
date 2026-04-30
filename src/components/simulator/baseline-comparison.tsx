@@ -43,6 +43,23 @@ const formatSignedPp = (n: number): string => {
 
 const formatProbability = (n: number): string => `${Math.round(n * 100)}%`;
 
+const formatHouseholdGbp = (n: number): string => {
+	const abs = Math.abs(n);
+	const sign = n > 0 ? "−" : n < 0 ? "+" : "";
+	if (abs >= 1000) return `${sign}£${(abs / 1000).toFixed(1)}k/yr`;
+	if (abs >= 100) return `${sign}£${Math.round(abs)}/yr`;
+	if (abs >= 10) return `${sign}£${abs.toFixed(0)}/yr`;
+	if (abs >= 1) return `${sign}£${abs.toFixed(1)}/yr`;
+	return "£0/yr";
+};
+
+const formatImpactPct = (n: number): string => {
+	const abs = Math.abs(n) * 100;
+	const sign = n > 0 ? "−" : n < 0 ? "+" : "";
+	if (abs >= 0.005) return `${sign}${abs.toFixed(2)}%`;
+	return "0%";
+};
+
 export function BaselineComparisonPanel({ comparison, fiscalRuleFan }: Props) {
 	const {
 		years,
@@ -293,6 +310,49 @@ export function BaselineComparisonPanel({ comparison, fiscalRuleFan }: Props) {
 										<div className="mt-1 text-red-700 leading-snug">
 											Residual gap after plausible caps:{" "}
 											{formatBn(option.package.residualGapGbp)}
+										</div>
+									)}
+									<div className="mt-1 text-muted-foreground leading-snug">
+										<span className="font-medium text-foreground">
+											Who pays:{" "}
+										</span>
+										D1{" "}
+										{formatHouseholdGbp(
+											option.package.incidence.bottomDecile
+												.perHouseholdGbp,
+										)}{" "}
+										· D5{" "}
+										{formatHouseholdGbp(
+											option.package.incidence.middleDecile
+												.perHouseholdGbp,
+										)}{" "}
+										· D10{" "}
+										{formatHouseholdGbp(
+											option.package.incidence.topDecile
+												.perHouseholdGbp,
+										)}
+										{" · "}
+										{option.package.incidence.progressivity}
+									</div>
+									{option.package.incidence.hardestHitHousehold && (
+										<div className="mt-1 text-muted-foreground leading-snug">
+											Hardest archetype:{" "}
+											<span className="font-medium text-foreground">
+												{
+													option.package.incidence
+														.hardestHitHousehold.label
+												}
+											</span>{" "}
+											{formatHouseholdGbp(
+												option.package.incidence
+													.hardestHitHousehold.impactGbp,
+											)}{" "}
+											(
+											{formatImpactPct(
+												option.package.incidence
+													.hardestHitHousehold.incomeShare,
+											)}
+											)
 										</div>
 									)}
 									<div className="mt-1 text-muted-foreground leading-snug">

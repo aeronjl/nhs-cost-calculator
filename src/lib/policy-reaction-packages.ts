@@ -1,5 +1,8 @@
+import { REPRESENTATIVE_HOUSEHOLDS } from "@/data/households";
 import { getTaxLever, type TaxUnit } from "@/data/levers/tax-rates";
 import { getProgramme } from "@/data/levers/uk-spending";
+import { DECILE_DISPOSABLE_INCOME } from "./distribution";
+import { evaluateHouseholdImpact } from "./household-impact";
 import {
 	TAX_TO_GDP_RATIO,
 	getProgrammeMultiplier,
@@ -7,6 +10,8 @@ import {
 	multiplierAtYear,
 } from "./macro";
 import {
+	evaluateScenario,
+	evaluateScenarioDistribution,
 	evaluateLine,
 	evaluateLineDynamic,
 	type LineType,
@@ -45,6 +50,8 @@ interface CandidateInstrument extends PolicyReactionInstrumentTemplate {
 	capacityMagnitude: number;
 }
 
+const HOUSEHOLDS_PER_DECILE = 2_800_000;
+
 export interface PolicyReactionComponent {
 	type: Exclude<LineType, "borrow">;
 	leverId: string;
@@ -63,6 +70,36 @@ export interface PolicyReactionComponent {
 	capacityUsed: number;
 }
 
+export interface PolicyReactionDecileImpact {
+	decile: number;
+	perHouseholdGbp: number;
+	incomeShare: number;
+}
+
+export interface PolicyReactionHouseholdImpact {
+	id: string;
+	label: string;
+	decile: number;
+	impactGbp: number;
+	incomeShare: number;
+}
+
+export interface PolicyReactionIncidenceSummary {
+	modelledLines: number;
+	totalLines: number;
+	modelledDeltaGbp: number;
+	totalDeltaGbp: number;
+	unmodelledDeltaGbp: number;
+	bottomDecile: PolicyReactionDecileImpact;
+	middleDecile: PolicyReactionDecileImpact;
+	topDecile: PolicyReactionDecileImpact;
+	largestDecileLoss: PolicyReactionDecileImpact;
+	hardestHitByIncomeShare: PolicyReactionDecileImpact;
+	hardestHitHousehold: PolicyReactionHouseholdImpact | null;
+	households: readonly PolicyReactionHouseholdImpact[];
+	progressivity: "progressive" | "broad" | "regressive" | "mixed";
+}
+
 export interface PolicyReactionPackage {
 	components: readonly PolicyReactionComponent[];
 	staticTighteningGbp: number;
@@ -77,6 +114,7 @@ export interface PolicyReactionPackage {
 	targetCorrectionGbp: number;
 	residualGapGbp: number;
 	bindingConstraints: readonly string[];
+	incidence: PolicyReactionIncidenceSummary;
 }
 
 export const POLICY_REACTION_PROTOTYPES: readonly PolicyReactionPrototype[] = [
@@ -491,6 +529,103 @@ const allocateAcrossCandidates = (
 	}
 };
 
+const componentsToScenarioLines = (
+	components: readonly PolicyReactionComponent[],
+	prefix = "policy-reaction",
+): ScenarioLine[] =>
+	components.map((component, index) => ({
+		id: `${prefix}-${index + 1}-${component.leverId}`,
+		type: component.type,
+		leverId: component.leverId,
+		magnitude: component.magnitude,
+	}));
+
+const decileImpactFor = (
+	perDecile: readonly number[],
+	index: number,
+): PolicyReactionDecileImpact => {
+	const perHouseholdGbp = (perDecile[index] ?? 0) / HOUSEHOLDS_PER_DECILE;
+	const income = DECILE_DISPOSABLE_INCOME[index] ?? 0;
+	return {
+		decile: index + 1,
+		perHouseholdGbp,
+		incomeShare: income > 0 ? perHouseholdGbp / income : 0,
+	};
+};
+
+const classifyProgressivity = (
+	bottom: PolicyReactionDecileImpact,
+	middle: PolicyReactionDecileImpact,
+	top: PolicyReactionDecileImpact,
+): PolicyReactionIncidenceSummary["progressivity"] => {
+	const bottomBurden = Math.max(0, bottom.incomeShare);
+	const middleBurden = Math.max(0, middle.incomeShare);
+	const topBurden = Math.max(0, top.incomeShare);
+	if (bottomBurden <= 0 && middleBurden <= 0 && topBurden <= 0) return "mixed";
+	if (bottomBurden > topBurden * 1.25 && bottomBurden > middleBurden * 1.1) {
+		return "regressive";
+	}
+	if (topBurden > bottomBurden * 1.25 && topBurden > middleBurden * 1.1) {
+		return "progressive";
+	}
+	return "broad";
+};
+
+const buildPolicyReactionIncidence = (
+	components: readonly PolicyReactionComponent[],
+): PolicyReactionIncidenceSummary => {
+	const lines = componentsToScenarioLines(components, "incidence");
+	const result = evaluateScenario(lines);
+	const distribution = evaluateScenarioDistribution(result);
+	const deciles = distribution.perDecile.map((_, index) =>
+		decileImpactFor(distribution.perDecile, index),
+	);
+	const bottomDecile = deciles[0]!;
+	const middleDecile = deciles[4]!;
+	const topDecile = deciles[9]!;
+	const largestDecileLoss = deciles.reduce((largest, row) =>
+		row.perHouseholdGbp > largest.perHouseholdGbp ? row : largest,
+	);
+	const hardestHitByIncomeShare = deciles.reduce((largest, row) =>
+		row.incomeShare > largest.incomeShare ? row : largest,
+	);
+	const households = REPRESENTATIVE_HOUSEHOLDS.map((household) => {
+		const impact = evaluateHouseholdImpact(household, result);
+		return {
+			id: household.id,
+			label: household.label,
+			decile: household.decile,
+			impactGbp: impact.totalImpactGbp,
+			incomeShare: impact.asPercentOfNetIncome,
+		};
+	});
+	const hardestHitHousehold =
+		households.length === 0
+			? null
+			: households.reduce((largest, row) =>
+					row.incomeShare > largest.incomeShare ? row : largest,
+				);
+	const unmodelledDeltaGbp = Math.max(
+		0,
+		Math.abs(distribution.totalDelta) - Math.abs(distribution.modelledDelta),
+	);
+	return {
+		modelledLines: distribution.modelledLines,
+		totalLines: distribution.totalLines,
+		modelledDeltaGbp: distribution.modelledDelta,
+		totalDeltaGbp: distribution.totalDelta,
+		unmodelledDeltaGbp,
+		bottomDecile,
+		middleDecile,
+		topDecile,
+		largestDecileLoss,
+		hardestHitByIncomeShare,
+		hardestHitHousehold,
+		households,
+		progressivity: classifyProgressivity(bottomDecile, middleDecile, topDecile),
+	};
+};
+
 const packageForStaticTarget = (
 	prototype: PolicyReactionPrototype,
 	staticTargetGbp: number,
@@ -616,6 +751,7 @@ const packageForStaticTarget = (
 	const bindingConstraints = components
 		.filter((component) => component.capacityUsed >= 0.98)
 		.map((component) => component.label);
+	const incidence = buildPolicyReactionIncidence(components);
 
 	return {
 		components,
@@ -631,6 +767,7 @@ const packageForStaticTarget = (
 		targetCorrectionGbp,
 		residualGapGbp: Math.max(0, targetCorrectionGbp - effectiveCorrectionGbp),
 		bindingConstraints,
+		incidence,
 	};
 };
 
@@ -704,9 +841,4 @@ export const policyReactionPackageToScenarioLines = (
 	pkg: PolicyReactionPackage,
 	prefix = "policy-reaction",
 ): ScenarioLine[] =>
-	pkg.components.map((component, index) => ({
-		id: `${prefix}-${index + 1}-${component.leverId}`,
-		type: component.type,
-		leverId: component.leverId,
-		magnitude: component.magnitude,
-	}));
+	componentsToScenarioLines(pkg.components, prefix);

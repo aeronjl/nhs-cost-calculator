@@ -164,6 +164,8 @@ The panel also shows fiscal reaction options: balanced, tax-led, spending-led, a
 
 Each package is sized to restore the required rule headroom after applying the existing taxable-base elasticities, worker CEV/output effects, and per-lever fiscal multipliers. The output reports gross action, behavioural adjustment, GDP drag, macro revenue feedback, corrected PSNB/debt, and any residual gap if the plausible package caps cannot close the breach. This is not a recommendation about whether the adjustment should come from tax rises or spending cuts; it is a sensitivity showing how realistic offset choices change macro and debt-path consequences.
 
+The same packages are also passed through the calculator's incidence machinery. For each offset option, the model reports the implied burden for the bottom, middle, and top deciles on a per-household basis, classifies the incidence pattern, and identifies the hardest-hit representative household archetype. Distributional coverage is explicit: lines with no incidence vector, such as parts of international aid or unallocated measures, remain outside the incidence total rather than being forced into an arbitrary allocation.
+
 ## Stress And Stochastic Cases
 
 Deterministic stress cases show:

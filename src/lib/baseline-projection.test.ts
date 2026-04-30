@@ -222,6 +222,36 @@ describe("projectAgainstBaseline", () => {
 		expect(balanced.package.macroFeedbackGbp).toBeLessThan(0);
 	});
 
+	it("attaches distributional and household incidence to reaction packages", () => {
+		const proj = [yp(1, 0), yp(2, 0), yp(3, -15_000_000_000)];
+		const cmp = projectAgainstBaseline(proj, TEST_BASELINE);
+		const taxLed = cmp.policyReactionOptions.find(
+			(option) => option.id === "tax-led",
+		)!;
+		const spendingLed = cmp.policyReactionOptions.find(
+			(option) => option.id === "spending-led",
+		)!;
+
+		expect(taxLed.package.incidence.totalLines).toBe(
+			taxLed.package.components.length,
+		);
+		expect(taxLed.package.incidence.modelledLines).toBeGreaterThan(0);
+		expect(taxLed.package.incidence.unmodelledDeltaGbp).toBeGreaterThanOrEqual(
+			0,
+		);
+		expect(taxLed.package.incidence.topDecile.perHouseholdGbp).toBeGreaterThan(
+			0,
+		);
+		expect(
+			taxLed.package.incidence.hardestHitHousehold?.impactGbp,
+		).toBeGreaterThan(0);
+		expect(taxLed.package.incidence.households).toHaveLength(9);
+		expect(
+			spendingLed.package.incidence.bottomDecile.incomeShare,
+		).toBeGreaterThan(spendingLed.package.incidence.topDecile.incomeShare);
+		expect(spendingLed.package.incidence.progressivity).toBe("regressive");
+	});
+
 	it("reports residual gaps when plausible reaction package caps bind", () => {
 		const proj = [yp(1, 0), yp(2, 0), yp(3, -90_000_000_000)];
 		const cmp = projectAgainstBaseline(proj, TEST_BASELINE);
