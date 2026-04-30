@@ -55,6 +55,7 @@ import { buildMacroStressLab } from "@/lib/macro-stress-lab";
 import { BaselineComparisonPanel } from "./baseline-comparison";
 import { DistributionalImpact } from "./distributional-impact";
 import { HouseholdImpactPanel } from "./household-impact";
+import { MacroCausalOverview } from "./macro-causal-overview";
 import { MacroStatePanel } from "./macro-state-panel";
 import { MacroStressLabPanel } from "./macro-stress-lab";
 import { MacroTierBreakdown } from "./macro-tier-breakdown";
@@ -766,64 +767,80 @@ export function OutputRail({
 									)}
 
 									{activeSection === "macro" && (
-										<div className="grid gap-3 xl:grid-cols-[minmax(280px,0.75fr)_minmax(0,1.25fr)] xl:items-start">
-											<div className="min-w-0 space-y-3 xl:max-w-[520px]">
-												<MacroTierBreakdown
-													staticNet={result.net}
-													dynamic={dynamic}
-													dynamicGapSignificant={
-														dynamicGapSignificant
-													}
-													macro={macro}
-													macroGapSignificant={
-														macroGapSignificant
-													}
-													macroYear1={macroYear1}
-													geYear1={geYear1}
-													geGap={geGap}
-													geGapSignificant={
-														geGapSignificant
-													}
-												/>
-												{bandWidthSignificant && (
-													<div className="space-y-1 rounded-md border bg-background/60 p-2 text-[11px] leading-snug">
-														<div className="text-xs font-medium">
-															Confidence band
+										<div className="space-y-3">
+											<MacroCausalOverview
+												staticNet={result.net}
+												dynamic={dynamic}
+												macro={macro}
+												macroPath={macroPath}
+												macroYear1={macroYear1}
+												geYear1={geYear1}
+												geGap={geGap}
+												convergence={{
+													iterations: ge.iterations,
+													converged: ge.converged,
+													maxChangeGbp: ge.maxChangeGbp,
+												}}
+											/>
+											<div className="grid gap-3 xl:grid-cols-[minmax(280px,0.75fr)_minmax(0,1.25fr)] xl:items-start">
+												<div className="min-w-0 space-y-3 xl:max-w-[520px]">
+													<MacroTierBreakdown
+														staticNet={result.net}
+														dynamic={dynamic}
+														dynamicGapSignificant={
+															dynamicGapSignificant
+														}
+														macro={macro}
+														macroGapSignificant={
+															macroGapSignificant
+														}
+														macroYear1={macroYear1}
+														geYear1={geYear1}
+														geGap={geGap}
+														geGapSignificant={
+															geGapSignificant
+														}
+													/>
+													{bandWidthSignificant && (
+														<div className="space-y-1 rounded-md border bg-background/60 p-2 text-[11px] leading-snug">
+															<div className="text-xs font-medium">
+																Confidence band
+															</div>
+															<div className="text-muted-foreground">
+																90% CI:{" "}
+																<span className="tabular-nums text-foreground">
+																	£
+																	{Math.round(
+																		band.p5,
+																	).toLocaleString()}
+																</span>{" "}
+																—{" "}
+																<span className="tabular-nums text-foreground">
+																	£
+																	{Math.round(
+																		band.p95,
+																	).toLocaleString()}
+																</span>
+															</div>
+															<div className="text-[10px] text-muted-foreground">
+																1000-draw Monte Carlo over
+																per-lever yield distributions
+																(HMRC ranges where stated,
+																±10% otherwise).
+															</div>
 														</div>
-														<div className="text-muted-foreground">
-															90% CI:{" "}
-															<span className="tabular-nums text-foreground">
-																£
-																{Math.round(
-																	band.p5,
-																).toLocaleString()}
-															</span>{" "}
-															—{" "}
-															<span className="tabular-nums text-foreground">
-																£
-																{Math.round(
-																	band.p95,
-																).toLocaleString()}
-															</span>
-														</div>
-														<div className="text-[10px] text-muted-foreground">
-															1000-draw Monte Carlo over
-															per-lever yield distributions
-															(HMRC ranges where stated,
-															±10% otherwise).
-														</div>
-													</div>
-												)}
-											</div>
-											<div className="min-w-0">
-												<MacroStatePanel
-													path={macroPath}
-													convergence={{
-														iterations: ge.iterations,
-														converged: ge.converged,
-														maxChangeGbp: ge.maxChangeGbp,
-													}}
-												/>
+													)}
+												</div>
+												<div className="min-w-0">
+													<MacroStatePanel
+														path={macroPath}
+														convergence={{
+															iterations: ge.iterations,
+															converged: ge.converged,
+															maxChangeGbp: ge.maxChangeGbp,
+														}}
+													/>
+												</div>
 											</div>
 										</div>
 									)}

@@ -84,6 +84,16 @@ test.describe("policy scenario quick starts", () => {
 		await expect(page.getByText("Borrow to invest")).toBeVisible();
 		await expect(page.getByText("4 decisions")).toBeVisible();
 		await expect(page.getByText("No decisions yet.")).toHaveCount(0);
+		await page.getByRole("tab", { name: "Macro" }).click();
+		await expect(page.getByLabel("Macro causal overview")).toBeVisible();
+		await expect(
+			page.getByLabel(
+				"Macro causal scoring flow from static score to GE-adjusted result",
+			),
+		).toBeVisible();
+		await expect(
+			page.getByLabel("Macro state channel deviations versus baseline"),
+		).toBeVisible();
 
 		await expectSearchParam(() => page.url(), "wstep", "5");
 		await expectSearchParam(
