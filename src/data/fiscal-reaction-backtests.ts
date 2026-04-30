@@ -1,3 +1,5 @@
+import type { FiscalReactionPriorProfileId } from "./fiscal-reaction-priors";
+
 export type FiscalReactionPackageId =
 	| "balanced"
 	| "tax-led"
@@ -17,6 +19,8 @@ export interface FiscalReactionBacktestEpisode {
 	growthShock: number;
 	inflationShock: number;
 	rateStress: number;
+	institutionalPriorProfileIds: readonly FiscalReactionPriorProfileId[];
+	institutionalContext: string;
 	context: string;
 	lesson: string;
 }
@@ -37,6 +41,12 @@ export const FISCAL_REACTION_BACKTEST_EPISODES: readonly FiscalReactionBacktestE
 			growthShock: -0.006,
 			inflationShock: 0.03,
 			rateStress: 0.018,
+			institutionalPriorProfileIds: [
+				"credibility-repair",
+				"public-service-protection",
+			],
+			institutionalContext:
+				"New Chancellor reversing a credibility shock while avoiding a fresh public-service retrenchment narrative.",
 			context:
 				"Post-mini-budget credibility repair with high inflation, higher gilt yields, and a large stated consolidation target.",
 			lesson:
@@ -56,6 +66,9 @@ export const FISCAL_REACTION_BACKTEST_EPISODES: readonly FiscalReactionBacktestE
 			growthShock: -0.003,
 			inflationShock: 0.002,
 			rateStress: 0.002,
+			institutionalPriorProfileIds: ["public-service-protection"],
+			institutionalContext:
+				"Pandemic-era service commitments constrained immediate departmental cuts, making deferred tax rises more plausible.",
 			context:
 				"Pandemic borrowing unwind with tax rises announced for later years rather than immediate spending cuts.",
 			lesson:
@@ -75,6 +88,9 @@ export const FISCAL_REACTION_BACKTEST_EPISODES: readonly FiscalReactionBacktestE
 			growthShock: -0.012,
 			inflationShock: 0.006,
 			rateStress: 0.003,
+			institutionalPriorProfileIds: ["spending-restraint-mandate"],
+			institutionalContext:
+				"Coalition fiscal strategy explicitly prioritised welfare and departmental restraint over a tax-led repair.",
 			context:
 				"Post-financial-crisis consolidation with Coalition preference for welfare and departmental restraint despite a material VAT rise.",
 			lesson:
@@ -93,6 +109,12 @@ export const FISCAL_REACTION_BACKTEST_EPISODES: readonly FiscalReactionBacktestE
 			growthShock: 0.002,
 			inflationShock: 0.001,
 			rateStress: 0.001,
+			institutionalPriorProfileIds: [
+				"spending-restraint-mandate",
+				"tax-lock",
+			],
+			institutionalContext:
+				"Conservative majority, welfare-cap politics, and tax-lock messaging tilted the package toward spending restraint.",
 			context:
 				"Medium-sized consolidation framed around a Conservative welfare target rather than market stress.",
 			lesson:
@@ -112,6 +134,9 @@ export const FISCAL_REACTION_BACKTEST_EPISODES: readonly FiscalReactionBacktestE
 			growthShock: -0.002,
 			inflationShock: 0.004,
 			rateStress: 0.006,
+			institutionalPriorProfileIds: ["public-service-protection"],
+			institutionalContext:
+				"Public-service and investment commitments made tax rises more plausible than a renewed austerity package.",
 			context:
 				"Large tax package used to repair inherited headroom while preserving public-service spending plans.",
 			lesson:

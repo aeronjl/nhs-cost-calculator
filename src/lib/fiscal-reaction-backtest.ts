@@ -7,9 +7,10 @@ import {
 import {
 	POLICY_REACTION_PROTOTYPES,
 	buildPolicyReactionPackage,
-	selectPolicyReactionOptionId,
+	explainPolicyReactionSelection,
 	type PolicyReactionOptionId,
 	type PolicyReactionPackage,
+	type PolicyReactionSelectionScore,
 } from "./policy-reaction-packages";
 import { deserializeScenario, evaluateScenario, type ScenarioLine } from "./scenario";
 
@@ -25,6 +26,8 @@ export interface FiscalReactionComposition {
 export interface FiscalReactionBacktestRow {
 	episode: FiscalReactionBacktestEpisode;
 	budgetName: string;
+	mechanicalPackageId: PolicyReactionOptionId | null;
+	mechanicalPackageLabel: string;
 	selectedPackageId: PolicyReactionOptionId | null;
 	selectedPackageLabel: string;
 	selectedPackage: PolicyReactionPackage | null;
@@ -33,15 +36,23 @@ export interface FiscalReactionBacktestRow {
 	modelComposition: FiscalReactionComposition | null;
 	shareDistance: number | null;
 	leverOverlap: number;
+	mechanicalStatus: FiscalReactionBacktestStatus;
 	status: FiscalReactionBacktestStatus;
 	diagnosis: string;
+	priorProfileLabels: readonly string[];
+	priorChangedSelection: boolean;
+	selectionScores: readonly PolicyReactionSelectionScore[];
 }
 
 export interface FiscalReactionBacktestSummary {
 	rows: FiscalReactionBacktestRow[];
+	mechanicalMatches: number;
+	mechanicalPartials: number;
+	mechanicalMisses: number;
 	matches: number;
 	partials: number;
 	misses: number;
+	priorChangedRows: number;
 	meanLeverOverlap: number;
 	meanShareDistance: number;
 }
@@ -125,6 +136,13 @@ const diagnosisFor = (
 	row: Omit<FiscalReactionBacktestRow, "status" | "diagnosis">,
 	status: FiscalReactionBacktestStatus,
 ): string => {
+	if (
+		status === "match" &&
+		row.mechanicalStatus !== "match" &&
+		row.priorChangedSelection
+	) {
+		return `Institutional priors move the selector from ${row.mechanicalPackageLabel} to the historical ${row.actualPackageId} package shape.`;
+	}
 	if (status === "match") {
 		return `Selector matches the historical ${row.actualPackageId} package shape.`;
 	}
@@ -143,19 +161,33 @@ const diagnosisFor = (
 export const evaluateFiscalReactionBacktestEpisode = (
 	episode: FiscalReactionBacktestEpisode,
 ): FiscalReactionBacktestRow => {
-	const selectedPackageId = selectPolicyReactionOptionId({
+	const selectionState = {
 		policyReactionGbp: episode.targetCorrectionGbp,
 		stabilityRuleBreached: episode.stabilityRuleBreached,
 		growthShock: episode.growthShock,
 		inflationShock: episode.inflationShock,
 		rateStress: episode.rateStress,
 		mode: "stress-contingent",
+	} as const;
+	const mechanicalSelection = explainPolicyReactionSelection(selectionState);
+	const selection = explainPolicyReactionSelection({
+		...selectionState,
+		institutionalPriorProfileIds: episode.institutionalPriorProfileIds,
 	});
+	const selectedPackageId = selection.selectedId;
 	const selectedPackage =
 		selectedPackageId === null
 			? null
 			: buildPolicyReactionPackage(
 					prototypeFor(selectedPackageId),
+					episode.targetCorrectionGbp,
+					5,
+				);
+	const mechanicalPackage =
+		mechanicalSelection.selectedId === null
+			? null
+			: buildPolicyReactionPackage(
+					prototypeFor(mechanicalSelection.selectedId),
 					episode.targetCorrectionGbp,
 					5,
 				);
@@ -165,14 +197,35 @@ export const evaluateFiscalReactionBacktestEpisode = (
 	const modelComposition = selectedPackage
 		? compositionForPackage(selectedPackage)
 		: null;
+	const mechanicalComposition = mechanicalPackage
+		? compositionForPackage(mechanicalPackage)
+		: null;
 	const distance = modelComposition
 		? shareDistance(modelComposition, actualComposition)
 		: null;
 	const overlap = leverOverlap(modelComposition, actualComposition);
+	const mechanicalDistance = mechanicalComposition
+		? shareDistance(mechanicalComposition, actualComposition)
+		: null;
+	const mechanicalOverlap = leverOverlap(
+		mechanicalComposition,
+		actualComposition,
+	);
 	const budget = ANNOTATED_BUDGETS.find((item) => item.id === episode.budgetId);
+	const mechanicalStatus = statusFor(
+		mechanicalSelection.selectedId,
+		episode.actualPackageId,
+		mechanicalDistance,
+		mechanicalOverlap,
+	);
 	const base = {
 		episode,
 		budgetName: budget?.name ?? episode.label,
+		mechanicalPackageId: mechanicalSelection.selectedId,
+		mechanicalPackageLabel:
+			mechanicalSelection.selectedId === null
+				? "No reaction"
+				: prototypeFor(mechanicalSelection.selectedId).label,
 		selectedPackageId,
 		selectedPackageLabel:
 			selectedPackageId === null
@@ -184,6 +237,11 @@ export const evaluateFiscalReactionBacktestEpisode = (
 		modelComposition,
 		shareDistance: distance,
 		leverOverlap: overlap,
+		mechanicalStatus,
+		priorProfileLabels: selection.appliedPriors.map((profile) => profile.label),
+		priorChangedSelection:
+			mechanicalSelection.selectedId !== selection.selectedId,
+		selectionScores: selection.scores,
 	};
 	const status = statusFor(
 		selectedPackageId,
@@ -203,9 +261,21 @@ export const auditFiscalReactionBacktests =
 		const rows = FISCAL_REACTION_BACKTEST_EPISODES.map(
 			evaluateFiscalReactionBacktestEpisode,
 		);
+		const mechanicalMatches = rows.filter(
+			(row) => row.mechanicalStatus === "match",
+		).length;
+		const mechanicalPartials = rows.filter(
+			(row) => row.mechanicalStatus === "partial",
+		).length;
+		const mechanicalMisses = rows.filter(
+			(row) => row.mechanicalStatus === "miss",
+		).length;
 		const matches = rows.filter((row) => row.status === "match").length;
 		const partials = rows.filter((row) => row.status === "partial").length;
 		const misses = rows.filter((row) => row.status === "miss").length;
+		const priorChangedRows = rows.filter(
+			(row) => row.priorChangedSelection,
+		).length;
 		const meanLeverOverlap =
 			rows.length > 0
 				? rows.reduce((sum, row) => sum + row.leverOverlap, 0) / rows.length
@@ -221,9 +291,13 @@ export const auditFiscalReactionBacktests =
 				: 0;
 		return {
 			rows,
+			mechanicalMatches,
+			mechanicalPartials,
+			mechanicalMisses,
 			matches,
 			partials,
 			misses,
+			priorChangedRows,
 			meanLeverOverlap,
 			meanShareDistance,
 		};

@@ -22,6 +22,7 @@ import type {
 	OBRBaseline,
 } from "@/data/baseline/obr-baseline";
 import { OBR_BASELINE } from "@/data/baseline/obr-baseline";
+import type { FiscalReactionPriorProfileId } from "@/data/fiscal-reaction-priors";
 import {
 	type ProjectionAssumptions,
 	type ScenarioResult,
@@ -160,6 +161,7 @@ export interface FiscalRuleFanOptions {
 	regimeSwitching?: boolean;
 	policyReactionTree?: boolean;
 	policyReactionPackage?: PolicyReactionOptionId | "stress-contingent";
+	policyReactionPriorProfileIds?: readonly FiscalReactionPriorProfileId[];
 }
 
 export const evaluateFiscalRuleDiagnostics = (
@@ -464,6 +466,9 @@ const selectEndogenousPolicyReactionId = (
 	comparison: BaselineComparison,
 	draw: FiscalRuleDrawState,
 	mode: PolicyReactionOptionId | "stress-contingent" | undefined,
+	institutionalPriorProfileIds:
+		| readonly FiscalReactionPriorProfileId[]
+		| undefined,
 ): PolicyReactionOptionId | null => {
 	return selectPolicyReactionOptionId({
 		policyReactionGbp: comparison.diagnostics.policyReactionGbp,
@@ -472,6 +477,7 @@ const selectEndogenousPolicyReactionId = (
 		inflationShock: draw.inflationShock,
 		rateStress: draw.giltShock + draw.bankRateShock + draw.regimeOverlay,
 		mode,
+		institutionalPriorProfileIds,
 	});
 };
 
@@ -597,14 +603,19 @@ export const projectFiscalRuleFan = (
 		const selectedReactionId =
 			options.policyReactionTree === false
 				? null
-				: selectEndogenousPolicyReactionId(comparison, {
-						growthShock,
-						inflationShock,
-						giltShock,
-						bankRateShock,
-						regimeOverlay,
-						commonShock,
-					}, options.policyReactionPackage);
+				: selectEndogenousPolicyReactionId(
+						comparison,
+						{
+							growthShock,
+							inflationShock,
+							giltShock,
+							bankRateShock,
+							regimeOverlay,
+							commonShock,
+						},
+						options.policyReactionPackage,
+						options.policyReactionPriorProfileIds,
+					);
 		if (selectedReactionId) {
 			reactionTriggeredCount++;
 			reactionPackageCounts[selectedReactionId]++;

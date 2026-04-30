@@ -1,4 +1,9 @@
 import { REPRESENTATIVE_HOUSEHOLDS } from "@/data/households";
+import {
+	getFiscalReactionPriorProfile,
+	type FiscalReactionPriorProfile,
+	type FiscalReactionPriorProfileId,
+} from "@/data/fiscal-reaction-priors";
 import { getTaxLever, type TaxUnit } from "@/data/levers/tax-rates";
 import { getProgramme } from "@/data/levers/uk-spending";
 import { DECILE_DISPOSABLE_INCOME } from "./distribution";
@@ -31,6 +36,23 @@ export interface PolicyReactionSelectionState {
 	inflationShock: number;
 	rateStress: number;
 	mode?: PolicyReactionOptionId | "stress-contingent";
+	institutionalPriorProfileIds?: readonly FiscalReactionPriorProfileId[];
+}
+
+export interface PolicyReactionSelectionScore {
+	id: PolicyReactionOptionId;
+	label: string;
+	mechanicalScore: number;
+	priorScore: number;
+	totalScore: number;
+	reasons: readonly string[];
+}
+
+export interface PolicyReactionSelection {
+	selectedId: PolicyReactionOptionId | null;
+	mechanicalSelectedId: PolicyReactionOptionId | null;
+	scores: readonly PolicyReactionSelectionScore[];
+	appliedPriors: readonly FiscalReactionPriorProfile[];
 }
 
 export interface PolicyReactionPrototype {
@@ -437,21 +459,220 @@ export const POLICY_REACTION_PROTOTYPES: readonly PolicyReactionPrototype[] = [
 	},
 ];
 
+const POLICY_REACTION_OPTION_ORDER: readonly PolicyReactionOptionId[] = [
+	"balanced",
+	"tax-led",
+	"spending-led",
+	"delayed",
+];
+
+const policyReactionOptionRank = new Map(
+	POLICY_REACTION_OPTION_ORDER.map((id, index) => [id, index]),
+);
+
+const isPolicyReactionOptionId = (id: string): id is PolicyReactionOptionId =>
+	POLICY_REACTION_OPTION_ORDER.includes(id as PolicyReactionOptionId);
+
+const createSelectionScores = (): PolicyReactionSelectionScore[] =>
+	POLICY_REACTION_OPTION_ORDER.map((id) => {
+		const prototype =
+			POLICY_REACTION_PROTOTYPES.find((item) => item.id === id) ??
+			POLICY_REACTION_PROTOTYPES[0]!;
+		return {
+			id,
+			label: prototype.label,
+			mechanicalScore: 0,
+			priorScore: 0,
+			totalScore: 0,
+			reasons: [],
+		};
+	});
+
+const addSelectionScore = (
+	scores: PolicyReactionSelectionScore[],
+	id: PolicyReactionOptionId,
+	value: number,
+	reason: string,
+	source: "mechanical" | "prior",
+) => {
+	if (value === 0) return;
+	const score = scores.find((item) => item.id === id);
+	if (!score) return;
+	if (source === "mechanical") {
+		score.mechanicalScore += value;
+	} else {
+		score.priorScore += value;
+	}
+	score.totalScore = score.mechanicalScore + score.priorScore;
+	(score.reasons as string[]).push(
+		`${reason} (${value > 0 ? "+" : ""}${value.toFixed(2)})`,
+	);
+};
+
+const rankedSelection = (
+	scores: readonly PolicyReactionSelectionScore[],
+	scoreKey: "mechanicalScore" | "totalScore",
+): PolicyReactionOptionId =>
+	scores
+		.slice()
+		.sort((a, b) => {
+			const scoreDelta = b[scoreKey] - a[scoreKey];
+			if (Math.abs(scoreDelta) > 1e-9) return scoreDelta;
+			return (
+				(policyReactionOptionRank.get(a.id) ?? 999) -
+				(policyReactionOptionRank.get(b.id) ?? 999)
+			);
+		})[0]!.id;
+
+const fixedPolicyReactionSelection = (
+	id: PolicyReactionOptionId,
+): PolicyReactionSelection => {
+	const scores = createSelectionScores();
+	addSelectionScore(
+		scores,
+		id,
+		1,
+		"fixed package override",
+		"mechanical",
+	);
+	return {
+		selectedId: id,
+		mechanicalSelectedId: id,
+		scores,
+		appliedPriors: [],
+	};
+};
+
+export const explainPolicyReactionSelection = (
+	state: PolicyReactionSelectionState,
+): PolicyReactionSelection => {
+	if (state.policyReactionGbp <= 0) {
+		return {
+			selectedId: null,
+			mechanicalSelectedId: null,
+			scores: [],
+			appliedPriors: [],
+		};
+	}
+	if (state.mode && state.mode !== "stress-contingent") {
+		return fixedPolicyReactionSelection(state.mode);
+	}
+
+	const scores = createSelectionScores();
+	const gapBn = state.policyReactionGbp / 1_000_000_000;
+	addSelectionScore(
+		scores,
+		"balanced",
+		0.5,
+		"default implementability",
+		"mechanical",
+	);
+	addSelectionScore(
+		scores,
+		"tax-led",
+		0.2,
+		"high-yield tax capacity",
+		"mechanical",
+	);
+	addSelectionScore(
+		scores,
+		"spending-led",
+		0.2,
+		"available programme restraint",
+		"mechanical",
+	);
+
+	if (state.stabilityRuleBreached) {
+		addSelectionScore(
+			scores,
+			"balanced",
+			0.3,
+			"formal rule breach",
+			"mechanical",
+		);
+	}
+	if (state.stabilityRuleBreached && gapBn > 20) {
+		addSelectionScore(
+			scores,
+			"tax-led",
+			1.4,
+			"large annual correction need",
+			"mechanical",
+		);
+	}
+	if (state.stabilityRuleBreached && state.rateStress > 0.01) {
+		addSelectionScore(
+			scores,
+			"tax-led",
+			1.2,
+			"rate and credibility stress",
+			"mechanical",
+		);
+	}
+	if (state.inflationShock > 0.01 && state.growthShock > -0.006) {
+		addSelectionScore(
+			scores,
+			"spending-led",
+			1.1,
+			"inflationary demand pressure",
+			"mechanical",
+		);
+	}
+	if (state.growthShock < -0.008) {
+		addSelectionScore(
+			scores,
+			"delayed",
+			0.6,
+			"weak-growth implementation risk",
+			"mechanical",
+		);
+	}
+	if (!state.stabilityRuleBreached && gapBn <= 15) {
+		addSelectionScore(
+			scores,
+			"balanced",
+			0.7,
+			"thin but unbreached headroom",
+			"mechanical",
+		);
+		addSelectionScore(
+			scores,
+			"delayed",
+			0.3,
+			"room to phase tightening",
+			"mechanical",
+		);
+	}
+
+	const mechanicalSelectedId = rankedSelection(scores, "mechanicalScore");
+	const appliedPriors = (state.institutionalPriorProfileIds ?? []).map(
+		getFiscalReactionPriorProfile,
+	);
+	for (const profile of appliedPriors) {
+		for (const [id, value] of Object.entries(profile.scoreAdjustments)) {
+			if (value === undefined || !isPolicyReactionOptionId(id)) continue;
+			addSelectionScore(
+				scores,
+				id,
+				value,
+				profile.label,
+				"prior",
+			);
+		}
+	}
+
+	return {
+		selectedId: rankedSelection(scores, "totalScore"),
+		mechanicalSelectedId,
+		scores,
+		appliedPriors,
+	};
+};
+
 export const selectPolicyReactionOptionId = (
 	state: PolicyReactionSelectionState,
 ): PolicyReactionOptionId | null => {
-	if (state.policyReactionGbp <= 0) return null;
-	if (state.mode && state.mode !== "stress-contingent") return state.mode;
-	if (
-		state.stabilityRuleBreached &&
-		(state.rateStress > 0.01 || state.policyReactionGbp > 20_000_000_000)
-	) {
-		return "tax-led";
-	}
-	if (state.inflationShock > 0.01 && state.growthShock > -0.006) {
-		return "spending-led";
-	}
-	return "balanced";
+	return explainPolicyReactionSelection(state).selectedId;
 };
 
 const taxQuantityLabel = (unit: TaxUnit, magnitude: number): string => {

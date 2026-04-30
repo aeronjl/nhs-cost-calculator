@@ -10,7 +10,10 @@ describe("fiscal reaction backtests", () => {
 		const audit = auditFiscalReactionBacktests();
 		expect(audit.rows).toHaveLength(FISCAL_REACTION_BACKTEST_EPISODES.length);
 		expect(audit.matches).toBeGreaterThan(0);
-		expect(audit.misses).toBeGreaterThan(0);
+		expect(audit.mechanicalMisses).toBeGreaterThan(0);
+		expect(audit.matches).toBeGreaterThan(audit.mechanicalMatches);
+		expect(audit.misses).toBeLessThan(audit.mechanicalMisses);
+		expect(audit.priorChangedRows).toBeGreaterThan(0);
 		expect(audit.meanLeverOverlap).toBeGreaterThanOrEqual(0);
 		expect(audit.meanLeverOverlap).toBeLessThanOrEqual(1);
 		expect(audit.meanShareDistance).toBeGreaterThanOrEqual(0);
@@ -28,15 +31,18 @@ describe("fiscal reaction backtests", () => {
 		expect(row.actualComposition.taxShare).toBeGreaterThan(0.65);
 	});
 
-	it("flags large spending-led austerity episodes as model misses", () => {
+	it("uses institutional priors to correct spending-led austerity misses", () => {
 		const episode = FISCAL_REACTION_BACKTEST_EPISODES.find(
 			(item) => item.id === "osborne-2010-emergency-budget",
 		)!;
 		const row = evaluateFiscalReactionBacktestEpisode(episode);
 		expect(row.actualPackageId).toBe("spending-led");
-		expect(row.selectedPackageId).not.toBe("spending-led");
-		expect(row.status).toBe("miss");
-		expect(row.diagnosis).toMatch(/politically spending-led/i);
+		expect(row.mechanicalPackageId).not.toBe("spending-led");
+		expect(row.mechanicalStatus).toBe("miss");
+		expect(row.selectedPackageId).toBe("spending-led");
+		expect(row.status).toBe("match");
+		expect(row.priorProfileLabels).toContain("Spending-restraint mandate");
+		expect(row.diagnosis).toMatch(/Institutional priors/i);
 	});
 
 	it("computes share distance and lever overlap for each row", () => {

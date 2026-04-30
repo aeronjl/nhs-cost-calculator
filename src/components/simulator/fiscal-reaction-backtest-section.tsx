@@ -54,7 +54,12 @@ export function FiscalReactionBacktestSection() {
 			<CardContent className="space-y-4">
 				<div className="rounded-lg bg-muted/40 p-4 text-sm leading-snug">
 					<p>
-						The stress-contingent selector matches{" "}
+						The rule-only selector matches{" "}
+						<strong>
+							{audit.mechanicalMatches}/{audit.rows.length}
+						</strong>{" "}
+						historical package labels. Adding institutional priors raises that
+						to{" "}
 						<strong>
 							{audit.matches}/{audit.rows.length}
 						</strong>{" "}
@@ -72,10 +77,10 @@ export function FiscalReactionBacktestSection() {
 					</p>
 					<p className="text-xs text-muted-foreground mt-2">
 						This audit is deliberately small-sample. It tests whether a model
-						conditioned only on fiscal stress, inflation, growth, and rate
-						pressure can recover the package shape actually chosen by
-						Chancellors. Misses are useful: they identify missing political
-						preference priors, especially spending-led austerity episodes.
+						conditioned on fiscal stress, inflation, growth, rate pressure, and
+						explicit political/institutional priors can recover the package
+						shape actually chosen by Chancellors. Prior-driven switches are
+						shown so judgement calls remain auditable.
 					</p>
 				</div>
 
@@ -112,6 +117,15 @@ export function FiscalReactionBacktestSection() {
 											inflation shock{" "}
 											{formatPct(row.episode.inflationShock)}
 										</div>
+										<div className="mt-1 text-muted-foreground leading-snug">
+											Priors:{" "}
+											{row.priorProfileLabels.length > 0
+												? row.priorProfileLabels.join(", ")
+												: "none"}
+										</div>
+										<div className="mt-1 text-muted-foreground leading-snug">
+											{row.episode.institutionalContext}
+										</div>
 									</td>
 									<td className="px-3 py-2 tabular-nums">
 										<div className="font-medium">
@@ -129,6 +143,11 @@ export function FiscalReactionBacktestSection() {
 										<div className="font-medium">
 											{row.selectedPackageLabel}
 										</div>
+										{row.priorChangedSelection && (
+											<div className="text-muted-foreground">
+												rule-only {packageLabel(row.mechanicalPackageId)}
+											</div>
+										)}
 										{row.modelComposition && (
 											<>
 												<div className="text-muted-foreground">
@@ -158,6 +177,7 @@ export function FiscalReactionBacktestSection() {
 											{row.diagnosis}
 										</div>
 										<div className="mt-1 text-muted-foreground tabular-nums">
+											rule-only {statusLabel(row.mechanicalStatus)} ·{" "}
 											lever overlap {formatPct(row.leverOverlap)}
 											{row.shareDistance !== null
 												? ` · share distance ${formatPct(row.shareDistance)}`
@@ -175,7 +195,8 @@ export function FiscalReactionBacktestSection() {
 					labels capture the policy intent over the forecast horizon, so the
 					2010 Emergency Budget is treated as spending-led despite its large VAT
 					rise because the multi-year consolidation relied mainly on welfare and
-					departmental restraint.
+					departmental restraint. Priors are transparent score adjustments, not
+					hidden overrides.
 				</p>
 			</CardContent>
 		</Card>
