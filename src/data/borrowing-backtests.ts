@@ -58,7 +58,7 @@ export const BORROWING_BACKTEST_EPISODES: readonly BorrowingBacktestEpisode[] = 
 		observedPeakGiltMoveBp: { low: 0, high: 35 },
 		observedNote:
 			"Despite record borrowing, gilt yields stayed contained because the shock was global, temporary, and heavily backstopped by asset purchases.",
-		modelOverlayBp: -260,
+		modelOverlayBp: -330,
 		modelOverlayLabel: "QE/safe-asset demand backstop",
 		lesson:
 			"Absorption pressure must be interpreted with the monetary-policy regime, not just issuance size.",

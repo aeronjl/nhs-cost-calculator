@@ -307,6 +307,13 @@ function BorrowingModelBlock({
 	const optimisedMix = strategyOptimisation
 		? formatPortfolioMix(strategyOptimisation.optimum.path.at(-1)?.instruments ?? [])
 		: null;
+	const bottleneckInvestor =
+		auctionBottleneck?.investorDemandBreakdown.find(
+			(item) => item.id === auctionBottleneck.investorBottleneck,
+		) ?? null;
+	const bottleneckMethods = auctionBottleneck
+		? formatIssuanceMethods(auctionBottleneck.issuanceMethods)
+		: null;
 	return (
 		<div>
 			<div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
@@ -388,6 +395,32 @@ function BorrowingModelBlock({
 						<dd className="tabular-nums text-right font-medium">
 							{auctionBottleneck.auctionCoverRatio.toFixed(1)}x /{" "}
 							{auctionBottleneck.auctionTailBp.toFixed(1)}bp
+						</dd>
+					</div>
+				)}
+				{auctionBottleneck && (
+					<div className="contents">
+						<dt className="text-muted-foreground">Operation calendar</dt>
+						<dd className="tabular-nums text-right font-medium">
+							{auctionBottleneck.plannedOperationCount} ops ·{" "}
+							{auctionBottleneck.calendarPressureRatio.toFixed(1)}x
+						</dd>
+					</div>
+				)}
+				{auctionBottleneck && bottleneckMethods && (
+					<div className="contents">
+						<dt className="text-muted-foreground">Issuance route</dt>
+						<dd className="tabular-nums text-right font-medium">
+							{bottleneckMethods}
+						</dd>
+					</div>
+				)}
+				{bottleneckInvestor && (
+					<div className="contents">
+						<dt className="text-muted-foreground">Investor bottleneck</dt>
+						<dd className="tabular-nums text-right font-medium">
+							{bottleneckInvestor.label}{" "}
+							{bottleneckInvestor.absorptionRatio.toFixed(1)}x
 						</dd>
 					</div>
 				)}
@@ -671,6 +704,14 @@ const formatPortfolioMix = (
 						: instrument.id.replace("-gilts", "").replace("-", " ");
 			return `${label} ${Math.round(instrument.share * 100)}%`;
 		})
+		.join(" · ");
+
+const formatIssuanceMethods = (
+	methods: readonly { label: string; plannedIssuanceGbp: number; share: number }[],
+): string =>
+	methods
+		.filter((method) => method.plannedIssuanceGbp > 0)
+		.map((method) => `${method.label} ${Math.round(method.share * 100)}%`)
 		.join(" · ");
 
 const formatSignedBn = (n: number): string => {

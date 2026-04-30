@@ -3,8 +3,15 @@ import {
 	DEFAULT_BORROWING_STRATEGY_ID,
 	type BorrowingStrategyId,
 	type DebtInstrument,
+	type DebtInstrumentId,
 	getBorrowingStrategy,
 } from "@/data/levers/borrowing";
+import {
+	BORROWING_INVESTOR_SEGMENTS,
+	type BorrowingInvestorSegmentId,
+	type BorrowingIssuanceMethodAllocation,
+	getBorrowingRemitCalendar,
+} from "@/data/borrowing-remit";
 import auctionDemandCalibration from "@/data/generated/auction-demand-calibration.json";
 import type { IncidenceVector } from "@/lib/distribution";
 import {
@@ -38,9 +45,20 @@ export interface BorrowingInstrumentCost {
 	refinancingGbp: number;
 	marginalIssuanceGbp: number;
 	plannedAnnualIssuanceGbp: number;
+	plannedOperationCount: number;
+	plannedAverageOperationSizeGbp: number;
+	marginalOperationSizeGbp: number;
+	calendarOperationSizeGbp: number;
+	calendarPressureRatio: number;
+	calendarConcessionBp: number;
+	issuanceMethods: readonly BorrowingIssuanceMethodAllocation[];
+	unallocatedFlexGbp: number;
 	competingApfSupplyGbp: number;
 	netMarketSupplyGbp: number;
 	baseAuctionDemandGbp: number;
+	investorDemandGbp: number;
+	investorBottleneck: BorrowingInvestorSegmentId | "none";
+	investorDemandBreakdown: BorrowingInvestorDemand[];
 	auctionDemandElasticityGbpPerBp: number;
 	requiredAuctionConcessionBp: number;
 	auctionClearingConcessionBp: number;
@@ -49,6 +67,17 @@ export interface BorrowingInstrumentCost {
 	uncoveredAuctionSupplyGbp: number;
 	absorptionRatio: number;
 	absorptionPremium: number;
+}
+
+export interface BorrowingInvestorDemand {
+	id: BorrowingInvestorSegmentId;
+	label: string;
+	preferredWeight: number;
+	demandGbp: number;
+	targetSupplyGbp: number;
+	absorptionRatio: number;
+	elasticityMultiplier: number;
+	qtSensitivity: number;
 }
 
 export interface BorrowingYear {
@@ -176,6 +205,9 @@ const DEFAULT_ASSUMPTIONS: BorrowingPathAssumptions = {
 
 const ABSORPTION_CAPACITY_SHARE_OF_ANNUAL_REMIT = 0.3;
 const ABSORPTION_PREMIUM_CAP = 0.0075;
+const UNALLOCATED_FLEX_DEMAND_COVERAGE = 0.35;
+const CALENDAR_OPERATION_FLEX_MULTIPLIER = 1.25;
+const CALENDAR_CONCESSION_BP_PER_EXCESS_RATIO = 18;
 const APF_ANNUAL_SUPPLY_SHARE = 0.12;
 const APF_CROWDING_WEIGHT = 0.25;
 const APF_BANK_RATE_CASHFLOW_BETA = 0.25;
@@ -224,10 +256,113 @@ const issuancePressurePremium = (amount: number): number => {
 };
 
 const plannedAnnualIssuanceFor = (instrument: DebtInstrument): number => {
+	const calendar = getBorrowingRemitCalendar(instrument.id);
+	if (calendar) return calendar.plannedAnnualIssuanceGbp;
 	const centralShare =
 		BORROWING.portfolio.find((item) => item.id === instrument.id)?.share ??
 		instrument.share;
 	return BORROWING.grossFinancingRequirement * centralShare;
+};
+
+const plannedOperationCountFor = (instrument: DebtInstrument): number =>
+	getBorrowingRemitCalendar(instrument.id)?.plannedOperationCount ??
+	Math.max(1, Math.round(instrument.maturityYears <= 1 ? 52 : 12));
+
+const issuanceMethodsFor = (
+	instrument: DebtInstrument,
+	plannedAnnualIssuanceGbp: number,
+): readonly BorrowingIssuanceMethodAllocation[] =>
+	getBorrowingRemitCalendar(instrument.id)?.methods ?? [
+		{
+			method: instrument.id === "treasury-bills" ? "bill-tender" : "gilt-auction",
+			label: instrument.id === "treasury-bills" ? "bill tenders" : "auctions",
+			plannedIssuanceGbp: plannedAnnualIssuanceGbp,
+			operationCount: plannedOperationCountFor(instrument),
+			normalOperationSizeGbp:
+				plannedAnnualIssuanceGbp / plannedOperationCountFor(instrument),
+			share: 1,
+		},
+	];
+
+const unallocatedFlexFor = (instrument: DebtInstrument): number =>
+	getBorrowingRemitCalendar(instrument.id)?.unallocatedFlexGbp ?? 0;
+
+const weightedNormalOperationSize = (
+	methods: readonly BorrowingIssuanceMethodAllocation[],
+): number => {
+	const weightTotal = methods.reduce(
+		(sum, item) => sum + Math.max(0, item.plannedIssuanceGbp),
+		0,
+	);
+	if (weightTotal <= 0) return 0;
+	return methods.reduce(
+		(sum, item) =>
+			sum + item.normalOperationSizeGbp * (item.plannedIssuanceGbp / weightTotal),
+		0,
+	);
+};
+
+const segmentRawWeight = (
+	instrumentId: DebtInstrumentId,
+	segment: (typeof BORROWING_INVESTOR_SEGMENTS)[number],
+): number =>
+	segment.marketShare * Math.max(0.01, segment.preferredInstruments[instrumentId] ?? 0.01);
+
+const investorDemandForInstrument = (
+	instrumentId: DebtInstrumentId,
+	baseDemandGbp: number,
+	netMarketSupplyGbp: number,
+	competingApfSupplyGbp: number,
+	plannedAnnualIssuanceGbp: number,
+): BorrowingInvestorDemand[] => {
+	const rawWeights = BORROWING_INVESTOR_SEGMENTS.map((segment) =>
+		segmentRawWeight(instrumentId, segment),
+	);
+	const rawTotal = rawWeights.reduce((sum, weight) => sum + weight, 0);
+	const apfPressure =
+		plannedAnnualIssuanceGbp > 0
+			? competingApfSupplyGbp / plannedAnnualIssuanceGbp
+			: 0;
+	return BORROWING_INVESTOR_SEGMENTS.map((segment, index) => {
+		const preferredWeight = rawTotal > 0 ? rawWeights[index]! / rawTotal : 0;
+		const qtHaircut = Math.min(0.25, segment.qtSensitivity * apfPressure * 0.08);
+		const demandGbp = baseDemandGbp * preferredWeight * (1 - qtHaircut);
+		const targetSupplyGbp = netMarketSupplyGbp * preferredWeight;
+		return {
+			id: segment.id,
+			label: segment.label,
+			preferredWeight,
+			demandGbp,
+			targetSupplyGbp,
+			absorptionRatio:
+				demandGbp > 0 ? Math.max(0, targetSupplyGbp / demandGbp) : 0,
+			elasticityMultiplier: segment.elasticityMultiplier,
+			qtSensitivity: segment.qtSensitivity,
+		};
+	});
+};
+
+const investorElasticityMultiplier = (
+	demand: readonly BorrowingInvestorDemand[],
+): number => {
+	const demandTotal = demand.reduce((sum, item) => sum + item.demandGbp, 0);
+	if (demandTotal <= 0) return 1;
+	return demand.reduce(
+		(sum, item) =>
+			sum + item.elasticityMultiplier * (item.demandGbp / demandTotal),
+		0,
+	);
+};
+
+const investorBottleneckFor = (
+	demand: readonly BorrowingInvestorDemand[],
+): BorrowingInvestorSegmentId | "none" => {
+	const bottleneck = demand.reduce<BorrowingInvestorDemand | null>(
+		(max, item) =>
+			!max || item.absorptionRatio > max.absorptionRatio ? item : max,
+		null,
+	);
+	return bottleneck && bottleneck.absorptionRatio > 1 ? bottleneck.id : "none";
 };
 
 export const annualApfCompetingSupplyGbp = (): number =>
@@ -281,9 +416,20 @@ const absorptionForInstrument = (
 ): {
 	marginalIssuanceGbp: number;
 	plannedAnnualIssuanceGbp: number;
+	plannedOperationCount: number;
+	plannedAverageOperationSizeGbp: number;
+	marginalOperationSizeGbp: number;
+	calendarOperationSizeGbp: number;
+	calendarPressureRatio: number;
+	calendarConcessionBp: number;
+	issuanceMethods: readonly BorrowingIssuanceMethodAllocation[];
+	unallocatedFlexGbp: number;
 	competingApfSupplyGbp: number;
 	netMarketSupplyGbp: number;
 	baseAuctionDemandGbp: number;
+	investorDemandGbp: number;
+	investorBottleneck: BorrowingInvestorSegmentId | "none";
+	investorDemandBreakdown: BorrowingInvestorDemand[];
 	auctionDemandElasticityGbpPerBp: number;
 	requiredAuctionConcessionBp: number;
 	auctionClearingConcessionBp: number;
@@ -295,24 +441,66 @@ const absorptionForInstrument = (
 } => {
 	const marginalIssuanceGbp = Math.max(0, amount) * instrument.share;
 	const plannedAnnualIssuanceGbp = plannedAnnualIssuanceFor(instrument);
+	const plannedOperationCount = plannedOperationCountFor(instrument);
+	const issuanceMethods = issuanceMethodsFor(instrument, plannedAnnualIssuanceGbp);
+	const plannedAverageOperationSizeGbp =
+		plannedOperationCount > 0
+			? plannedAnnualIssuanceGbp / plannedOperationCount
+			: plannedAnnualIssuanceGbp;
+	const marginalOperationSizeGbp =
+		plannedOperationCount > 0
+			? marginalIssuanceGbp / plannedOperationCount
+			: marginalIssuanceGbp;
+	const normalOperationCapacityGbp =
+		weightedNormalOperationSize(issuanceMethods) *
+		CALENDAR_OPERATION_FLEX_MULTIPLIER;
+	const unallocatedFlexGbp = unallocatedFlexFor(instrument);
 	const competingApfSupplyGbp = competingApfSupplyFor(instrument);
 	const netMarketSupplyGbp =
 		marginalIssuanceGbp + competingApfSupplyGbp * APF_CROWDING_WEIGHT;
+	const calendarOperationSizeGbp =
+		plannedAverageOperationSizeGbp +
+		marginalOperationSizeGbp +
+		(plannedOperationCount > 0
+			? (competingApfSupplyGbp * APF_CROWDING_WEIGHT) / plannedOperationCount
+			: 0);
+	const calendarPressureRatio =
+		normalOperationCapacityGbp > 0
+			? calendarOperationSizeGbp / normalOperationCapacityGbp
+			: 0;
+	const calendarConcessionBp =
+		Math.max(0, calendarPressureRatio - 1) *
+		CALENDAR_CONCESSION_BP_PER_EXCESS_RATIO;
 	const digestibleCapacity =
-		plannedAnnualIssuanceGbp * ABSORPTION_CAPACITY_SHARE_OF_ANNUAL_REMIT;
+		plannedAnnualIssuanceGbp * ABSORPTION_CAPACITY_SHARE_OF_ANNUAL_REMIT +
+		unallocatedFlexGbp * UNALLOCATED_FLEX_DEMAND_COVERAGE;
 	const demandCurve = AUCTION_DEMAND_CURVES[instrument.id];
-	const baseAuctionDemandGbp =
+	const segmentedBaseDemandGbp =
 		digestibleCapacity * demandCurve.normalCoverRatio;
+	const investorDemandBreakdown = investorDemandForInstrument(
+		instrument.id,
+		segmentedBaseDemandGbp,
+		netMarketSupplyGbp,
+		competingApfSupplyGbp,
+		plannedAnnualIssuanceGbp,
+	);
+	const baseAuctionDemandGbp = investorDemandBreakdown.reduce(
+		(sum, item) => sum + item.demandGbp,
+		0,
+	);
+	const investorDemandGbp = baseAuctionDemandGbp;
+	const investorBottleneck = investorBottleneckFor(investorDemandBreakdown);
 	const auctionDemandElasticityGbpPerBp =
 		plannedAnnualIssuanceGbp *
-		demandCurve.elasticityShareOfAnnualIssuancePerBp;
+		demandCurve.elasticityShareOfAnnualIssuancePerBp *
+		investorElasticityMultiplier(investorDemandBreakdown);
 	const requiredAuctionConcessionBp =
 		auctionDemandElasticityGbpPerBp > 0
 			? Math.max(
 					0,
 					(netMarketSupplyGbp - baseAuctionDemandGbp) /
 						auctionDemandElasticityGbpPerBp,
-				)
+				) + calendarConcessionBp
 			: 0;
 	const auctionClearingConcessionBp = Math.min(
 		ABSORPTION_PREMIUM_CAP * 10_000,
@@ -340,9 +528,20 @@ const absorptionForInstrument = (
 	return {
 		marginalIssuanceGbp,
 		plannedAnnualIssuanceGbp,
+		plannedOperationCount,
+		plannedAverageOperationSizeGbp,
+		marginalOperationSizeGbp,
+		calendarOperationSizeGbp,
+		calendarPressureRatio,
+		calendarConcessionBp,
+		issuanceMethods,
+		unallocatedFlexGbp,
 		competingApfSupplyGbp,
 		netMarketSupplyGbp,
 		baseAuctionDemandGbp,
+		investorDemandGbp,
+		investorBottleneck,
+		investorDemandBreakdown,
 		auctionDemandElasticityGbpPerBp,
 		requiredAuctionConcessionBp,
 		auctionClearingConcessionBp,

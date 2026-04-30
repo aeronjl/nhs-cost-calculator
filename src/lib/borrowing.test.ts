@@ -116,6 +116,36 @@ describe("borrowing model", () => {
 		);
 	});
 
+	it("uses the remit operation calendar and investor demand segmentation", () => {
+		const [year1] = projectBorrowingPath(80_000_000_000, 1, {
+			strategyId: "long-funded",
+		});
+		const longSlice = year1!.instruments.find(
+			(instrument) => instrument.id === "long-gilts",
+		)!;
+		expect(longSlice.plannedOperationCount).toBe(8);
+		expect(longSlice.issuanceMethods.map((method) => method.method)).toEqual([
+			"gilt-auction",
+			"syndication",
+		]);
+		expect(
+			longSlice.issuanceMethods.reduce(
+				(sum, method) => sum + method.share,
+				0,
+			),
+		).toBeCloseTo(1);
+		expect(longSlice.calendarPressureRatio).toBeGreaterThan(0);
+		expect(longSlice.investorDemandBreakdown).toHaveLength(4);
+		expect(
+			longSlice.investorDemandBreakdown.reduce(
+				(sum, segment) => sum + segment.demandGbp,
+				0,
+			),
+		).toBeCloseTo(longSlice.investorDemandGbp);
+		expect(longSlice.investorDemandBreakdown[0]?.label).toBeTruthy();
+		expect(longSlice.auctionDemandElasticityGbpPerBp).toBeGreaterThan(0);
+	});
+
 	it("estimates monetary-fiscal exposure from reserves and APF stock", () => {
 		const exposure = estimateMonetaryFiscalExposure(0.01);
 		expect(exposure.reserveInterestCostGbp).toBeGreaterThan(0);

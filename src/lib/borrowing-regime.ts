@@ -110,7 +110,7 @@ export const BORROWING_STRESS_REGIMES: readonly BorrowingStressRegimeDefinition[
 		{
 			id: "monetary-backstop",
 			label: "Monetary backstop",
-			expectedOverlayBp: -260,
+			expectedOverlayBp: -330,
 			description:
 				"Emergency or global shock where central-bank purchases and safe-asset demand suppress gilt stress.",
 		},
