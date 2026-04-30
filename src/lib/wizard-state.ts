@@ -84,7 +84,7 @@ export const wizardLineId = newLocalId;
 
 export interface WizardActions {
 	setStep: (step: number) => void;
-	setGoal: (goal: WizardGoal) => void;
+	setGoal: (goal: WizardGoal | null) => void;
 	setEra: (era: EraId) => void;
 	setBaselineMode: (mode: BaselineMode) => void;
 	setMobileSparklineCollapsed: (collapsed: boolean) => void;
@@ -140,7 +140,7 @@ export function useWizardState(initial?: Partial<WizardState>): WizardComputedSt
 		setState((s) => ({ ...s, step, previewLines: [] }));
 	}, []);
 
-	const setGoal = useCallback((goal: WizardGoal) => {
+	const setGoal = useCallback((goal: WizardGoal | null) => {
 		setState((s) => ({ ...s, goal }));
 	}, []);
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { ListChecks } from "lucide-react";
 import { TemplatesDrawer } from "@/components/simulator/templates-drawer";
 import { createDismissManager } from "./sparkline-dismiss-manager";
 import { cn } from "@/lib/utils";
@@ -9,6 +10,10 @@ import type { OBRBaseline } from "@/data/baseline/obr-baseline";
 import { getEraBaseline } from "@/data/historical/era-baselines";
 import type { EraId } from "@/data/eras";
 import { deserializeScenario } from "@/lib/scenario";
+import {
+	buildPolicyScenarioLines,
+	type PolicyScenarioPreset,
+} from "@/lib/policy-scenarios";
 import type { ResolvedComparison } from "@/data/comparisons";
 import {
 	STEP_LABELS,
@@ -54,8 +59,6 @@ interface Props {
 	initialScenarioOverride?: string;
 	initialStepOverride?: number;
 }
-
-const SKIP_KEY = "completedWizard";
 
 export function WizardShell({
 	baseline,
@@ -122,16 +125,6 @@ export function WizardShell({
 
 	const { state, actions, effectiveScenario } = useWizardState(initialWizardState);
 
-	// Mark wizard as "engaged" once the user lands on it. Subsequent visits
-	// can choose to skip.
-	useEffect(() => {
-		try {
-			localStorage.setItem(SKIP_KEY, "true");
-		} catch {
-			// no localStorage — fine, wizard will keep showing
-		}
-	}, []);
-
 	// Persist wizard state to the URL so progress survives reloads and is
 	// shareable. Debounced + only writes when the encoded URL actually
 	// differs, so back-to-back state changes don't thrash history.
@@ -166,11 +159,22 @@ export function WizardShell({
 		actions.setStep(prev);
 	};
 
-	// Header "Skip to results →" — jumps to the Result step (the
-	// analytics report) without forcing the user through goal/tax/spend.
-	// Useful when the user wants to bring an existing scenario via URL
-	// or just jump straight to the report layout.
-	const skipToResults = () => {
+	const showPolicyScenarios = () => {
+		actions.setStep(0);
+		if (typeof window !== "undefined") {
+			window.setTimeout(() => {
+				document
+					.getElementById("policy-scenario-quick-starts")
+					?.scrollIntoView({ behavior: "smooth", block: "start" });
+			}, 0);
+		}
+	};
+
+	const applyPolicyScenario = (preset: PolicyScenarioPreset) => {
+		if (preset.era !== state.era) actions.setEra(preset.era);
+		if (preset.baselineMode) actions.setBaselineMode(preset.baselineMode);
+		actions.setGoal(preset.goal);
+		actions.replaceScenario(buildPolicyScenarioLines(preset));
 		actions.setStep(5);
 	};
 
@@ -205,12 +209,13 @@ export function WizardShell({
 		state: state,
 		actions,
 		baseline: effectiveBaseline,
+		liveBaseline: baseline,
 		comparisons,
 		usdPerGbp,
 		browserDismissManager,
 		onAdvance: advance,
 		onBack: back,
-		onSkipToResults: skipToResults,
+		onApplyPolicyScenario: applyPolicyScenario,
 	};
 
 	const isResultStep = state.step === 5;
@@ -259,10 +264,11 @@ export function WizardShell({
 					</button>
 					<button
 						type="button"
-						onClick={skipToResults}
-						className="text-sm font-medium px-2.5 sm:px-3 py-1.5 rounded-md hover:bg-white/15 transition-colors whitespace-nowrap"
+						onClick={showPolicyScenarios}
+						className="inline-flex items-center gap-1.5 text-sm font-medium px-2.5 sm:px-3 py-1.5 rounded-md hover:bg-white/15 transition-colors whitespace-nowrap"
 					>
-						Skip to results →
+						<ListChecks aria-hidden="true" className="size-3.5" />
+						Policy scenarios
 					</button>
 				</div>
 			</header>

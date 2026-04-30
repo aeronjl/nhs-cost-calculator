@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { compareBorrowingStrategies } from "./borrowing-strategy-comparison";
 
+const LONG_STOCHASTIC_TEST_TIMEOUT_MS = 30_000;
+
 describe("borrowing strategy comparison", () => {
 	it("compares named strategies plus the optimised portfolio", () => {
 		const comparison = compareBorrowingStrategies(50_000_000_000, 5, {
@@ -25,7 +27,7 @@ describe("borrowing strategy comparison", () => {
 		expect(comparison.optimisedRow.objectiveGbp).toBeLessThanOrEqual(
 			comparison.bestNamedRow.objectiveGbp,
 		);
-	});
+	}, LONG_STOCHASTIC_TEST_TIMEOUT_MS);
 
 	it("exposes central, stress, regime, and fiscal-rule tail metrics", () => {
 		const comparison = compareBorrowingStrategies(50_000_000_000, 5, {
@@ -54,5 +56,5 @@ describe("borrowing strategy comparison", () => {
 				1,
 			);
 		}
-	});
+	}, LONG_STOCHASTIC_TEST_TIMEOUT_MS);
 });

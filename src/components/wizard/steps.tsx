@@ -26,6 +26,7 @@ import { getTaxLever } from "@/data/levers/tax-rates";
 import { getProgramme } from "@/data/levers/uk-spending";
 import type { OBRBaseline } from "@/data/baseline/obr-baseline";
 import type { ScenarioLine } from "@/lib/scenario";
+import type { PolicyScenarioPreset } from "@/lib/policy-scenarios";
 import {
 	GOAL_DEFINITIONS,
 	type WizardActions,
@@ -35,6 +36,7 @@ import {
 	wizardLineId,
 } from "@/lib/wizard-state";
 import { ChoiceCard } from "./choice-card";
+import { PolicyScenarioQuickStarts } from "./policy-scenario-quick-starts";
 import type { OutputRailProps } from "@/components/simulator/output-rail";
 import type { RefineScenarioPanelProps } from "./refine-scenario-panel";
 
@@ -103,6 +105,7 @@ interface StepProps {
 	state: WizardState;
 	actions: WizardActions;
 	baseline: OBRBaseline;
+	liveBaseline: OBRBaseline;
 	// Comparison catalog ("what £X buys") + FX rate. Used by the Result
 	// step's analytics report and any per-step comparison previews.
 	comparisons: readonly import("@/data/comparisons").ResolvedComparison[];
@@ -116,7 +119,7 @@ interface StepProps {
 	browserDismissManager: import("./sparkline-dismiss-manager").DismissManager;
 	onAdvance: () => void;
 	onBack: () => void;
-	onSkipToResults: () => void;
+	onApplyPolicyScenario: (preset: PolicyScenarioPreset) => void;
 }
 
 const formatBn = (n: number): string => {
@@ -232,9 +235,10 @@ export function StepBriefing({
 	state,
 	actions,
 	baseline,
+	liveBaseline,
 	browserDismissManager,
 	onAdvance,
-	onSkipToResults,
+	onApplyPolicyScenario,
 }: StepProps) {
 	const era = ERAS[state.era];
 	const isCurrent = state.era === "current";
@@ -318,7 +322,7 @@ export function StepBriefing({
 					{ERA_ORDER.map((eraId) => {
 						const eraBaseline = getEraBaseline(
 							eraId,
-							baseline,
+							liveBaseline,
 							state.baselineMode,
 						);
 						const isSelected = state.era === eraId;
@@ -430,6 +434,11 @@ export function StepBriefing({
 				</AnimatePresence>
 			</div>
 
+			<PolicyScenarioQuickStarts
+				era={state.era}
+				onApply={onApplyPolicyScenario}
+			/>
+
 			<motion.div
 				layout
 				transition={{ layout: { duration: 0.22, ease: [0.16, 1, 0.3, 1] } }}
@@ -503,10 +512,7 @@ export function StepBriefing({
 				</div>
 			</motion.div>
 
-			<div className="flex items-center justify-between gap-2 pt-2">
-				<Button variant="outline" size="sm" onClick={onSkipToResults}>
-					Skip to results →
-				</Button>
+			<div className="flex items-center justify-end gap-2 pt-2">
 				<Button onClick={onAdvance}>Begin →</Button>
 			</div>
 		</div>

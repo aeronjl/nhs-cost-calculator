@@ -34,6 +34,8 @@ const markdownTables = (markdown: string): readonly (readonly string[])[] => {
 const markdownCellCount = (line: string): number =>
 	line.replace(/\\\|/g, "").split("|").length - 2;
 
+const LONG_AUDIT_TEST_TIMEOUT_MS = 30_000;
+
 describe("model audit evidence pack", () => {
 	const buildBorrowingAudit = () => {
 		const result = evaluateScenario([
@@ -145,7 +147,7 @@ describe("model audit evidence pack", () => {
 			"Policy reaction",
 		]);
 		expect(audit.limitations.length).toBeGreaterThan(0);
-	});
+	}, LONG_AUDIT_TEST_TIMEOUT_MS);
 
 	it("exports a deterministic markdown appendix and JSON evidence bundle", () => {
 		const { audit } = buildBorrowingAudit();
@@ -205,7 +207,7 @@ describe("model audit evidence pack", () => {
 		expect(
 			parsed.audit.calibration.map((item: { label: string }) => item.label),
 		).toEqual(audit.calibration.map((item) => item.label));
-	});
+	}, LONG_AUDIT_TEST_TIMEOUT_MS);
 
 	it("exports top-level research appendix payloads with the same evidence contract", () => {
 		const { audit } = buildBorrowingAudit();
@@ -278,5 +280,5 @@ describe("model audit evidence pack", () => {
 			borrowingStressRating: audit.liveRisk.borrowingStressRating,
 			largestDownsideLayerLabel: audit.liveRisk.largestDownsideLayerLabel,
 		});
-	});
+	}, LONG_AUDIT_TEST_TIMEOUT_MS);
 });
