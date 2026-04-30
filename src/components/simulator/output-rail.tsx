@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Check, Download, Link as LinkIcon } from "lucide-react";
 import { ComparisonsAffordedList } from "@/components/ui/comparisons-afforded-list";
 import type { ResolvedComparison } from "@/data/comparisons";
 import { comparisonsCovered } from "@/lib/counterfactual";
@@ -82,6 +83,20 @@ type SectionId = (typeof SECTION_IDS)[number];
 
 const STORAGE_KEY = "simulator-rail-sections";
 
+const SECTION_NAV: readonly {
+	id: SectionId;
+	label: string;
+}[] = [
+	{ id: "trajectory", label: "Trajectory" },
+	{ id: "who-pays", label: "Who pays" },
+	{ id: "macro", label: "Macro" },
+	{ id: "stress", label: "Stress" },
+	{ id: "assumptions", label: "Assumptions" },
+	{ id: "audit", label: "Audit/export" },
+];
+
+const sectionHash = (id: SectionId | "summary") => `report-${id}`;
+
 export function OutputRail({
 	scenario,
 	comparisons,
@@ -99,6 +114,7 @@ export function OutputRail({
 		assumptions: false,
 		audit: false,
 	});
+	const [copied, setCopied] = useState(false);
 
 	useEffect(() => {
 		try {
@@ -110,6 +126,17 @@ export function OutputRail({
 		} catch {
 			// localStorage unavailable / parse error — keep defaults
 		}
+	}, []);
+
+	useEffect(() => {
+		if (typeof window === "undefined") return;
+		const hash = window.location.hash.replace(/^#/, "");
+		const section = SECTION_NAV.find((item) => sectionHash(item.id) === hash);
+		if (!section) return;
+		setOpenMap((prev) => ({ ...prev, [section.id]: true }));
+		window.setTimeout(() => {
+			document.getElementById(hash)?.scrollIntoView({ block: "start" });
+		}, 80);
 	}, []);
 
 	useEffect(() => {
@@ -132,6 +159,30 @@ export function OutputRail({
 			assumptions: v,
 			audit: v,
 		});
+	const copyReportLink = async () => {
+		if (typeof window === "undefined" || !navigator.clipboard) return;
+		try {
+			const url = new URL(window.location.href);
+			url.hash = "";
+			await navigator.clipboard.writeText(url.toString());
+			setCopied(true);
+			window.setTimeout(() => setCopied(false), 1600);
+		} catch {
+			setCopied(false);
+		}
+	};
+	const goToSection = (id: SectionId | "summary") => {
+		const hash = sectionHash(id);
+		if (id !== "summary") {
+			setOpenMap((prev) => ({ ...prev, [id]: true }));
+		}
+		if (typeof window !== "undefined") {
+			window.history.replaceState(null, "", `#${hash}`);
+			window.setTimeout(() => {
+				document.getElementById(hash)?.scrollIntoView({ block: "start" });
+			}, 80);
+		}
+	};
 
 	const result = useMemo(
 		() => evaluateScenario(scenario as ScenarioLine[]),
@@ -245,16 +296,67 @@ export function OutputRail({
 	return (
 		<div className="space-y-4">
 			{/* Top zone: always-visible essential summary */}
-			<TopZone
-				result={result}
-				dynamic={dynamic}
-				dynamicGapSignificant={dynamicGapSignificant}
-				items={items}
-				distribution={distribution}
-				microsim={microsim}
-				year1Projection={year1}
-				year5Projection={year5}
-			/>
+			<div id={sectionHash("summary")} className="scroll-mt-20">
+				<TopZone
+					result={result}
+					dynamic={dynamic}
+					dynamicGapSignificant={dynamicGapSignificant}
+					items={items}
+					distribution={distribution}
+					microsim={microsim}
+					year1Projection={year1}
+					year5Projection={year5}
+				/>
+			</div>
+
+			<div className="rounded-lg border bg-background/70 p-3 shadow-sm">
+				<div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+					<nav
+						aria-label="Report sections"
+						className="flex flex-wrap gap-1.5"
+					>
+						<button
+							type="button"
+							onClick={() => goToSection("summary")}
+							className="rounded-md border bg-muted/20 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+						>
+							Summary
+						</button>
+						{SECTION_NAV.map((item) => (
+							<button
+								key={item.id}
+								type="button"
+								onClick={() => goToSection(item.id)}
+								className="rounded-md border bg-muted/20 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+							>
+								{item.label}
+							</button>
+						))}
+					</nav>
+					<div className="flex flex-wrap gap-1.5">
+						<button
+							type="button"
+							onClick={copyReportLink}
+							className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+						>
+							{copied ? (
+								<Check aria-hidden="true" className="size-3" />
+							) : (
+								<LinkIcon aria-hidden="true" className="size-3" />
+							)}
+							{copied ? "Copied" : "Copy link"}
+						</button>
+						<button
+							type="button"
+							onClick={() => goToSection("audit")}
+							className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+						>
+							<Download aria-hidden="true" className="size-3" />
+							Export
+						</button>
+					</div>
+				</div>
+			</div>
 
 			{/* Header strip with "Expand all / Collapse all" toggle */}
 			<div className="flex items-center justify-between gap-3 border-t pt-3">

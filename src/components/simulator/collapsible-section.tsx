@@ -34,7 +34,10 @@ export function CollapsibleSection({
 	children,
 }: Props) {
 	return (
-		<section className="rounded-md border bg-background/40 overflow-hidden">
+		<section
+			id={`report-${id}`}
+			className="scroll-mt-20 rounded-md border bg-background/40 overflow-hidden"
+		>
 			<button
 				type="button"
 				onClick={onToggle}
