@@ -69,5 +69,13 @@ describe("BaselineComparisonPanel counterfactual chart", () => {
 		);
 		expect(html).toContain("PSNB path counterfactual endpoint labels");
 		expect(html).toContain("Debt:GDP path counterfactual endpoint labels");
+
+		// Compare-to picker is rendered + defaults to "No comparison".
+		expect(html).toContain("Compare with a historical budget");
+		expect(html).toContain('id="compare-budget"');
+		expect(html).toContain("No comparison");
+		// At least one annotated budget option is rendered (smoke test — lever
+		// content is exercised in the data tests).
+		expect(html).toContain("Autumn Budget 2024");
 	});
 });

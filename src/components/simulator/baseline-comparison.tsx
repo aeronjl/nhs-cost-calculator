@@ -1,6 +1,6 @@
 "use client";
 
-import { type PointerEvent, useRef } from "react";
+import { type PointerEvent, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type {
 	BaselineComparison,
@@ -8,6 +8,14 @@ import type {
 	FiscalRulePriorSensitivity,
 	FiscalRuleUncertaintyDecomposition,
 } from "@/lib/baseline-projection";
+import { projectAgainstBaseline } from "@/lib/baseline-projection";
+import {
+	deserializeScenario,
+	evaluateScenario,
+	projectScenarioOverYears,
+} from "@/lib/scenario";
+import { ANNOTATED_BUDGETS } from "@/data/budgets/annotated";
+import type { OBRBaseline } from "@/data/baseline/obr-baseline";
 import { policyReactionPackageSummary } from "@/lib/policy-reaction-packages";
 import { pointerToYearIndex, useYearFocus } from "@/lib/year-focus";
 import { FiscalRiskGauge } from "./fiscal-risk-gauge";
@@ -114,6 +122,34 @@ const metricToneClassName = (
 				? "text-red-700"
 				: "text-muted-foreground";
 
+interface CompareSeries {
+	id: string;
+	label: string;
+	psnbValues: number[];
+	debtGdpValues: number[];
+}
+
+const buildCompareSeries = (
+	budgetId: string,
+	baseline: OBRBaseline,
+	yearCount: number,
+): CompareSeries | null => {
+	if (!budgetId) return null;
+	const budget = ANNOTATED_BUDGETS.find((b) => b.id === budgetId);
+	if (!budget || budget.placeholder) return null;
+	const lines = deserializeScenario(budget.scenario);
+	if (lines.length === 0) return null;
+	const result = evaluateScenario(lines);
+	const projection = projectScenarioOverYears(result, yearCount);
+	const compareComparison = projectAgainstBaseline(projection, baseline);
+	return {
+		id: budget.id,
+		label: budget.name,
+		psnbValues: compareComparison.years.map((y) => y.adjustedPsnb),
+		debtGdpValues: compareComparison.years.map((y) => y.adjustedDebtGdp),
+	};
+};
+
 export function BaselineComparisonPanel({
 	comparison,
 	fiscalRuleFan,
@@ -130,6 +166,16 @@ export function BaselineComparisonPanel({
 		policyReactionOptions,
 	} = comparison;
 	if (years.length === 0) return null;
+
+	const compareCandidates = useMemo(
+		() => ANNOTATED_BUDGETS.filter((b) => !b.placeholder && b.scenario),
+		[],
+	);
+	const [compareBudgetId, setCompareBudgetId] = useState<string>("");
+	const compareSeries = useMemo(
+		() => buildCompareSeries(compareBudgetId, baseline, years.length),
+		[baseline, compareBudgetId, years.length],
+	);
 
 	const lastYear = years[years.length - 1]!;
 	const ruleBroken = adjustedStabilityHeadroom < 0;
@@ -274,12 +320,52 @@ export function BaselineComparisonPanel({
 				/>
 			)}
 
+			<div className="flex flex-col gap-2 rounded-md border bg-background/70 p-2.5 sm:flex-row sm:items-center sm:justify-between">
+				<div className="min-w-0">
+					<div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+						Compare with a historical budget
+					</div>
+					<div className="text-[11px] text-muted-foreground leading-snug">
+						Overlay any annotated budget's PSNB + debt:GDP path on the
+						counterfactual chart, projected against the same OBR baseline.
+					</div>
+				</div>
+				<div className="flex items-center gap-2">
+					<label htmlFor="compare-budget" className="sr-only">
+						Compare to budget
+					</label>
+					<select
+						id="compare-budget"
+						value={compareBudgetId}
+						onChange={(e) => setCompareBudgetId(e.target.value)}
+						className="rounded-sm border bg-background px-2 py-1 text-[11px]"
+					>
+						<option value="">No comparison</option>
+						{compareCandidates.map((b) => (
+							<option key={b.id} value={b.id}>
+								{b.name}
+							</option>
+						))}
+					</select>
+					{compareBudgetId && (
+						<button
+							type="button"
+							onClick={() => setCompareBudgetId("")}
+							className="rounded-sm border px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground"
+						>
+							Clear
+						</button>
+					)}
+				</div>
+			</div>
+
 			<FiscalCounterfactualChart
 				comparison={comparison}
 				fiscalRuleFan={fiscalRuleFan}
 				fiscalRuleUncertaintyDecomposition={
 					fiscalRuleUncertaintyDecomposition
 				}
+				compareSeries={compareSeries}
 			/>
 
 			<div className="rounded-md border bg-background/60 p-3 space-y-3">
@@ -851,10 +937,12 @@ function FiscalCounterfactualChart({
 	comparison,
 	fiscalRuleFan,
 	fiscalRuleUncertaintyDecomposition,
+	compareSeries,
 }: {
 	comparison: BaselineComparison;
 	fiscalRuleFan?: FiscalRuleFan;
 	fiscalRuleUncertaintyDecomposition?: FiscalRuleUncertaintyDecomposition;
+	compareSeries?: CompareSeries | null;
 }) {
 	const { years, policyReactionPath } = comparison;
 	if (years.length === 0) return null;
@@ -879,6 +967,11 @@ function FiscalCounterfactualChart({
 		rulePsnbDelta < 0 ? "blue" : rulePsnbDelta > 0 ? "amber" : "muted";
 	const debtRuleTone =
 		ruleDebtDelta < 0 ? "blue" : ruleDebtDelta > 0 ? "amber" : "muted";
+	const compareColour = "#7c3aed"; // violet-600 — distinct from baseline / scenario / reaction palettes
+	const hasCompare =
+		!!compareSeries &&
+		compareSeries.psnbValues.length === years.length &&
+		compareSeries.debtGdpValues.length === years.length;
 	const psnbSeries = [
 		{
 			label: "current-policy baseline",
@@ -900,6 +993,16 @@ function FiscalCounterfactualChart({
 								year.adjustedPsnb,
 						),
 						color: "#dc2626",
+						dashed: true,
+					},
+				]
+			: []),
+		...(hasCompare && compareSeries
+			? [
+					{
+						label: `${compareSeries.label} (replay)`,
+						values: compareSeries.psnbValues,
+						color: compareColour,
 						dashed: true,
 					},
 				]
@@ -930,6 +1033,16 @@ function FiscalCounterfactualChart({
 					},
 				]
 			: []),
+		...(hasCompare && compareSeries
+			? [
+					{
+						label: `${compareSeries.label} (replay)`,
+						values: compareSeries.debtGdpValues,
+						color: compareColour,
+						dashed: true,
+					},
+				]
+			: []),
 	];
 
 	return (
@@ -956,6 +1069,13 @@ function FiscalCounterfactualChart({
 						<ChartLegendItem
 							color="#dc2626"
 							label="after modelled reaction"
+							dashed
+						/>
+					)}
+					{hasCompare && compareSeries && (
+						<ChartLegendItem
+							color={compareColour}
+							label={`${compareSeries.label} (replay)`}
 							dashed
 						/>
 					)}
