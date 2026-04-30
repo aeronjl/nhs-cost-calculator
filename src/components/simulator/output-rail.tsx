@@ -28,11 +28,13 @@ import {
 } from "@/lib/microsim/impact";
 import { generatePopulation } from "@/lib/microsim/population";
 import { buildModelAuditEvidencePack } from "@/lib/model-audit";
+import { buildMacroStressLab } from "@/lib/macro-stress-lab";
 import { BaselineComparisonPanel } from "./baseline-comparison";
 import { CollapsibleSection } from "./collapsible-section";
 import { DistributionalImpact } from "./distributional-impact";
 import { HouseholdImpactPanel } from "./household-impact";
 import { MacroStatePanel } from "./macro-state-panel";
+import { MacroStressLabPanel } from "./macro-stress-lab";
 import { MacroTierBreakdown } from "./macro-tier-breakdown";
 import { MicrosimulationPanel } from "./microsimulation-panel";
 import { ModelAuditPanel } from "./model-audit-panel";
@@ -45,10 +47,11 @@ import { TopZone } from "./top-zone";
 //   • Top zone (always visible): essential answer in ~6 lines —
 //     net effect, comparisons, 1-line distributional + household headlines.
 //
-//   • 5 collapsible sections (closed by default; state persisted):
+//   • 6 collapsible sections (closed by default; state persisted):
 //     - Trajectory: multi-year + vs OBR baseline
 //     - Who pays: distributional + microsim + household archetypes
 //     - Macro feedback: tier breakdown (reckoner→dynamic→macro→GE) + macro state
+//     - Stress lab: macro assumption tornado and sensitivity table
 //     - Assumptions: per-line caveats with full methodology
 //     - Model audit: calibration/backtest evidence pack
 //
@@ -71,6 +74,7 @@ const SECTION_IDS = [
 	"trajectory",
 	"who-pays",
 	"macro",
+	"stress",
 	"assumptions",
 	"audit",
 ] as const;
@@ -91,6 +95,7 @@ export function OutputRail({
 		trajectory: false,
 		"who-pays": false,
 		macro: false,
+		stress: false,
 		assumptions: false,
 		audit: false,
 	});
@@ -123,6 +128,7 @@ export function OutputRail({
 			trajectory: v,
 			"who-pays": v,
 			macro: v,
+			stress: v,
 			assumptions: v,
 			audit: v,
 		});
@@ -170,6 +176,13 @@ export function OutputRail({
 				? projectFiscalRuleUncertaintyDecomposition(result, baseline, 300)
 				: undefined,
 		[baseline, result, scenario.length],
+	);
+	const macroStressLab = useMemo(
+		() =>
+			openMap.stress && scenario.length > 0
+				? buildMacroStressLab(result, baseline)
+				: undefined,
+		[baseline, openMap.stress, result, scenario.length],
 	);
 	const modelAudit = useMemo(
 		() =>
@@ -256,7 +269,7 @@ export function OutputRail({
 				</button>
 			</div>
 
-			{/* 4 collapsible sections — closed by default */}
+			{/* 6 collapsible sections — closed by default */}
 			<CollapsibleSection
 				id="trajectory"
 				title="Trajectory"
@@ -345,6 +358,16 @@ export function OutputRail({
 						maxChangeGbp: ge.maxChangeGbp,
 					}}
 				/>
+			</CollapsibleSection>
+
+			<CollapsibleSection
+				id="stress"
+				title="Stress lab"
+				subtitle="GDP, inflation, Bank Rate, multipliers, buoyancy, and gilt-premium sensitivities"
+				open={openMap.stress}
+				onToggle={() => toggle("stress")}
+			>
+				{macroStressLab && <MacroStressLabPanel lab={macroStressLab} />}
 			</CollapsibleSection>
 
 			<CollapsibleSection

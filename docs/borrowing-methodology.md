@@ -201,6 +201,8 @@ The same draw set is also decomposed into sequential uncertainty layers. The rep
 
 The simulator report includes a model-audit evidence pack. It collects scenario composition, baseline-vs-scenario PSNB and debt/GDP comparisons, a borrowing scenario matrix, methodology range coverage, live borrowing-regime probabilities, calibration artifact status, historical backtest pass rates, prior sensitivity, uncertainty decomposition, and stated model limitations in one reviewable panel. The matrix replays the current policy stack under OBR-scored, unscored, emergency/backstopped, short-funded, and long-funded borrowing assumptions. The panel exposes a compact JSON payload and downloadable Markdown/JSON appendix for external review.
 
+The simulator also includes a macro stress lab. It re-runs the same scenario through the general-equilibrium projection under low/high nominal growth, inflation, Bank Rate, fiscal-multiplier strength, tax-buoyancy, and debt-risk-premium assumptions. The output is a tornado-style rule-headroom sensitivity and a case table covering PSNB, debt/GDP, debt interest, and risk rating.
+
 ## Market Reaction Loop
 
 Large borrowing packages also receive an endogenous market-reaction path. The central path applies the static debt/GDP and issuance risk premium. The market-reaction path then carries forward an additional credibility premium when debt/GDP, refinancing exposure, or the size of the issuance package cross risk thresholds:

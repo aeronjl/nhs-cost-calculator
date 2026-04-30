@@ -770,6 +770,9 @@ export interface ProjectionAssumptions {
 	bankRate: number;
 	inflation: number;
 	yieldCurveShift: number;
+	multiplierScale: number;
+	taxBuoyancyScale: number;
+	debtRiskPremiumScale: number;
 	// Era multiplier adjust: per-era regime factor on macro coefficients
 	// (1979 stagflation 0.7, 2010 ZLB 1.3, etc.). Default 1.0 (current).
 	era?: EraId;
@@ -781,6 +784,9 @@ const DEFAULT_ASSUMPTIONS: ProjectionAssumptions = {
 	bankRate: BORROWING.bankRate,
 	inflation: BORROWING.inflation,
 	yieldCurveShift: 0,
+	multiplierScale: 1,
+	taxBuoyancyScale: 1,
+	debtRiskPremiumScale: 1,
 };
 
 // Apply the era's macro adjust to a multiplier. Three-tier resolution:
@@ -826,6 +832,46 @@ const eraAdjustedMultiplier = (
 	const adjust = def.multiplierAdjust;
 	if (!adjust || adjust === 1) return m;
 	return { ...m, coefficient: m.coefficient * adjust };
+};
+
+const scaledMultiplier = (
+	m: FiscalMultiplier | undefined,
+	scale: number,
+): FiscalMultiplier | undefined => {
+	if (!m || scale === 1) return m;
+	return {
+		...m,
+		coefficient: m.coefficient * scale,
+		...(m.multiplierSplit
+			? {
+					multiplierSplit: {
+						...m.multiplierSplit,
+						capital: m.multiplierSplit.capital * scale,
+						current: m.multiplierSplit.current * scale,
+					},
+				}
+			: {}),
+	};
+};
+
+const projectionMultiplier = (
+	m: FiscalMultiplier | undefined,
+	a: ProjectionAssumptions,
+): FiscalMultiplier | undefined => scaledMultiplier(m, a.multiplierScale);
+
+const secondRoundDeltaForAssumptions = (
+	firstRoundDelta: number,
+	multiplier: FiscalMultiplier | undefined,
+	year: number,
+	a: ProjectionAssumptions,
+): number => {
+	const feedback =
+		macroFeedback(firstRoundDelta, multiplier, year) * a.taxBuoyancyScale;
+	const result = firstRoundDelta + feedback;
+	if (Math.sign(result) !== Math.sign(firstRoundDelta) && firstRoundDelta !== 0) {
+		return 0;
+	}
+	return result;
 };
 
 // ---------------------------------------------------------------------------
@@ -925,7 +971,9 @@ const evaluateScenarioMacroPathFromProjection = (
 	result: ScenarioResult,
 	years: number,
 	psnbProjection: readonly YearProjection[],
+	assumptions: Partial<ProjectionAssumptions> = {},
 ): MacroState[] => {
+	const a = { ...DEFAULT_ASSUMPTIONS, ...assumptions };
 	const states: MacroState[] = [];
 	let cumulativePsnb = 0; // cumulative scenario PSNB shift (positive = scenario reduces borrowing)
 	let previousBankRateDeviationPp = 0;
@@ -957,18 +1005,21 @@ const evaluateScenarioMacroPathFromProjection = (
 					firstRound =
 						tg > 0 && y < tg ? (y / tg) * dyn.dynamicDelta : dyn.dynamicDelta;
 				} else {
-					firstRound = dyn.dynamicDelta * Math.pow(1.04, y - 1);
+					firstRound =
+						dyn.dynamicDelta * Math.pow(1 + a.nominalGrowth, y - 1);
 				}
 			} else if (ev.line.type === "programme") {
-				firstRound = dyn.dynamicDelta * Math.pow(1.04, y - 1);
+				firstRound = dyn.dynamicDelta * Math.pow(1 + a.nominalGrowth, y - 1);
 			}
 
-			const multiplier =
+			const multiplier = projectionMultiplier(
 				ev.line.type === "tax"
 					? getTaxMultiplier(ev.line.leverId)
 					: ev.line.type === "programme"
 						? getProgrammeMultiplier(ev.line.leverId)
-						: undefined;
+						: undefined,
+				a,
+			);
 
 			// GDP impact: sign-flipped from revenue (revenue raise = fiscal contraction = GDP loss)
 			if (multiplier) {
@@ -1012,7 +1063,10 @@ const evaluateScenarioMacroPathFromProjection = (
 		previousBankRateDeviationPp = bankRateDeviationPp;
 		// Gilt yield response: sensitivity × debt:GDP shift
 		const giltYieldDeviationPp =
-			debtGdpDeviationPp * GILT_YIELD_PER_DEBT_GDP_PP * 100;
+			debtGdpDeviationPp *
+			GILT_YIELD_PER_DEBT_GDP_PP *
+			100 *
+			a.debtRiskPremiumScale;
 
 		states.push({
 			year: y,
@@ -1029,11 +1083,13 @@ const evaluateScenarioMacroPathFromProjection = (
 export const evaluateScenarioMacroPath = (
 	result: ScenarioResult,
 	years: number,
+	assumptions: Partial<ProjectionAssumptions> = {},
 ): MacroState[] =>
 	evaluateScenarioMacroPathFromProjection(
 		result,
 		years,
-		projectScenarioOverYears(result, years),
+		projectScenarioOverYears(result, years, assumptions),
+		assumptions,
 	);
 
 export const evaluateScenarioMacro = (
@@ -1262,7 +1318,12 @@ const projectScenarioWithMacroPath = (
 					"tax",
 					ev.line.leverId,
 				);
-				baseDelta = secondRoundDelta(baseDelta, multiplier, y);
+				baseDelta = secondRoundDeltaForAssumptions(
+					baseDelta,
+					projectionMultiplier(multiplier, a),
+					y,
+					a,
+				);
 			} else if (ev.line.type === "programme") {
 				baseDelta = dyn.dynamicDelta * Math.pow(1 + a.nominalGrowth, y - 1);
 				const multiplier = eraAdjustedMultiplier(
@@ -1271,7 +1332,12 @@ const projectScenarioWithMacroPath = (
 					"programme",
 					ev.line.leverId,
 				);
-				baseDelta = secondRoundDelta(baseDelta, multiplier, y);
+				baseDelta = secondRoundDeltaForAssumptions(
+					baseDelta,
+					projectionMultiplier(multiplier, a),
+					y,
+					a,
+				);
 			}
 
 			const geAdjusted =
@@ -1309,6 +1375,7 @@ export const projectScenarioWithGEFeedback = (
 		result,
 		years,
 		withFeedback,
+		a,
 	);
 	let maxChangeGbp = Number.POSITIVE_INFINITY;
 	let iterations = 0;
@@ -1323,6 +1390,7 @@ export const projectScenarioWithGEFeedback = (
 			result,
 			years,
 			withFeedback,
+			a,
 		);
 		if (maxChangeGbp <= GE_FEEDBACK_TOLERANCE_GBP) {
 			converged = true;
@@ -1481,7 +1549,12 @@ export const projectScenarioOverYears = (
 					"tax",
 					ev.line.leverId,
 				);
-				delta = secondRoundDelta(delta, multiplier, y);
+				delta = secondRoundDeltaForAssumptions(
+					delta,
+					projectionMultiplier(multiplier, a),
+					y,
+					a,
+				);
 				psnbShift += delta;
 			} else if (ev.line.type === "programme") {
 				// Programme line: scaled with nominal growth (departmental spend
@@ -1494,7 +1567,12 @@ export const projectScenarioOverYears = (
 					"programme",
 					ev.line.leverId,
 				);
-				delta = secondRoundDelta(delta, multiplier, y);
+				delta = secondRoundDeltaForAssumptions(
+					delta,
+					projectionMultiplier(multiplier, a),
+					y,
+					a,
+				);
 				psnbShift += delta;
 			}
 			if (delta > 0) freed += delta;
