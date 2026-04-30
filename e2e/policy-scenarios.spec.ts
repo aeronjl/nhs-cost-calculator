@@ -35,6 +35,21 @@ test.describe("policy scenario quick starts", () => {
 		await expect(page.getByText("4 decisions")).toBeVisible();
 		await expect(page.getByText("Reduce borrowing")).toBeVisible();
 		await expect(page.getByText("No decisions yet.")).toHaveCount(0);
+		await expect(
+			page.getByRole("tablist", { name: "Detailed report tabs" }),
+		).toBeVisible();
+		await expect(page.getByRole("tab", { name: "Trajectory" })).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+		await page.getByRole("tab", { name: "Who pays" }).click();
+		await expect(page.getByRole("tab", { name: "Who pays" })).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+		await expect(
+			page.getByRole("tabpanel", { name: "Who pays" }),
+		).toBeVisible();
 
 		await expectSearchParam(() => page.url(), "wstep", "5");
 		await expectSearchParam(() => page.url(), "wera", "2010");

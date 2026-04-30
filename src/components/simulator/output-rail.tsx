@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+	type KeyboardEvent,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import {
 	AlertCircle,
 	Check,
@@ -43,7 +49,6 @@ import {
 } from "@/lib/model-audit";
 import { buildMacroStressLab } from "@/lib/macro-stress-lab";
 import { BaselineComparisonPanel } from "./baseline-comparison";
-import { CollapsibleSection } from "./collapsible-section";
 import { DistributionalImpact } from "./distributional-impact";
 import { HouseholdImpactPanel } from "./household-impact";
 import { MacroStatePanel } from "./macro-state-panel";
@@ -60,7 +65,7 @@ import { TopZone } from "./top-zone";
 //   • Top zone (always visible): essential answer in ~6 lines —
 //     net effect, comparisons, 1-line distributional + household headlines.
 //
-//   • 6 collapsible sections (closed by default; state persisted):
+//   • 6 detailed tabs:
 //     - Trajectory: multi-year + vs OBR baseline
 //     - Who pays: distributional + microsim + household archetypes
 //     - Macro feedback: tier breakdown (reckoner→dynamic→macro→GE) + macro state
@@ -68,10 +73,8 @@ import { TopZone } from "./top-zone";
 //     - Assumptions: per-line caveats with full methodology
 //     - Model audit: calibration/backtest evidence pack
 //
-//   • "Expand all" toggle in rail header for power users.
-//
-// Mobile and desktop share the same structure. State persisted via
-// localStorage so a user's preferred depth survives reloads.
+// Mobile and desktop share the same structure. Active tab persisted via
+// localStorage so a user's preferred view survives reloads.
 
 export interface OutputRailProps {
 	scenario: readonly ScenarioLine[];
@@ -99,22 +102,59 @@ type AppendixExportFeedback = {
 	status: AppendixExportStatus;
 } | null;
 
-const STORAGE_KEY = "simulator-rail-sections";
+const STORAGE_KEY = "simulator-rail-active-tab";
 const APPENDIX_FEEDBACK_MS = 1800;
 
 const SECTION_NAV: readonly {
 	id: SectionId;
 	label: string;
+	panelTitle: string;
+	subtitle: string;
 }[] = [
-	{ id: "trajectory", label: "Trajectory" },
-	{ id: "who-pays", label: "Who pays" },
-	{ id: "macro", label: "Macro" },
-	{ id: "stress", label: "Stress" },
-	{ id: "assumptions", label: "Assumptions" },
-	{ id: "audit", label: "Audit/export" },
+	{
+		id: "trajectory",
+		label: "Trajectory",
+		panelTitle: "Trajectory",
+		subtitle: "How the £ effect evolves over 5 years, vs OBR's central forecast",
+	},
+	{
+		id: "who-pays",
+		label: "Who pays",
+		panelTitle: "Who pays",
+		subtitle: "Across income deciles, household types, and named cases",
+	},
+	{
+		id: "macro",
+		label: "Macro",
+		panelTitle: "Macro feedback",
+		subtitle: "How behavioural and demand-side responses shift the headline",
+	},
+	{
+		id: "stress",
+		label: "Stress",
+		panelTitle: "Stress lab",
+		subtitle:
+			"GDP, inflation, Bank Rate, multipliers, buoyancy, and gilt-premium sensitivities",
+	},
+	{
+		id: "assumptions",
+		label: "Assumptions",
+		panelTitle: "Assumptions",
+		subtitle: "What's behind each lever's number, line by line",
+	},
+	{
+		id: "audit",
+		label: "Audit",
+		panelTitle: "Model audit",
+		subtitle:
+			"Calibration status, backtests, regimes, priors, and uncertainty layers",
+	},
 ];
 
 const sectionHash = (id: SectionId | "summary") => `report-${id}`;
+
+const isSectionId = (value: string | undefined): value is SectionId =>
+	SECTION_IDS.includes(value as SectionId);
 
 const appendixFilename = (
 	kind: AppendixExportKind,
@@ -169,16 +209,8 @@ export function OutputRail({
 	baseline = OBR_BASELINE,
 	emptyMessage = "Add a lever to your scenario to see what it'd fund or cost.",
 }: OutputRailProps) {
-	// Open-state map for collapsible sections. Default closed; restored from
-	// localStorage on mount.
-	const [openMap, setOpenMap] = useState<Record<SectionId, boolean>>({
-		trajectory: false,
-		"who-pays": false,
-		macro: false,
-		stress: false,
-		assumptions: false,
-		audit: false,
-	});
+	const [activeSection, setActiveSection] =
+		useState<SectionId>("trajectory");
 	const [copied, setCopied] = useState(false);
 	const [appendixFeedback, setAppendixFeedback] =
 		useState<AppendixExportFeedback>(null);
@@ -203,10 +235,8 @@ export function OutputRail({
 	useEffect(() => {
 		try {
 			const stored = localStorage.getItem(STORAGE_KEY);
-			if (stored) {
-				const parsed = JSON.parse(stored) as Partial<Record<SectionId, boolean>>;
-				setOpenMap((prev) => ({ ...prev, ...parsed }));
-			}
+			const storedSection = stored ?? undefined;
+			if (isSectionId(storedSection)) setActiveSection(storedSection);
 		} catch {
 			// localStorage unavailable / parse error — keep defaults
 		}
@@ -217,7 +247,7 @@ export function OutputRail({
 		const hash = window.location.hash.replace(/^#/, "");
 		const section = SECTION_NAV.find((item) => sectionHash(item.id) === hash);
 		if (!section) return;
-		setOpenMap((prev) => ({ ...prev, [section.id]: true }));
+		setActiveSection(section.id);
 		window.setTimeout(() => {
 			document.getElementById(hash)?.scrollIntoView({ block: "start" });
 		}, 80);
@@ -225,11 +255,11 @@ export function OutputRail({
 
 	useEffect(() => {
 		try {
-			localStorage.setItem(STORAGE_KEY, JSON.stringify(openMap));
+			localStorage.setItem(STORAGE_KEY, activeSection);
 		} catch {
 			// ignore
 		}
-	}, [openMap]);
+	}, [activeSection]);
 
 	useEffect(
 		() => () => {
@@ -240,18 +270,6 @@ export function OutputRail({
 		[],
 	);
 
-	const toggle = (id: SectionId) =>
-		setOpenMap((prev) => ({ ...prev, [id]: !prev[id] }));
-	const allOpen = SECTION_IDS.every((id) => openMap[id]);
-	const setAll = (v: boolean) =>
-		setOpenMap({
-			trajectory: v,
-			"who-pays": v,
-			macro: v,
-			stress: v,
-			assumptions: v,
-			audit: v,
-		});
 	const copyReportLink = async () => {
 		if (typeof window === "undefined" || !navigator.clipboard) return;
 		try {
@@ -273,7 +291,7 @@ export function OutputRail({
 	const goToSection = (id: SectionId | "summary") => {
 		const hash = sectionHash(id);
 		if (id !== "summary") {
-			setOpenMap((prev) => ({ ...prev, [id]: true }));
+			setActiveSection(id);
 		}
 		if (typeof window !== "undefined") {
 			window.history.replaceState(null, "", `#${hash}`);
@@ -281,6 +299,32 @@ export function OutputRail({
 				document.getElementById(hash)?.scrollIntoView({ block: "start" });
 			}, 80);
 		}
+	};
+	const onTabKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+		const currentIndex = SECTION_NAV.findIndex(
+			(item) => item.id === activeSection,
+		);
+		if (currentIndex < 0) return;
+
+		let nextIndex: number | undefined;
+		if (event.key === "ArrowRight") {
+			nextIndex = (currentIndex + 1) % SECTION_NAV.length;
+		} else if (event.key === "ArrowLeft") {
+			nextIndex =
+				(currentIndex - 1 + SECTION_NAV.length) % SECTION_NAV.length;
+		} else if (event.key === "Home") {
+			nextIndex = 0;
+		} else if (event.key === "End") {
+			nextIndex = SECTION_NAV.length - 1;
+		}
+
+		if (nextIndex === undefined) return;
+		event.preventDefault();
+		const nextId = SECTION_NAV[nextIndex].id;
+		goToSection(nextId);
+		window.setTimeout(() => {
+			document.getElementById(`report-tab-${nextId}`)?.focus();
+		}, 0);
 	};
 
 	const result = useMemo(
@@ -329,14 +373,15 @@ export function OutputRail({
 	);
 	const macroStressLab = useMemo(
 		() =>
-			(openMap.stress || openMap.audit) && scenario.length > 0
+			(activeSection === "stress" || activeSection === "audit") &&
+			scenario.length > 0
 				? buildMacroStressLab(result, baseline)
 				: undefined,
-		[baseline, openMap.audit, openMap.stress, result, scenario.length],
+		[activeSection, baseline, result, scenario.length],
 	);
 	const modelAudit = useMemo(
 		() =>
-			openMap.audit && scenario.length > 0
+			activeSection === "audit" && scenario.length > 0
 				? buildModelAuditEvidencePack({
 						result,
 						baseline,
@@ -354,7 +399,7 @@ export function OutputRail({
 			fiscalRulePriorSensitivity,
 			fiscalRuleUncertaintyDecomposition,
 			macroStressLab,
-			openMap.audit,
+			activeSection,
 			result,
 			scenario.length,
 		],
@@ -444,7 +489,7 @@ export function OutputRail({
 			<div className="rounded-lg border bg-background/70 p-3 shadow-sm">
 				<div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
 					<nav
-						aria-label="Report sections"
+						aria-label="Report shortcuts"
 						className="flex flex-wrap gap-1.5"
 					>
 						<button
@@ -454,16 +499,6 @@ export function OutputRail({
 						>
 							Summary
 						</button>
-						{SECTION_NAV.map((item) => (
-							<button
-								key={item.id}
-								type="button"
-								onClick={() => goToSection(item.id)}
-								className="rounded-md border bg-muted/20 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
-							>
-								{item.label}
-							</button>
-						))}
 					</nav>
 					<div className="flex flex-wrap gap-1.5">
 						<button
@@ -513,143 +548,193 @@ export function OutputRail({
 				</div>
 			</div>
 
-			{/* Header strip with "Expand all / Collapse all" toggle */}
-			<div className="flex items-center justify-between gap-3 border-t pt-3">
-				<div>
-					<h2 className="text-sm font-semibold">Detailed analysis</h2>
-					<p className="text-[11px] text-muted-foreground">
-						Trajectory, incidence, macro feedback, stress cases, assumptions, and audit evidence.
+			<section
+				aria-labelledby="report-details-heading"
+				className="overflow-hidden rounded-lg border bg-background shadow-sm"
+			>
+				<div className="border-b bg-muted/20 p-3">
+					<h2
+						id="report-details-heading"
+						className="text-sm font-semibold"
+					>
+						Detailed analysis
+					</h2>
+					<p className="mt-1 text-[11px] text-muted-foreground">
+						Trajectory, incidence, macro feedback, stress cases, assumptions,
+						and audit evidence.
 					</p>
-				</div>
-				<button
-					type="button"
-					onClick={() => setAll(!allOpen)}
-					className="shrink-0 rounded-md border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-				>
-					{allOpen ? "Collapse all" : "Expand all"}
-				</button>
-			</div>
-
-			{/* 6 collapsible sections — closed by default */}
-			<CollapsibleSection
-				id="trajectory"
-				title="Trajectory"
-				subtitle="How the £ effect evolves over 5 years, vs OBR's central forecast"
-				open={openMap.trajectory}
-				onToggle={() => toggle("trajectory")}
-			>
-				<MultiYearProjection
-					projection={projection}
-					bands={projectionBands}
-				/>
-				<BaselineComparisonPanel
-					comparison={baselineComparison}
-					fiscalRuleFan={fiscalRuleFan}
-					fiscalRulePriorSensitivity={fiscalRulePriorSensitivity}
-					fiscalRuleUncertaintyDecomposition={
-						fiscalRuleUncertaintyDecomposition
-					}
-				/>
-			</CollapsibleSection>
-
-			<CollapsibleSection
-				id="who-pays"
-				title="Who pays"
-				subtitle="Across income deciles, household types, and named cases"
-				open={openMap["who-pays"]}
-				onToggle={() => toggle("who-pays")}
-			>
-				<DistributionalImpact distribution={distribution} />
-				<MicrosimulationPanel result={result} />
-				<HouseholdImpactPanel result={result} />
-				<ComparisonsAffordedList
-					items={items}
-					caption={
-						result.net > 0
-							? "Full list — what the net surplus could fund:"
-							: result.net < 0
-								? "Full list — equivalent costs:"
-								: undefined
-					}
-					emptyMessage={null}
-				/>
-			</CollapsibleSection>
-
-			<CollapsibleSection
-				id="macro"
-				title="Macro feedback"
-				subtitle="How behavioural and demand-side responses shift the headline"
-				open={openMap.macro}
-				onToggle={() => toggle("macro")}
-			>
-				<MacroTierBreakdown
-					staticNet={result.net}
-					dynamic={dynamic}
-					dynamicGapSignificant={dynamicGapSignificant}
-					macro={macro}
-					macroGapSignificant={macroGapSignificant}
-					geYear1={geYear1}
-					geGap={geGap}
-					geGapSignificant={geGapSignificant}
-				/>
-				{bandWidthSignificant && (
-					<div className="text-[11px] leading-snug rounded-md border bg-background/60 p-2 space-y-1">
-						<div className="text-xs font-medium">Confidence band</div>
-						<div className="text-muted-foreground">
-							90% CI:{" "}
-							<span className="tabular-nums text-foreground">
-								£{Math.round(band.p5).toLocaleString()}
-							</span>{" "}
-							—{" "}
-							<span className="tabular-nums text-foreground">
-								£{Math.round(band.p95).toLocaleString()}
-							</span>
-						</div>
-						<div className="text-[10px] text-muted-foreground">
-							1000-draw Monte Carlo over per-lever yield distributions (HMRC
-							ranges where stated, ±10% otherwise).
-						</div>
+					<div
+						role="tablist"
+						aria-label="Detailed report tabs"
+						onKeyDown={onTabKeyDown}
+						className="mt-3 flex flex-wrap gap-1.5"
+					>
+						{SECTION_NAV.map((item) => {
+							const selected = activeSection === item.id;
+							return (
+								<button
+									key={item.id}
+									id={`report-tab-${item.id}`}
+									type="button"
+									role="tab"
+									aria-selected={selected}
+									aria-controls={sectionHash(item.id)}
+									tabIndex={selected ? 0 : -1}
+									onClick={() => goToSection(item.id)}
+									className={cn(
+										"rounded-md border px-3 py-1.5 text-xs font-medium transition-colors",
+										selected
+											? "border-blue-300 bg-blue-50 text-blue-800 shadow-sm"
+											: "border-transparent bg-background text-muted-foreground hover:border-border hover:text-foreground",
+									)}
+								>
+									{item.label}
+								</button>
+							);
+						})}
 					</div>
-				)}
-				<MacroStatePanel
-					path={macroPath}
-					convergence={{
-						iterations: ge.iterations,
-						converged: ge.converged,
-						maxChangeGbp: ge.maxChangeGbp,
-					}}
-				/>
-			</CollapsibleSection>
+				</div>
 
-			<CollapsibleSection
-				id="stress"
-				title="Stress lab"
-				subtitle="GDP, inflation, Bank Rate, multipliers, buoyancy, and gilt-premium sensitivities"
-				open={openMap.stress}
-				onToggle={() => toggle("stress")}
-			>
-				{macroStressLab && <MacroStressLabPanel lab={macroStressLab} />}
-			</CollapsibleSection>
+				{SECTION_NAV.map((item) => {
+					const selected = activeSection === item.id;
+					return (
+						<div
+							key={item.id}
+							id={sectionHash(item.id)}
+							role="tabpanel"
+							aria-labelledby={`report-tab-${item.id}`}
+							hidden={!selected}
+							className={cn(
+								"scroll-mt-20 p-3",
+								!selected && "hidden",
+							)}
+						>
+							{selected && (
+								<div className="space-y-3">
+									<div className="space-y-1">
+										<h3 className="text-sm font-semibold">
+											{item.panelTitle}
+										</h3>
+										<p className="text-[11px] text-muted-foreground">
+											{item.subtitle}
+										</p>
+									</div>
 
-			<CollapsibleSection
-				id="assumptions"
-				title="Assumptions"
-				subtitle="What's behind each lever's number, line by line"
-				open={openMap.assumptions}
-				onToggle={() => toggle("assumptions")}
-			>
-				<ScenarioAssumptions lines={result.lines} />
-			</CollapsibleSection>
+									{activeSection === "trajectory" && (
+										<>
+											<MultiYearProjection
+												projection={projection}
+												bands={projectionBands}
+											/>
+											<BaselineComparisonPanel
+												comparison={baselineComparison}
+												fiscalRuleFan={fiscalRuleFan}
+												fiscalRulePriorSensitivity={
+													fiscalRulePriorSensitivity
+												}
+												fiscalRuleUncertaintyDecomposition={
+													fiscalRuleUncertaintyDecomposition
+												}
+											/>
+										</>
+									)}
 
-			<CollapsibleSection
-				id="audit"
-				title="Model audit"
-				subtitle="Calibration status, backtests, regimes, priors, and uncertainty layers"
-				open={openMap.audit}
-				onToggle={() => toggle("audit")}
-			>
-				{modelAudit && <ModelAuditPanel audit={modelAudit} />}
-			</CollapsibleSection>
+									{activeSection === "who-pays" && (
+										<>
+											<DistributionalImpact
+												distribution={distribution}
+											/>
+											<MicrosimulationPanel result={result} />
+											<HouseholdImpactPanel result={result} />
+											<ComparisonsAffordedList
+												items={items}
+												caption={
+													result.net > 0
+														? "Full list — what the net surplus could fund:"
+														: result.net < 0
+															? "Full list — equivalent costs:"
+															: undefined
+												}
+												emptyMessage={null}
+											/>
+										</>
+									)}
+
+									{activeSection === "macro" && (
+										<>
+											<MacroTierBreakdown
+												staticNet={result.net}
+												dynamic={dynamic}
+												dynamicGapSignificant={
+													dynamicGapSignificant
+												}
+												macro={macro}
+												macroGapSignificant={
+													macroGapSignificant
+												}
+												geYear1={geYear1}
+												geGap={geGap}
+												geGapSignificant={
+													geGapSignificant
+												}
+											/>
+											{bandWidthSignificant && (
+												<div className="space-y-1 rounded-md border bg-background/60 p-2 text-[11px] leading-snug">
+													<div className="text-xs font-medium">
+														Confidence band
+													</div>
+													<div className="text-muted-foreground">
+														90% CI:{" "}
+														<span className="tabular-nums text-foreground">
+															£
+															{Math.round(
+																band.p5,
+															).toLocaleString()}
+														</span>{" "}
+														—{" "}
+														<span className="tabular-nums text-foreground">
+															£
+															{Math.round(
+																band.p95,
+															).toLocaleString()}
+														</span>
+													</div>
+													<div className="text-[10px] text-muted-foreground">
+														1000-draw Monte Carlo over
+														per-lever yield distributions
+														(HMRC ranges where stated,
+														±10% otherwise).
+													</div>
+												</div>
+											)}
+											<MacroStatePanel
+												path={macroPath}
+												convergence={{
+													iterations: ge.iterations,
+													converged: ge.converged,
+													maxChangeGbp: ge.maxChangeGbp,
+												}}
+											/>
+										</>
+									)}
+
+									{activeSection === "stress" && macroStressLab && (
+										<MacroStressLabPanel lab={macroStressLab} />
+									)}
+
+									{activeSection === "assumptions" && (
+										<ScenarioAssumptions lines={result.lines} />
+									)}
+
+									{activeSection === "audit" && modelAudit && (
+										<ModelAuditPanel audit={modelAudit} />
+									)}
+								</div>
+							)}
+						</div>
+					);
+				})}
+			</section>
 		</div>
 	);
 }

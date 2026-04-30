@@ -1463,8 +1463,8 @@ export function StepResult({
 
 			{/* The report itself — OutputRail is the existing simulator
 			    sidebar promoted to the wizard's main surface. Progressive
-			    disclosure: TopZone always visible (~6 lines), 4 collapsible
-			    sections beneath (Trajectory, Who pays, Macro, Assumptions). */}
+			    disclosure: TopZone always visible (~6 lines), with tabbed
+			    analysis panels beneath for deeper model detail. */}
 			<OutputRail
 				scenario={fullScenario}
 				comparisons={comparisons}

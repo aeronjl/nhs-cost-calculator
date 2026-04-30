@@ -27,15 +27,22 @@ describe("OutputRail report chrome", () => {
 	it("keeps the report navigation and export toolbar visible", () => {
 		const html = renderOutputRail(scenario);
 
-		expect(html).toContain('aria-label="Report sections"');
+		expect(html).toContain('aria-label="Report shortcuts"');
+		expect(html).toContain("Summary");
+		expect(html).toContain('role="tablist"');
+		expect(html).toContain('aria-label="Detailed report tabs"');
+		expect(html.match(/role="tab"/g)).toHaveLength(6);
+		expect(html.match(/role="tabpanel"/g)).toHaveLength(6);
+		expect(html.match(/aria-selected="true"/g)).toHaveLength(1);
+		expect(html).toContain('aria-controls="report-trajectory"');
+		expect(html).toContain('id="report-trajectory"');
 		for (const label of [
-			"Summary",
 			"Trajectory",
 			"Who pays",
 			"Macro",
 			"Stress",
 			"Assumptions",
-			"Audit/export",
+			"Audit",
 		]) {
 			expect(html).toContain(label);
 		}
@@ -44,15 +51,16 @@ describe("OutputRail report chrome", () => {
 			expect(html).toContain(label);
 		}
 		expect(html).toContain("Detailed analysis");
-		expect(html).toContain("Expand all");
-		expect(html.match(/aria-expanded="false"/g)).toHaveLength(6);
+		expect(html).not.toContain("Expand all");
+		expect(html).not.toContain('aria-expanded="false"');
 	});
 
 	it("does not render report chrome for an empty scenario", () => {
 		const html = renderOutputRail([]);
 
 		expect(html).toContain("No decisions yet.");
-		expect(html).not.toContain('aria-label="Report sections"');
+		expect(html).not.toContain('aria-label="Report shortcuts"');
+		expect(html).not.toContain('role="tablist"');
 		expect(html).not.toContain("Appendix MD");
 	});
 });

@@ -10,9 +10,8 @@ import type {
 // dynamic → macro-adjusted (Scope A) → GE-adjusted (Scope C). Each tier
 // shown only when it differs meaningfully from the previous one.
 //
-// Lives inside the "Macro feedback" CollapsibleSection — surfaces the
-// scoring layers that economists care about, hidden behind disclosure
-// for casual users.
+// Lives inside the "Macro feedback" report tab — surfaces the scoring
+// layers that economists care about without overwhelming the summary view.
 
 interface Props {
 	staticNet: number;

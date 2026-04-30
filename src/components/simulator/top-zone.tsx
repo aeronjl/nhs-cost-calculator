@@ -19,7 +19,7 @@ import { formatCount } from "@/app/utils/formatters";
 // sections.
 //
 // Layered detail (multi-year, baseline, distributional breakdown, microsim,
-// macro state, assumptions) lives in collapsible sections below.
+// macro state, assumptions) lives in the tabbed report panels below.
 
 interface Props {
 	result: ScenarioResult;

@@ -53,7 +53,7 @@ export function AnimatedNumber({ value, className }: AnimatedNumber) {
 		const duration = computeDuration(delta);
 		const controls: AnimationPlaybackControls = animate(motionValue, value, {
 			duration: duration / 1000,
-			ease: [0.16, 1, 0.3, 1], // standard ease-out cubic, matches CollapsibleSection
+			ease: [0.16, 1, 0.3, 1], // standard ease-out cubic
 		});
 		prevValue.current = value;
 		return () => controls.stop();
