@@ -51,6 +51,25 @@ describe("OutputRail report chrome", () => {
 			expect(html).toContain(label);
 		}
 		expect(html).toContain("Detailed analysis");
+		expect(html).toContain('aria-label="Report narrative map"');
+		expect(html).toContain("Report narrative map");
+		expect(html).toContain("Baseline -&gt; scenario");
+		expect(html).toContain("current-policy baseline");
+		expect(html).toContain("Distributional baseline");
+		expect(html).toContain("Macro bridge");
+		expect(html).toContain("Stress/reaction");
+		expect(html).toContain("Evidence pack");
+		expect(html).toContain("Calibration, provenance, backtests");
+		for (const targetId of [
+			"report-trajectory",
+			"report-who-pays",
+			"report-macro",
+			"report-stress",
+			"report-assumptions",
+			"report-audit",
+		]) {
+			expect(html).toContain(`aria-controls="${targetId}"`);
+		}
 		expect(html).toContain("fiscal risk");
 		expect(html).toContain("Rule headroom");
 		expect(html).toContain("Show fiscal uncertainty decomposition");

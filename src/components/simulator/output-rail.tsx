@@ -20,6 +20,7 @@ import type { ResolvedComparison } from "@/data/comparisons";
 import { comparisonsCovered } from "@/lib/counterfactual";
 import {
 	type ScenarioLine,
+	type ScenarioDistribution,
 	evaluateScenario,
 	evaluateScenarioBand,
 	evaluateScenarioDistribution,
@@ -35,6 +36,9 @@ import {
 	projectFiscalRuleFan,
 	projectFiscalRulePriorSensitivity,
 	projectFiscalRuleUncertaintyDecomposition,
+	type BaselineComparison,
+	type FiscalRuleFan,
+	type FiscalRuleUncertaintyDecomposition,
 } from "@/lib/baseline-projection";
 import {
 	evaluateMicrosim,
@@ -152,6 +156,72 @@ const SECTION_NAV: readonly {
 ];
 
 const sectionHash = (id: SectionId | "summary") => `report-${id}`;
+
+type SignalTone = "blue" | "amber" | "red" | "muted";
+
+const formatBn = (n: number): string => {
+	const abs = Math.abs(n);
+	const sign = n < 0 ? "−" : "";
+	if (abs >= 1_000_000_000)
+		return `${sign}£${(abs / 1_000_000_000).toFixed(1)}bn`;
+	if (abs >= 1_000_000) return `${sign}£${Math.round(abs / 1_000_000)}m`;
+	return `${sign}£${Math.round(abs).toLocaleString()}`;
+};
+
+const formatBnDelta = (n: number): string => {
+	const abs = Math.abs(n);
+	const sign = n > 0 ? "+" : n < 0 ? "−" : "";
+	if (abs >= 1_000_000_000)
+		return `${sign}£${(abs / 1_000_000_000).toFixed(1)}bn`;
+	if (abs >= 1_000_000) return `${sign}£${Math.round(abs / 1_000_000)}m`;
+	return `${sign}£${Math.round(abs).toLocaleString()}`;
+};
+
+const formatProbability = (n: number): string => `${Math.round(n * 100)}%`;
+
+const clamp01 = (n: number): number => Math.min(1, Math.max(0, n));
+
+const formatStylePct = (n: number): string =>
+	`${(clamp01(n) * 100).toFixed(4)}%`;
+
+const signalToneClassName = (tone: SignalTone): string =>
+	tone === "blue"
+		? "text-blue-700"
+		: tone === "amber"
+			? "text-amber-700"
+			: tone === "red"
+				? "text-red-700"
+				: "text-muted-foreground";
+
+const signalBarClassName = (tone: SignalTone): string =>
+	tone === "blue"
+		? "bg-blue-600"
+		: tone === "amber"
+			? "bg-amber-500"
+			: tone === "red"
+				? "bg-red-600"
+				: "bg-slate-400";
+
+const fiscalRiskTone = (probability: number | undefined): SignalTone =>
+	probability === undefined
+		? "muted"
+		: probability > 0.25
+			? "red"
+			: probability > 0.1
+				? "amber"
+				: "blue";
+
+const formatHouseholdImpact = (decileTotalGbp: number): string => {
+	const perHouseholdPerYear = decileTotalGbp / 2_800_000;
+	const abs = Math.abs(perHouseholdPerYear);
+	const sign =
+		perHouseholdPerYear > 0 ? "−" : perHouseholdPerYear < 0 ? "+" : "";
+	if (abs >= 1000) return `${sign}£${(abs / 1000).toFixed(1)}k/yr`;
+	if (abs >= 100) return `${sign}£${Math.round(abs)}/yr`;
+	if (abs >= 10) return `${sign}£${abs.toFixed(0)}/yr`;
+	if (abs >= 1) return `${sign}£${abs.toFixed(1)}/yr`;
+	return "£0/yr";
+};
 
 const isSectionId = (value: string | undefined): value is SectionId =>
 	SECTION_IDS.includes(value as SectionId);
@@ -548,6 +618,21 @@ export function OutputRail({
 				</div>
 			</div>
 
+			<ReportNarrativeMap
+				activeSection={activeSection}
+				baselineComparison={baselineComparison}
+				distribution={distribution}
+				staticNet={result.net}
+				dynamicNet={dynamic.dynamicNet}
+				geYear1={geYear1}
+				fiscalRuleFan={fiscalRuleFan}
+				fiscalRuleUncertaintyDecomposition={
+					fiscalRuleUncertaintyDecomposition
+				}
+				scenarioLineCount={result.lines.length}
+				onSelect={goToSection}
+			/>
+
 			<section
 				aria-labelledby="report-details-heading"
 				className="overflow-hidden rounded-lg border bg-background shadow-sm"
@@ -759,5 +844,251 @@ export function OutputRail({
 				})}
 			</section>
 		</div>
+	);
+}
+
+function ReportNarrativeMap({
+	activeSection,
+	baselineComparison,
+	distribution,
+	staticNet,
+	dynamicNet,
+	geYear1,
+	fiscalRuleFan,
+	fiscalRuleUncertaintyDecomposition,
+	scenarioLineCount,
+	onSelect,
+}: {
+	activeSection: SectionId;
+	baselineComparison: BaselineComparison;
+	distribution: ScenarioDistribution;
+	staticNet: number;
+	dynamicNet: number;
+	geYear1: number;
+	fiscalRuleFan?: FiscalRuleFan;
+	fiscalRuleUncertaintyDecomposition?: FiscalRuleUncertaintyDecomposition;
+	scenarioLineCount: number;
+	onSelect: (id: SectionId) => void;
+}) {
+	const finalYear = baselineComparison.years.at(-1);
+	if (!finalYear) return null;
+
+	const ruleYear = baselineComparison.ruleYear ?? finalYear;
+	const psnbDelta = finalYear.adjustedPsnb - finalYear.baselinePsnb;
+	const ruleHeadroomDelta =
+		baselineComparison.adjustedStabilityHeadroom -
+		baselineComparison.baseline.stabilityRuleHeadroom;
+	const trajectoryTone: SignalTone =
+		baselineComparison.adjustedStabilityHeadroom < 0
+			? "red"
+			: psnbDelta > 0
+				? "amber"
+				: psnbDelta < 0
+					? "blue"
+					: "muted";
+	const bottomDecile = distribution.perDecile[0] ?? 0;
+	const topDecile = distribution.perDecile[9] ?? 0;
+	const householdLosses = distribution.perDecile.filter((value) => value > 0).length;
+	const householdGains = distribution.perDecile.filter((value) => value < 0).length;
+	const maxHouseholdImpact = Math.max(
+		...distribution.perDecile.map((value) => Math.abs(value / 2_800_000)),
+		0,
+	);
+	const distributionTone: SignalTone =
+		distribution.modelledLines === 0
+			? "muted"
+			: householdLosses > householdGains
+				? "amber"
+				: householdGains > householdLosses
+					? "blue"
+					: "muted";
+	const macroAdjustment = geYear1 - staticNet;
+	const dynamicAdjustment = dynamicNet - staticNet;
+	const largestDownsideLayer = fiscalRuleUncertaintyDecomposition?.layers
+		.filter((layer) => layer.id !== "central" && layer.p5DeltaFromPreviousGbp < 0)
+		.slice()
+		.sort((a, b) => a.p5DeltaFromPreviousGbp - b.p5DeltaFromPreviousGbp)[0];
+	const breachTone = fiscalRiskTone(fiscalRuleFan?.breachProbability);
+	const cards: readonly ReportSignalCardData[] = [
+		{
+			id: "trajectory",
+			kicker: "Baseline -> scenario",
+			title: "Fiscal path",
+			value: `${formatBn(finalYear.baselinePsnb)} -> ${formatBn(
+				finalYear.adjustedPsnb,
+			)}`,
+			detail: `${finalYear.fiscalYear} PSNB vs current-policy baseline; rule headroom ${formatBn(
+				baselineComparison.adjustedStabilityHeadroom,
+			)}`,
+			tone: trajectoryTone,
+			intensity: Math.abs(psnbDelta) / 50_000_000_000,
+		},
+		{
+			id: "who-pays",
+			kicker: "Distributional baseline",
+			title: "Household incidence",
+			value:
+				distribution.modelledLines > 0
+					? `D1 ${formatHouseholdImpact(
+							bottomDecile,
+						)} / D10 ${formatHouseholdImpact(topDecile)}`
+					: "Not modelled",
+			detail: `${distribution.modelledLines}/${distribution.totalLines} lines with incidence; baseline = £0/yr`,
+			tone: distributionTone,
+			intensity: maxHouseholdImpact / 1000,
+		},
+		{
+			id: "macro",
+			kicker: "Macro bridge",
+			title: "Static -> GE score",
+			value: formatBnDelta(macroAdjustment),
+			detail: `${formatBn(staticNet)} ready-reckoner -> ${formatBn(
+				geYear1,
+			)} GE year 1`,
+			tone:
+				macroAdjustment > 0
+					? "blue"
+					: macroAdjustment < 0
+						? "amber"
+						: "muted",
+			intensity: Math.abs(macroAdjustment) / Math.max(Math.abs(staticNet), 1),
+		},
+		{
+			id: "stress",
+			kicker: "Stress/reaction",
+			title: "Fiscal-rule risk",
+			value: fiscalRuleFan
+				? `${formatProbability(
+						fiscalRuleFan.breachProbability,
+					)} raw -> ${formatProbability(
+						fiscalRuleFan.postReactionBreachProbability,
+					)} post`
+				: baselineComparison.diagnostics.riskRating,
+			detail: largestDownsideLayer
+				? `Largest downside: ${largestDownsideLayer.label}`
+				: `${ruleYear.fiscalYear} rule-year central case`,
+			tone: breachTone,
+			intensity: fiscalRuleFan?.breachProbability ?? 0,
+		},
+		{
+			id: "assumptions",
+			kicker: "Model inputs",
+			title: "Line assumptions",
+			value: `${scenarioLineCount} line${scenarioLineCount === 1 ? "" : "s"}`,
+			detail: `Behavioural adjustment ${formatBnDelta(
+				dynamicAdjustment,
+			)}; rule headroom move ${formatBnDelta(ruleHeadroomDelta)}`,
+			tone:
+				dynamicAdjustment > 0
+					? "blue"
+					: dynamicAdjustment < 0
+						? "amber"
+						: "muted",
+			intensity: Math.abs(dynamicAdjustment) / Math.max(Math.abs(staticNet), 1),
+		},
+		{
+			id: "audit",
+			kicker: "Evidence pack",
+			title: "Audit trail",
+			value: fiscalRuleFan ? `${fiscalRuleFan.samples} risk draws` : "Central case",
+			detail: "Calibration, provenance, backtests, uncertainty layers",
+			tone: "blue",
+			intensity: fiscalRuleFan ? 1 : 0.55,
+		},
+	];
+
+	return (
+		<section
+			aria-label="Report narrative map"
+			className="rounded-lg border bg-background/70 p-3 shadow-sm"
+		>
+			<div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+				<h2 className="text-sm font-semibold">Report narrative map</h2>
+				<p className="text-[11px] text-muted-foreground">
+					Baselines, counterfactuals, stress, and evidence in one scan.
+				</p>
+			</div>
+			<div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+				{cards.map((card) => (
+					<ReportSignalCard
+						key={card.id}
+						card={card}
+						selected={activeSection === card.id}
+						onSelect={onSelect}
+					/>
+				))}
+			</div>
+		</section>
+	);
+}
+
+interface ReportSignalCardData {
+	id: SectionId;
+	kicker: string;
+	title: string;
+	value: string;
+	detail: string;
+	tone: SignalTone;
+	intensity: number;
+}
+
+function ReportSignalCard({
+	card,
+	selected,
+	onSelect,
+}: {
+	card: ReportSignalCardData;
+	selected: boolean;
+	onSelect: (id: SectionId) => void;
+}) {
+	return (
+		<button
+			type="button"
+			aria-controls={sectionHash(card.id)}
+			aria-current={selected ? "true" : undefined}
+			onClick={() => onSelect(card.id)}
+			className={cn(
+				"min-w-0 rounded-md border bg-background/80 p-3 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+				selected && "border-blue-300 bg-blue-50/70",
+			)}
+		>
+			<div className="flex items-baseline justify-between gap-2">
+				<span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+					{card.kicker}
+				</span>
+				<span
+					className={cn(
+						"shrink-0 text-[9px] uppercase tracking-wider",
+						signalToneClassName(card.tone),
+					)}
+				>
+					{SECTION_NAV.find((item) => item.id === card.id)?.label}
+				</span>
+			</div>
+			<div className="mt-2 flex items-start justify-between gap-3">
+				<div className="min-w-0">
+					<div className="text-xs font-medium text-foreground">
+						{card.title}
+					</div>
+					<div
+						className={cn(
+							"mt-0.5 truncate text-sm font-semibold tabular-nums",
+							signalToneClassName(card.tone),
+						)}
+					>
+						{card.value}
+					</div>
+				</div>
+			</div>
+			<div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+				<span
+					className={cn("block h-full", signalBarClassName(card.tone))}
+					style={{ width: formatStylePct(card.intensity) }}
+				/>
+			</div>
+			<div className="mt-2 line-clamp-2 text-[10px] leading-snug text-muted-foreground">
+				{card.detail}
+			</div>
+		</button>
 	);
 }
