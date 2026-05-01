@@ -3,6 +3,11 @@ import type {
 	ScenarioResult,
 } from "@/lib/scenario";
 import type { MicrosimAggregate } from "@/lib/microsim/impact";
+import {
+	GOAL_DEFINITIONS,
+	type WizardGoal,
+	materialiseGoalLine,
+} from "@/lib/wizard-goals";
 
 // Plain-English one-or-two sentence summary of a scenario, intended for the
 // TopZone of the results page. Goal: a journalist or non-specialist should be
@@ -43,15 +48,48 @@ export interface NarrativeInputs {
 	result: ScenarioResult;
 	distribution: ScenarioDistribution;
 	microsim?: MicrosimAggregate;
+	// When the user came in through the wizard with a goal, the narrative
+	// prepends a goal-vs-actuals sentence so the report knows what target
+	// they were aiming at. Free-play / hold-steady / no-goal are quietly
+	// skipped — there's nothing meaningful to say.
+	goal?: WizardGoal | null;
 }
+
+const buildGoalSentence = (
+	goal: WizardGoal | null | undefined,
+	result: ScenarioResult,
+): string | null => {
+	if (!goal || goal === "free-play" || goal === "hold-steady") return null;
+	const goalDef = GOAL_DEFINITIONS[goal];
+	if (goalDef.initialDemand <= 0) return null;
+	// Goals that materialise an implicit scenario line (fund-nhs etc.) carry
+	// the goal cost inside `result` already, so the surplus / shortfall is
+	// just `result.net`. Goals without a materialised line (reduce-borrowing)
+	// expect the user to find `initialDemand` worth of revenue / savings on
+	// top of nothing, so balance is `result.net - demand`.
+	const isMaterialised = materialiseGoalLine(goal) !== null;
+	const balance = isMaterialised ? result.net : result.net - goalDef.initialDemand;
+	const target = formatBn(goalDef.initialDemand);
+	const labelLower = goalDef.label.toLowerCase();
+	if (Math.abs(balance) < SIGNIFICANT_NET) {
+		return `Goal: ${labelLower} (${target}). On target.`;
+	}
+	if (balance > 0) {
+		return `Goal: ${labelLower} (${target}). ${formatBn(balance)} over target.`;
+	}
+	return `Goal: ${labelLower} (${target}). ${formatBn(Math.abs(balance))} short of target.`;
+};
 
 export function composeScenarioNarrative(
 	inputs: NarrativeInputs,
 ): string | null {
-	const { result, distribution, microsim } = inputs;
+	const { result, distribution, microsim, goal } = inputs;
 	if (result.lines.length === 0) return null;
 
 	const sentences: string[] = [];
+
+	const goalSentence = buildGoalSentence(goal, result);
+	if (goalSentence) sentences.push(goalSentence);
 
 	const raised = result.lines.filter((l) => l.deltaGbp > 0);
 	const spent = result.lines.filter((l) => l.deltaGbp < 0);

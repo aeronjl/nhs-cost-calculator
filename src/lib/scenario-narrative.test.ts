@@ -184,6 +184,82 @@ describe("composeScenarioNarrative", () => {
 		expect(text).toContain("20% gain");
 	});
 
+	it("prepends a goal-vs-actuals sentence for materialised goals", () => {
+		// fund-nhs is materialised — the £20bn NHS line is in result.lines, so
+		// result.net is the surplus / shortfall directly.
+		const tax = stubEvaluation({
+			deltaGbp: 24_000_000_000,
+			description: "Raise basic-rate income tax by 2pp",
+			line: { id: "tax", type: "tax" },
+		});
+		const nhs = stubEvaluation({
+			deltaGbp: -20_000_000_000,
+			description: "Increase NHS England spending by £20bn",
+			line: { id: "nhs", type: "programme", leverId: "nhs-england" },
+		});
+		const result: ScenarioResult = {
+			freed: 24_000_000_000,
+			required: 20_000_000_000,
+			net: 4_000_000_000,
+			lines: [tax, nhs],
+		};
+		const text = composeScenarioNarrative({
+			result,
+			distribution: emptyDistribution,
+			goal: "fund-nhs",
+		});
+		expect(text).toContain("Goal: fund nhs expansion");
+		expect(text).toContain("£4.0bn over target");
+	});
+
+	it("uses demand-minus-net for non-materialised goals", () => {
+		// reduce-borrowing is non-materialised — demand £30bn, no goal line.
+		// Found £24bn ⇒ £6bn short.
+		const tax = stubEvaluation({
+			deltaGbp: 24_000_000_000,
+			description: "Raise basic-rate income tax by 2pp",
+			line: { id: "tax", type: "tax" },
+		});
+		const result: ScenarioResult = {
+			freed: 24_000_000_000,
+			required: 0,
+			net: 24_000_000_000,
+			lines: [tax],
+		};
+		const text = composeScenarioNarrative({
+			result,
+			distribution: emptyDistribution,
+			goal: "reduce-borrowing",
+		});
+		expect(text).toContain("Goal: reduce borrowing");
+		expect(text).toContain("£6.0bn short");
+	});
+
+	it("emits no goal sentence for free-play / null", () => {
+		const tax = stubEvaluation({
+			deltaGbp: 5_000_000_000,
+			description: "Raise basic-rate income tax by 1pp",
+			line: { id: "tax", type: "tax" },
+		});
+		const result: ScenarioResult = {
+			freed: 5_000_000_000,
+			required: 0,
+			net: 5_000_000_000,
+			lines: [tax],
+		};
+		const text = composeScenarioNarrative({
+			result,
+			distribution: emptyDistribution,
+			goal: "free-play",
+		});
+		expect(text).not.toContain("Goal:");
+		const noGoalText = composeScenarioNarrative({
+			result,
+			distribution: emptyDistribution,
+		});
+		expect(noGoalText).not.toContain("Goal:");
+	});
+
 	it("falls back to decile impact when microsim is unavailable", () => {
 		const line = stubEvaluation({
 			deltaGbp: 10_000_000_000,

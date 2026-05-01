@@ -30,6 +30,7 @@ import { evaluateMicrosim } from "@/lib/microsim/impact";
 import { computeScenarioSignature } from "@/lib/scenario-signature";
 import { useMemo } from "react";
 import { ScenarioSignatureRadar } from "@/components/report/scenario-signature";
+import { DecileSparkline } from "@/components/report/decile-sparkline";
 import { EraSparkline } from "./era-sparkline";
 
 // Chancellor HUD — compact panel showing the live impact of the wizard's
@@ -319,6 +320,10 @@ export function ChancellorHUD({
 			{signature && !compact && (
 				<ScenarioSignatureRadar signature={signature} />
 			)}
+
+			{/* Per-decile incidence sparkline — auto-hides when no decile carries
+			    a meaningful per-household impact (e.g. empty scenarios). */}
+			{!compact && <DecileSparkline distribution={distribution} />}
 
 			{/* Goal-progress bar */}
 			{goalDef && goalDef.initialDemand > 0 && (

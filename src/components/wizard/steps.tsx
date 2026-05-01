@@ -1495,6 +1495,7 @@ export function StepResult({
 				usdPerGbp={usdPerGbp}
 				baseline={baseline}
 				emptyMessage="No decisions yet."
+				goal={state.goal}
 			/>
 
 			<div className="flex items-center justify-start gap-2 pt-2">

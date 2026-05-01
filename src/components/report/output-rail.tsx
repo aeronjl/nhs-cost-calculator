@@ -76,6 +76,7 @@ import { TabSubNav } from "./tab-sub-nav";
 import { TopZone } from "./top-zone";
 import { WhoPaysOverview } from "./who-pays-overview";
 import { YearFocusProvider } from "@/lib/year-focus";
+import type { WizardGoal } from "@/lib/wizard-goals";
 
 // Output rail with progressive disclosure across three modes:
 //
@@ -112,6 +113,10 @@ export interface OutputRailProps {
 	// Defaults to the embedded static baseline if not passed.
 	baseline?: OBRBaseline;
 	emptyMessage?: string;
+	// Goal the user came in with via the wizard. Threaded through to the
+	// TopZone narrative so the report can say "Goal: X. £Y over target."
+	// Null / undefined skips the goal-aware sentence.
+	goal?: WizardGoal | null;
 }
 
 const SECTION_IDS = [
@@ -316,6 +321,7 @@ export function OutputRail({
 	usdPerGbp,
 	baseline = OBR_BASELINE,
 	emptyMessage = "Add a lever to your scenario to see what it'd fund or cost.",
+	goal = null,
 }: OutputRailProps) {
 	const [activeSection, setActiveSection] =
 		useState<SectionId>("trajectory");
@@ -654,6 +660,7 @@ export function OutputRail({
 					microsim={microsim}
 					year1Projection={year1}
 					year5Projection={year5}
+					goal={goal}
 					onDrill={goToSection}
 				/>
 			</div>

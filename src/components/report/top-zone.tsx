@@ -35,6 +35,7 @@ interface Props {
 	microsim?: MicrosimAggregate;
 	year1Projection: YearProjection | undefined;
 	year5Projection: YearProjection | undefined;
+	goal?: import("@/lib/wizard-goals").WizardGoal | null;
 	onDrill?: (target: DrillTarget) => void;
 }
 
@@ -65,6 +66,7 @@ export function TopZone({
 	microsim,
 	year1Projection,
 	year5Projection,
+	goal,
 	onDrill,
 }: Props) {
 	const direction =
@@ -102,6 +104,7 @@ export function TopZone({
 		result,
 		distribution,
 		microsim,
+		goal,
 	});
 
 	const signature = computeScenarioSignature({
