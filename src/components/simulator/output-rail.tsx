@@ -67,7 +67,9 @@ import { MicrosimulationPanel } from "./microsimulation-panel";
 import { ModelAuditPanel } from "./model-audit-panel";
 import { MultiYearProjection } from "./multi-year-projection";
 import { ScenarioAssumptions } from "./scenario-assumptions";
+import { DiscoverableHint } from "./discoverable-hint";
 import { ScenarioYearScrubber } from "./scenario-year-scrubber";
+import { TabSubNav } from "./tab-sub-nav";
 import { TopZone } from "./top-zone";
 import { WhoPaysOverview } from "./who-pays-overview";
 import { YearFocusProvider } from "@/lib/year-focus";
@@ -738,6 +740,12 @@ export function OutputRail({
 				</div>
 			</div>
 
+			<DiscoverableHint storageKey="year-scrubber-v1">
+				<strong>Tip:</strong> drag the year slider below or hover any chart —
+				the focus year syncs across the multi-year fan, counterfactual paths,
+				and macro-state sparklines. The TopZone numbers also drill straight
+				to the relevant tab.
+			</DiscoverableHint>
 			<ScenarioYearScrubber
 				yearCount={baseline.years.length}
 				yearLabels={baseline.years.map((y) => y.fiscalYear)}
@@ -873,19 +881,56 @@ export function OutputRail({
 
 									{activeSection === "who-pays" && (
 										<div className="space-y-3">
-											<WhoPaysOverview
-												distribution={distribution}
-												microsim={microsim}
-												result={result}
-											/>
+											{mode !== "headline" && (
+												<TabSubNav
+													sections={[
+														{ id: "who-pays-overview", label: "Overview" },
+														{
+															id: "who-pays-deciles",
+															label: "Decile shares",
+														},
+														...(items.length > 0
+															? [
+																	{
+																		id: "who-pays-comparisons",
+																		label: "Comparisons",
+																	},
+																]
+															: []),
+														{
+															id: "who-pays-microsim",
+															label: "Microsim",
+														},
+														{
+															id: "who-pays-households",
+															label: "Archetypes",
+														},
+													]}
+												/>
+											)}
+											<div id="who-pays-overview" className="scroll-mt-24">
+												<WhoPaysOverview
+													distribution={distribution}
+													microsim={microsim}
+													result={result}
+												/>
+											</div>
 											{mode !== "headline" && (
 												<div className="grid gap-3 xl:grid-cols-[minmax(300px,0.82fr)_minmax(0,1.18fr)] xl:items-start">
 													<div className="min-w-0 space-y-3">
-														<DistributionalImpact
-															distribution={distribution}
-														/>
+														<div
+															id="who-pays-deciles"
+															className="scroll-mt-24"
+														>
+															<DistributionalImpact
+																distribution={distribution}
+															/>
+														</div>
 														{items.length > 0 && (
-															<div className="rounded-md border bg-background/60 p-3">
+															<div
+																id="who-pays-comparisons"
+																className="scroll-mt-24 rounded-md border bg-background/60 p-3"
+															>
 																<ComparisonsAffordedList
 																	items={items}
 																	caption={
@@ -901,8 +946,18 @@ export function OutputRail({
 														)}
 													</div>
 													<div className="min-w-0 space-y-3">
-														<MicrosimulationPanel result={result} />
-														<HouseholdImpactPanel result={result} />
+														<div
+															id="who-pays-microsim"
+															className="scroll-mt-24"
+														>
+															<MicrosimulationPanel result={result} />
+														</div>
+														<div
+															id="who-pays-households"
+															className="scroll-mt-24"
+														>
+															<HouseholdImpactPanel result={result} />
+														</div>
 													</div>
 												</div>
 											)}
