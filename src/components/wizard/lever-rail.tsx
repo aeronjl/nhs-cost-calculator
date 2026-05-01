@@ -119,25 +119,42 @@ const buildLevers = (): {
 
 interface Props {
 	onAdd: (lever: PickerLever) => void;
+	// Optional kind filter: when provided, only the listed lever kinds are
+	// rendered. Used by the step-level free-form picker so step 2 (Taxes)
+	// shows only tax levers, step 3 (Spending) only programme cards, etc.
+	kinds?: readonly ("tax" | "programme" | "borrow")[];
+	searchPlaceholder?: string;
 }
 
-export function LeverRail({ onAdd }: Props) {
+export function LeverRail({
+	onAdd,
+	kinds,
+	searchPlaceholder = "Search 25+ levers…",
+}: Props) {
 	const [search, setSearch] = useState("");
 	const { taxByCategory, programmes, borrow } = useMemo(buildLevers, []);
+
+	const showTax = !kinds || kinds.includes("tax");
+	const showProgrammes = !kinds || kinds.includes("programme");
+	const showBorrowKind = !kinds || kinds.includes("borrow");
 
 	const q = search.trim().toLowerCase();
 	const matches = (text: string): boolean =>
 		!q || text.toLowerCase().includes(q);
 
-	const filteredCategories = taxByCategory
-		.map((cat) => ({
-			...cat,
-			levers: cat.levers.filter((l) => matches(l.label)),
-		}))
-		.filter((cat) => cat.levers.length > 0);
+	const filteredCategories = showTax
+		? taxByCategory
+				.map((cat) => ({
+					...cat,
+					levers: cat.levers.filter((l) => matches(l.label)),
+				}))
+				.filter((cat) => cat.levers.length > 0)
+		: [];
 
-	const filteredProgrammes = programmes.filter((p) => matches(p.label));
-	const showBorrow = matches(borrow.label);
+	const filteredProgrammes = showProgrammes
+		? programmes.filter((p) => matches(p.label))
+		: [];
+	const showBorrow = showBorrowKind && matches(borrow.label);
 
 	return (
 		<div className="flex flex-col h-full">
@@ -146,7 +163,7 @@ export function LeverRail({ onAdd }: Props) {
 					type="search"
 					value={search}
 					onChange={(e) => setSearch(e.target.value)}
-					placeholder="Search 25+ levers…"
+					placeholder={searchPlaceholder}
 					className="w-full px-2.5 py-1.5 text-sm border rounded-md bg-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
 					aria-label="Search levers"
 				/>

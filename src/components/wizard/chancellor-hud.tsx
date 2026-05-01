@@ -27,7 +27,9 @@ import {
 } from "@/lib/wizard-state";
 import { generatePopulation } from "@/lib/microsim/population";
 import { evaluateMicrosim } from "@/lib/microsim/impact";
+import { computeScenarioSignature } from "@/lib/scenario-signature";
 import { useMemo } from "react";
+import { ScenarioSignatureRadar } from "@/components/report/scenario-signature";
 import { EraSparkline } from "./era-sparkline";
 
 // Chancellor HUD — compact panel showing the live impact of the wizard's
@@ -129,6 +131,18 @@ export function ChancellorHUD({
 			? projectAgainstBaseline(projection, alternateBaseline)
 			: null;
 	const distribution = evaluateScenarioDistribution(result, { era });
+	const signature = useMemo(
+		() =>
+			result.lines.length > 0
+				? computeScenarioSignature({
+						result,
+						distribution,
+						year1: projection[0],
+						year5: projection[projection.length - 1],
+					})
+				: null,
+		[result, distribution, projection],
+	);
 
 	const goalDef = goal ? GOAL_DEFINITIONS[goal] : null;
 	// Goal demand is defined in current pounds. Scale to era-pound basis so
@@ -300,6 +314,11 @@ export function ChancellorHUD({
 					after behavioural response: {formatBn(dynamic.dynamicNet)}
 				</div>
 			</div>
+
+			{/* Scenario signature radar */}
+			{signature && !compact && (
+				<ScenarioSignatureRadar signature={signature} />
+			)}
 
 			{/* Goal-progress bar */}
 			{goalDef && goalDef.initialDemand > 0 && (

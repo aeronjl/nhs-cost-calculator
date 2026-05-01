@@ -39,6 +39,7 @@ import {
 	wizardLineId,
 } from "@/lib/wizard-state";
 import { ChoiceCard } from "./choice-card";
+import { FreeFormPicker } from "./free-form-picker";
 import { PolicyScenarioQuickStarts } from "./policy-scenario-quick-starts";
 import type { OutputRailProps } from "@/components/report/output-rail";
 import type { RefineScenarioPanelProps } from "./refine-scenario-panel";
@@ -987,6 +988,14 @@ export function StepTaxes({ state, actions, onAdvance, onBack }: StepProps) {
 				);
 			})()}
 
+			<FreeFormPicker
+				kinds={["tax"]}
+				label="Pick any tax lever directly"
+				helpText="Click to add with a sensible default magnitude — refine the magnitude in the Result step's lever panel."
+				searchPlaceholder="Search 25+ tax levers…"
+				onAdd={(line) => actions.addChoice(line)}
+			/>
+
 			<div className="flex items-center justify-between gap-2 pt-2">
 				<Button variant="outline" size="sm" onClick={onBack}>
 					← Back
@@ -1215,6 +1224,14 @@ export function StepSpending({
 				);
 			})}
 
+			<FreeFormPicker
+				kinds={["programme"]}
+				label="Pick any spending programme directly"
+				helpText="Click adds a 5% cut by default — flip to an increase or retune the magnitude in the Result step's lever panel."
+				searchPlaceholder="Search programmes…"
+				onAdd={(line) => actions.addChoice(line)}
+			/>
+
 			<div className="flex items-center justify-between gap-2 pt-2">
 				<Button variant="outline" size="sm" onClick={onBack}>
 					← Back
@@ -1325,6 +1342,13 @@ export function StepBorrow({ state, actions, onAdvance, onBack }: StepProps) {
 					);
 				})}
 			</div>
+
+			<FreeFormPicker
+				kinds={["borrow"]}
+				label="Add a custom borrow line"
+				helpText="Click to add £20bn of net borrowing by default — adjust the amount in the Result step's lever panel."
+				onAdd={(line) => actions.addChoice(line)}
+			/>
 
 			<div className="flex items-center justify-between gap-2 pt-2">
 				<Button variant="outline" size="sm" onClick={onBack}>
