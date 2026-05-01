@@ -24,6 +24,8 @@ import { ScenarioSignatureRadar } from "./scenario-signature";
 // Layered detail (multi-year, baseline, distributional breakdown, microsim,
 // macro state, assumptions) lives in the tabbed report panels below.
 
+type DrillTarget = "trajectory" | "who-pays" | "macro";
+
 interface Props {
 	result: ScenarioResult;
 	dynamic: ScenarioDynamic;
@@ -33,6 +35,7 @@ interface Props {
 	microsim?: MicrosimAggregate;
 	year1Projection: YearProjection | undefined;
 	year5Projection: YearProjection | undefined;
+	onDrill?: (target: DrillTarget) => void;
 }
 
 const formatBn = (n: number): string => {
@@ -50,6 +53,9 @@ const formatDelta = (n: number): string => {
 	return `${sign}${formatBn(Math.abs(n))}`;
 };
 
+const drillButtonClass =
+	"-mx-1 px-1 -my-0.5 py-0.5 rounded-sm text-left transition-colors hover:bg-blue-50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500";
+
 export function TopZone({
 	result,
 	dynamic,
@@ -59,6 +65,7 @@ export function TopZone({
 	microsim,
 	year1Projection,
 	year5Projection,
+	onDrill,
 }: Props) {
 	const direction =
 		result.net > 0 ? "freed" : result.net < 0 ? "shortfall" : "balanced";
@@ -142,43 +149,101 @@ export function TopZone({
 						£<AnimatedNumber value={Math.abs(Math.round(result.net))} />
 					</div>
 					<div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-						{dynamicGapSignificant && (
-							<div>
-								<span className="font-medium text-foreground">
-									{formatDelta(dynamic.dynamicNet)}
-								</span>{" "}
-								after behavioural response
-							</div>
-						)}
-						{psnbDiverges && year1Projection && (
-							<div>
-								<span className="font-medium text-foreground">
-									{formatDelta(year1Projection.psnbShift)}
-								</span>{" "}
-								PSNB shift in year 1
-							</div>
-						)}
-						{year5Projection && (
-							<div>
-								<span className="font-medium text-foreground">
-									{formatBn(year5Projection.net)}
-								</span>{" "}
-								by year 5{trend ? `, ${trend}` : ""}
-							</div>
-						)}
-						{topComparison && (
-							<div>
-								<span aria-hidden="true" className="mr-1">
-									{topComparison.comparison.emoji}
-								</span>
-								<span className="font-medium text-foreground tabular-nums">
-									{formatCount(topComparison.count)}
-								</span>{" "}
-								{topComparison.count === 1
-									? topComparison.comparison.name
-									: topComparison.comparison.pluralName}
-							</div>
-						)}
+						{dynamicGapSignificant &&
+							(onDrill ? (
+								<button
+									type="button"
+									onClick={() => onDrill("macro")}
+									className={drillButtonClass}
+									aria-label="Jump to macro scoring breakdown"
+								>
+									<span className="font-medium text-foreground">
+										{formatDelta(dynamic.dynamicNet)}
+									</span>{" "}
+									after behavioural response
+								</button>
+							) : (
+								<div>
+									<span className="font-medium text-foreground">
+										{formatDelta(dynamic.dynamicNet)}
+									</span>{" "}
+									after behavioural response
+								</div>
+							))}
+						{psnbDiverges &&
+							year1Projection &&
+							(onDrill ? (
+								<button
+									type="button"
+									onClick={() => onDrill("trajectory")}
+									className={drillButtonClass}
+									aria-label="Jump to PSNB trajectory"
+								>
+									<span className="font-medium text-foreground">
+										{formatDelta(year1Projection.psnbShift)}
+									</span>{" "}
+									PSNB shift in year 1
+								</button>
+							) : (
+								<div>
+									<span className="font-medium text-foreground">
+										{formatDelta(year1Projection.psnbShift)}
+									</span>{" "}
+									PSNB shift in year 1
+								</div>
+							))}
+						{year5Projection &&
+							(onDrill ? (
+								<button
+									type="button"
+									onClick={() => onDrill("trajectory")}
+									className={drillButtonClass}
+									aria-label="Jump to multi-year trajectory"
+								>
+									<span className="font-medium text-foreground">
+										{formatBn(year5Projection.net)}
+									</span>{" "}
+									by year 5{trend ? `, ${trend}` : ""}
+								</button>
+							) : (
+								<div>
+									<span className="font-medium text-foreground">
+										{formatBn(year5Projection.net)}
+									</span>{" "}
+									by year 5{trend ? `, ${trend}` : ""}
+								</div>
+							))}
+						{topComparison &&
+							(onDrill ? (
+								<button
+									type="button"
+									onClick={() => onDrill("who-pays")}
+									className={drillButtonClass}
+									aria-label="Jump to full comparisons list"
+								>
+									<span aria-hidden="true" className="mr-1">
+										{topComparison.comparison.emoji}
+									</span>
+									<span className="font-medium text-foreground tabular-nums">
+										{formatCount(topComparison.count)}
+									</span>{" "}
+									{topComparison.count === 1
+										? topComparison.comparison.name
+										: topComparison.comparison.pluralName}
+								</button>
+							) : (
+								<div>
+									<span aria-hidden="true" className="mr-1">
+										{topComparison.comparison.emoji}
+									</span>
+									<span className="font-medium text-foreground tabular-nums">
+										{formatCount(topComparison.count)}
+									</span>{" "}
+									{topComparison.count === 1
+										? topComparison.comparison.name
+										: topComparison.comparison.pluralName}
+								</div>
+							))}
 					</div>
 				</div>
 
@@ -214,38 +279,75 @@ export function TopZone({
 								<div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
 									Household effect
 								</div>
-								{distrSignificant && (
-									<div className="text-xs leading-snug">
-										<span className="text-muted-foreground">Bottom 10% </span>
-										<span
-											className={cn(
-												"tabular-nums font-medium",
-												bottomPerHh > 0
-													? "text-amber-700"
-													: bottomPerHh < 0
-														? "text-blue-700"
-														: "",
-											)}
+								{distrSignificant &&
+									(onDrill ? (
+										<button
+											type="button"
+											onClick={() => onDrill("who-pays")}
+											className={cn(drillButtonClass, "text-xs leading-snug")}
+											aria-label="Jump to who-pays decile breakdown"
 										>
-											{bottomPerHh > 0 ? "−" : "+"}£
-											{Math.round(Math.abs(bottomPerHh)).toLocaleString()}
-										</span>
-										<span className="text-muted-foreground"> · Top 10% </span>
-										<span
-											className={cn(
-												"tabular-nums font-medium",
-												topPerHh > 0
-													? "text-amber-700"
-													: topPerHh < 0
-														? "text-blue-700"
-														: "",
-											)}
-										>
-											{topPerHh > 0 ? "−" : "+"}£
-											{Math.round(Math.abs(topPerHh)).toLocaleString()}
-										</span>
-									</div>
-								)}
+											<span className="text-muted-foreground">Bottom 10% </span>
+											<span
+												className={cn(
+													"tabular-nums font-medium",
+													bottomPerHh > 0
+														? "text-amber-700"
+														: bottomPerHh < 0
+															? "text-blue-700"
+															: "",
+												)}
+											>
+												{bottomPerHh > 0 ? "−" : "+"}£
+												{Math.round(Math.abs(bottomPerHh)).toLocaleString()}
+											</span>
+											<span className="text-muted-foreground"> · Top 10% </span>
+											<span
+												className={cn(
+													"tabular-nums font-medium",
+													topPerHh > 0
+														? "text-amber-700"
+														: topPerHh < 0
+															? "text-blue-700"
+															: "",
+												)}
+											>
+												{topPerHh > 0 ? "−" : "+"}£
+												{Math.round(Math.abs(topPerHh)).toLocaleString()}
+											</span>
+										</button>
+									) : (
+										<div className="text-xs leading-snug">
+											<span className="text-muted-foreground">Bottom 10% </span>
+											<span
+												className={cn(
+													"tabular-nums font-medium",
+													bottomPerHh > 0
+														? "text-amber-700"
+														: bottomPerHh < 0
+															? "text-blue-700"
+															: "",
+												)}
+											>
+												{bottomPerHh > 0 ? "−" : "+"}£
+												{Math.round(Math.abs(bottomPerHh)).toLocaleString()}
+											</span>
+											<span className="text-muted-foreground"> · Top 10% </span>
+											<span
+												className={cn(
+													"tabular-nums font-medium",
+													topPerHh > 0
+														? "text-amber-700"
+														: topPerHh < 0
+															? "text-blue-700"
+															: "",
+												)}
+											>
+												{topPerHh > 0 ? "−" : "+"}£
+												{Math.round(Math.abs(topPerHh)).toLocaleString()}
+											</span>
+										</div>
+									))}
 								{microsim &&
 									microsim.winners + microsim.losers + microsim.unaffected >
 										0 && (

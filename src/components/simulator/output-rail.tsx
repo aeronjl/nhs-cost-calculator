@@ -15,6 +15,7 @@ import {
 	FileText,
 	Link as LinkIcon,
 } from "lucide-react";
+import { motion } from "framer-motion";
 import { ComparisonsAffordedList } from "@/components/ui/comparisons-afforded-list";
 import type { ResolvedComparison } from "@/data/comparisons";
 import { comparisonsCovered } from "@/lib/counterfactual";
@@ -643,6 +644,7 @@ export function OutputRail({
 					microsim={microsim}
 					year1Projection={year1}
 					year5Projection={year5}
+					onDrill={goToSection}
 				/>
 			</div>
 
@@ -819,7 +821,13 @@ export function OutputRail({
 							)}
 						>
 							{selected && (
-								<div className="mx-auto w-full max-w-6xl space-y-4">
+								<motion.div
+									key={item.id}
+									initial={{ opacity: 0, y: 6 }}
+									animate={{ opacity: 1, y: 0 }}
+									transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+									className="mx-auto w-full max-w-6xl space-y-4"
+								>
 									<div className="max-w-3xl space-y-1">
 										<h3 className="text-sm font-semibold">
 											{item.panelTitle}
@@ -999,7 +1007,7 @@ export function OutputRail({
 											<ModelAuditPanel audit={modelAudit} />
 										</div>
 									)}
-								</div>
+								</motion.div>
 							)}
 						</div>
 					);

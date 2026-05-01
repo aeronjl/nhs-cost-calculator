@@ -1,6 +1,12 @@
 "use client";
 
-import { type PointerEvent, useMemo, useRef, useState } from "react";
+import {
+	type PointerEvent,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { cn } from "@/lib/utils";
 import type {
 	BaselineComparison,
@@ -17,6 +23,10 @@ import {
 import { useAnimatedValues } from "@/lib/use-animated-values";
 import { ANNOTATED_BUDGETS } from "@/data/budgets/annotated";
 import type { OBRBaseline } from "@/data/baseline/obr-baseline";
+import {
+	listSavedScenarios,
+	type SavedScenario,
+} from "@/lib/saved-scenarios";
 import { policyReactionPackageSummary } from "@/lib/policy-reaction-packages";
 import { pointerToYearIndex, useYearFocus } from "@/lib/year-focus";
 import {
@@ -136,22 +146,51 @@ interface CompareSeries {
 	debtGdpValues: number[];
 }
 
+interface CompareCandidate {
+	id: string;
+	name: string;
+	scenario: string;
+	source: "saved" | "budget";
+}
+
+const annotatedCandidates = (): CompareCandidate[] =>
+	ANNOTATED_BUDGETS.filter((b) => !b.placeholder && b.scenario).map((b) => ({
+		id: `budget:${b.id}`,
+		name: b.name,
+		scenario: b.scenario,
+		source: "budget",
+	}));
+
+const savedCandidates = (saved: readonly SavedScenario[]): CompareCandidate[] =>
+	saved
+		.filter((s) => s.scenario)
+		.map((s) => ({
+			id: `saved:${s.id}`,
+			name: s.name,
+			scenario: s.scenario,
+			source: "saved",
+		}));
+
 const buildCompareSeries = (
-	budgetId: string,
+	candidateId: string,
+	candidates: readonly CompareCandidate[],
 	baseline: OBRBaseline,
 	yearCount: number,
 ): CompareSeries | null => {
-	if (!budgetId) return null;
-	const budget = ANNOTATED_BUDGETS.find((b) => b.id === budgetId);
-	if (!budget || budget.placeholder) return null;
-	const lines = deserializeScenario(budget.scenario);
+	if (!candidateId) return null;
+	const candidate = candidates.find((c) => c.id === candidateId);
+	if (!candidate) return null;
+	const lines = deserializeScenario(candidate.scenario);
 	if (lines.length === 0) return null;
 	const result = evaluateScenario(lines);
 	const projection = projectScenarioOverYears(result, yearCount);
 	const compareComparison = projectAgainstBaseline(projection, baseline);
 	return {
-		id: budget.id,
-		label: budget.name,
+		id: candidate.id,
+		label:
+			candidate.source === "saved"
+				? `${candidate.name} (saved)`
+				: candidate.name,
 		psnbValues: compareComparison.years.map((y) => y.adjustedPsnb),
 		debtGdpValues: compareComparison.years.map((y) => y.adjustedDebtGdp),
 	};
@@ -174,14 +213,31 @@ export function BaselineComparisonPanel({
 	} = comparison;
 	if (years.length === 0) return null;
 
-	const compareCandidates = useMemo(
-		() => ANNOTATED_BUDGETS.filter((b) => !b.placeholder && b.scenario),
+	const [savedScenarios, setSavedScenarios] = useState<readonly SavedScenario[]>(
 		[],
+	);
+	useEffect(() => {
+		setSavedScenarios(listSavedScenarios());
+		const onStorage = () => setSavedScenarios(listSavedScenarios());
+		window.addEventListener("storage", onStorage);
+		return () => window.removeEventListener("storage", onStorage);
+	}, []);
+	const annotated = useMemo(() => annotatedCandidates(), []);
+	const saved = useMemo(() => savedCandidates(savedScenarios), [savedScenarios]);
+	const compareCandidates = useMemo(
+		() => [...saved, ...annotated],
+		[annotated, saved],
 	);
 	const [compareBudgetId, setCompareBudgetId] = useState<string>("");
 	const compareSeries = useMemo(
-		() => buildCompareSeries(compareBudgetId, baseline, years.length),
-		[baseline, compareBudgetId, years.length],
+		() =>
+			buildCompareSeries(
+				compareBudgetId,
+				compareCandidates,
+				baseline,
+				years.length,
+			),
+		[baseline, compareBudgetId, compareCandidates, years.length],
 	);
 
 	const lastYear = years[years.length - 1]!;
@@ -348,11 +404,22 @@ export function BaselineComparisonPanel({
 						className="rounded-sm border bg-background px-2 py-1 text-[11px]"
 					>
 						<option value="">No comparison</option>
-						{compareCandidates.map((b) => (
-							<option key={b.id} value={b.id}>
-								{b.name}
-							</option>
-						))}
+						{saved.length > 0 && (
+							<optgroup label="Your saved scenarios">
+								{saved.map((c) => (
+									<option key={c.id} value={c.id}>
+										{c.name}
+									</option>
+								))}
+							</optgroup>
+						)}
+						<optgroup label="Annotated UK budgets">
+							{annotated.map((c) => (
+								<option key={c.id} value={c.id}>
+									{c.name}
+								</option>
+							))}
+						</optgroup>
 					</select>
 					{compareBudgetId && (
 						<button

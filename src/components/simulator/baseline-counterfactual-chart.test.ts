@@ -74,6 +74,8 @@ describe("BaselineComparisonPanel counterfactual chart", () => {
 		expect(html).toContain("Compare with a historical budget");
 		expect(html).toContain('id="compare-budget"');
 		expect(html).toContain("No comparison");
+		// Annotated budgets are grouped under their own optgroup.
+		expect(html).toContain('label="Annotated UK budgets"');
 		// At least one annotated budget option is rendered (smoke test — lever
 		// content is exercised in the data tests).
 		expect(html).toContain("Autumn Budget 2024");
