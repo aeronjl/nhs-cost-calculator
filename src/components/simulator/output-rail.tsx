@@ -10,6 +10,7 @@ import {
 import {
 	AlertCircle,
 	Check,
+	Columns2,
 	Download,
 	FileJson,
 	FileText,
@@ -68,6 +69,7 @@ import { ModelAuditPanel } from "./model-audit-panel";
 import { MultiYearProjection } from "./multi-year-projection";
 import { ScenarioAssumptions } from "./scenario-assumptions";
 import { DiscoverableHint } from "./discoverable-hint";
+import { ScenarioCompareModal } from "./scenario-compare-modal";
 import { ScenarioYearScrubber } from "./scenario-year-scrubber";
 import { TabSubNav } from "./tab-sub-nav";
 import { TopZone } from "./top-zone";
@@ -320,6 +322,7 @@ export function OutputRail({
 	const [copied, setCopied] = useState(false);
 	const [appendixFeedback, setAppendixFeedback] =
 		useState<AppendixExportFeedback>(null);
+	const [compareOpen, setCompareOpen] = useState(false);
 	const appendixFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(
 		null,
 	);
@@ -730,6 +733,14 @@ export function OutputRail({
 						})}
 						<button
 							type="button"
+							onClick={() => setCompareOpen(true)}
+							className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+						>
+							<Columns2 aria-hidden="true" className="size-3" />
+							Compare
+						</button>
+						<button
+							type="button"
 							onClick={() => goToSection("audit")}
 							className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
 						>
@@ -1069,6 +1080,12 @@ export function OutputRail({
 				})}
 			</section>
 		</div>
+		<ScenarioCompareModal
+			open={compareOpen}
+			onOpenChange={setCompareOpen}
+			scenarioA={scenario}
+			baseline={baseline}
+		/>
 		</YearFocusProvider>
 	);
 }
