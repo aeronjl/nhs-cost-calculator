@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ListChecks } from "lucide-react";
+import { motion } from "framer-motion";
 import { TemplatesDrawer } from "./templates-drawer";
 import { createDismissManager } from "./sparkline-dismiss-manager";
 import { cn } from "@/lib/utils";
@@ -367,7 +368,14 @@ export function WizardShell({
 						!isResultStep && "lg:max-w-2xl",
 					)}
 				>
-					{stepContent}
+					<motion.div
+						key={state.step}
+						initial={{ opacity: 0, y: 6 }}
+						animate={{ opacity: 1, y: 0 }}
+						transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+					>
+						{stepContent}
+					</motion.div>
 				</main>
 
 				{!isResultStep && (
