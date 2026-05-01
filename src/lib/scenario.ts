@@ -1633,6 +1633,103 @@ export const projectScenarioOverYears = (
 	return projections;
 };
 
+// Per-year scoring tier exposure. Each year carries the four canonical
+// tiers — static (linear, no behavioural, no macro), dynamic (with
+// behavioural response, no macro), macro (Scope B), GE (Scope C) — so a
+// caller can render the macro scoring bridge for any year of the horizon
+// without re-doing the projection logic itself. Mirrors the year-by-year
+// scaling rules in projectScenarioOverYears so the static / dynamic
+// values agree exactly with the bridge's existing year-1 inputs when y=1.
+export interface ScenarioTieredYear {
+	year: number;
+	staticNet: number;
+	dynamicNet: number;
+	macroNet: number;
+	geNet: number;
+}
+
+const scaleNonBorrowDeltaForYear = (
+	base: number,
+	line: ScenarioLine,
+	year: number,
+	nominalGrowth: number,
+): number => {
+	if (line.type === "tax") {
+		const lever = getTaxLever(line.leverId);
+		if (lever.unit === "yr") {
+			const targetYears = line.magnitude;
+			if (targetYears > 0 && year < targetYears) {
+				return (year / targetYears) * base;
+			}
+			return base;
+		}
+		return base * Math.pow(1 + nominalGrowth, year - 1);
+	}
+	if (line.type === "programme") {
+		return base * Math.pow(1 + nominalGrowth, year - 1);
+	}
+	return base;
+};
+
+export const projectScenarioTieredOverYears = (
+	result: ScenarioResult,
+	years: number,
+	assumptions: Partial<ProjectionAssumptions> = {},
+): ScenarioTieredYear[] => {
+	const a = { ...DEFAULT_ASSUMPTIONS, ...assumptions };
+	const ge = projectScenarioWithGEFeedback(result, years, assumptions);
+	const out: ScenarioTieredYear[] = [];
+
+	for (let y = 1; y <= years; y++) {
+		let staticNet = 0;
+		let dynamicNet = 0;
+
+		for (const ev of result.lines) {
+			const yearEv = ev.line.overridden
+				? evaluateLine(ev.line, { year: y })
+				: ev;
+			const dyn = evaluateLineDynamic(yearEv);
+
+			if (ev.line.type === "borrow") {
+				const borrowing = projectBorrowingPath(ev.line.magnitude, years, {
+					nominalGrowth: a.nominalGrowth,
+					bankRate: a.bankRate,
+					inflation: a.inflation,
+					yieldCurveShift: a.yieldCurveShift,
+					strategyId: ev.line.borrowingStrategyId,
+					portfolio: ev.line.borrowingPortfolio,
+				})[y - 1]!;
+				staticNet += borrowing.netFundingGbp;
+				dynamicNet += borrowing.netFundingGbp;
+				continue;
+			}
+
+			staticNet += scaleNonBorrowDeltaForYear(
+				yearEv.deltaGbp,
+				ev.line,
+				y,
+				a.nominalGrowth,
+			);
+			dynamicNet += scaleNonBorrowDeltaForYear(
+				dyn.dynamicDelta,
+				ev.line,
+				y,
+				a.nominalGrowth,
+			);
+		}
+
+		out.push({
+			year: y,
+			staticNet,
+			dynamicNet,
+			macroNet: ge.noFeedback[y - 1]?.net ?? 0,
+			geNet: ge.withFeedback[y - 1]?.net ?? 0,
+		});
+	}
+
+	return out;
+};
+
 export function diffScenarios(
 	current: readonly ScenarioLine[],
 	incoming: readonly ScenarioLine[],

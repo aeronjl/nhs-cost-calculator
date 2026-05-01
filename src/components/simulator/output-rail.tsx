@@ -32,6 +32,7 @@ import {
 	evaluateScenarioMacro,
 	projectScenarioBandsByYear,
 	projectScenarioOverYears,
+	projectScenarioTieredOverYears,
 	projectScenarioWithGEFeedback,
 } from "@/lib/scenario";
 import type { OBRBaseline } from "@/data/baseline/obr-baseline";
@@ -489,6 +490,10 @@ export function OutputRail({
 	const projectionBands = projectScenarioBandsByYear(
 		result,
 		baseline.years.length,
+	);
+	const tieredProjection = useMemo(
+		() => projectScenarioTieredOverYears(result, baseline.years.length),
+		[result, baseline.years.length],
 	);
 	const lineProjections = useMemo(
 		() =>
@@ -1010,6 +1015,7 @@ export function OutputRail({
 															geGapSignificant={
 																geGapSignificant
 															}
+															tiered={tieredProjection}
 														/>
 														{bandWidthSignificant && (
 															<div className="space-y-1 rounded-md border bg-background/60 p-2 text-[11px] leading-snug">

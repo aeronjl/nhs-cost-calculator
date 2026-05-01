@@ -5,7 +5,9 @@ import { useAnimatedValues } from "@/lib/use-animated-values";
 import type {
 	ScenarioDynamic,
 	ScenarioMacro,
+	ScenarioTieredYear,
 } from "@/lib/scenario";
+import { useYearFocus } from "@/lib/year-focus";
 
 // Layered tier display for the macro feedback section: ready-reckoner →
 // dynamic → macro-adjusted (Scope A) → GE-adjusted (Scope C). Each tier
@@ -24,6 +26,7 @@ interface Props {
 	geYear1: number;
 	geGap: number;
 	geGapSignificant: boolean;
+	tiered?: readonly ScenarioTieredYear[];
 }
 
 const fmt = (n: number): string =>
@@ -63,28 +66,58 @@ export function MacroTierBreakdown({
 	geYear1,
 	geGap,
 	geGapSignificant,
+	tiered,
 }: Props) {
-	const behaviouralDelta = dynamic.dynamicNet - staticNet;
-	const macroDelta = macroYear1 - dynamic.dynamicNet;
-	const geDelta = geYear1 - macroYear1;
-	const totalModelDelta = geYear1 - staticNet;
+	const { year: focusedYear } = useYearFocus();
+	const focusedIndex =
+		focusedYear !== null && tiered && focusedYear >= 1 && focusedYear <= tiered.length
+			? focusedYear - 1
+			: null;
+	const focusedTier = focusedIndex !== null && tiered ? tiered[focusedIndex] : null;
+	const yearLabel = focusedTier ? `Y${focusedTier.year}` : "Y1";
+	const isYearOne = !focusedTier || focusedTier.year === 1;
+
+	const bridgeStatic = focusedTier?.staticNet ?? staticNet;
+	const bridgeDynamic = focusedTier?.dynamicNet ?? dynamic.dynamicNet;
+	const bridgeMacro = focusedTier?.macroNet ?? macroYear1;
+	const bridgeGe = focusedTier?.geNet ?? geYear1;
+
+	const behaviouralDelta = bridgeDynamic - bridgeStatic;
+	const macroDelta = bridgeMacro - bridgeDynamic;
+	const geDelta = bridgeGe - bridgeMacro;
+	const totalModelDelta = bridgeGe - bridgeStatic;
 
 	return (
 		<div className="space-y-3">
-			<div>
+			<div className="flex items-baseline justify-between gap-2">
 				<div className="text-xs font-medium">Macro scoring bridge</div>
+				<div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+					{yearLabel}
+					{!isYearOne && (
+						<span className="ml-1 normal-case text-muted-foreground/80">
+							· focus year
+						</span>
+					)}
+				</div>
+			</div>
+			<div>
 				<p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
 					How the headline moves from a static ready-reckoner estimate to the
-					GE-adjusted year-1 result.
+					GE-adjusted result for {yearLabel}
+					{!isYearOne ? " (drag the year scrubber to change focus)" : ""}.
 				</p>
 			</div>
 
 			<MacroBridgeChart
-				staticNet={staticNet}
-				dynamicNet={dynamic.dynamicNet}
-				macroNet={macroYear1}
-				geNet={geYear1}
+				staticNet={bridgeStatic}
+				dynamicNet={bridgeDynamic}
+				macroNet={bridgeMacro}
+				geNet={bridgeGe}
 			/>
+
+			{tiered && tiered.length > 1 && (
+				<MacroTierSparkline tiered={tiered} focusedIndex={focusedIndex} />
+			)}
 
 			<div className="grid grid-cols-2 gap-2 text-[10px] sm:grid-cols-4">
 				<BridgeMetric
@@ -400,6 +433,154 @@ function BridgeMetric({
 				)}
 			>
 				{value}
+			</div>
+		</div>
+	);
+}
+
+const TIER_LINES = [
+	{ key: "staticNet", label: "Static", color: "#94a3b8", strokeWidth: 1.4 },
+	{ key: "dynamicNet", label: "Dynamic", color: "#60a5fa", strokeWidth: 1.4 },
+	{ key: "macroNet", label: "Macro", color: "#2563eb", strokeWidth: 1.6 },
+	{ key: "geNet", label: "GE", color: "#1e3a8a", strokeWidth: 1.8 },
+] as const;
+
+function MacroTierSparkline({
+	tiered,
+	focusedIndex,
+}: {
+	tiered: readonly ScenarioTieredYear[];
+	focusedIndex: number | null;
+}) {
+	const width = 220;
+	const height = 64;
+	const padX = 8;
+	const padY = 6;
+	const innerWidth = width - padX * 2;
+	const innerHeight = height - padY * 2;
+	const dx = innerWidth / Math.max(1, tiered.length - 1);
+
+	const allValues = tiered.flatMap((row) => [
+		row.staticNet,
+		row.dynamicNet,
+		row.macroNet,
+		row.geNet,
+		0,
+	]);
+	const min = Math.min(...allValues);
+	const max = Math.max(...allValues);
+	const range = max - min || 1;
+	const yAt = (v: number): number =>
+		padY + innerHeight - ((v - min) / range) * innerHeight;
+	const zeroY = yAt(0);
+	const xAt = (i: number): number => padX + i * dx;
+
+	const lineFor = (key: (typeof TIER_LINES)[number]["key"]): string =>
+		tiered.map((row, i) => `${xAt(i)},${yAt(row[key])}`).join(" ");
+
+	return (
+		<div className="rounded-md border bg-background/60 p-2">
+			<div className="flex items-baseline justify-between gap-2">
+				<div className="text-xs font-medium">Tier paths across {tiered.length} years</div>
+				<div className="text-[9px] text-muted-foreground">
+					static → dynamic → macro → GE per year
+				</div>
+			</div>
+			<svg
+				viewBox={`0 0 ${width} ${height}`}
+				className="mt-2 h-16 w-full"
+				preserveAspectRatio="none"
+				role="img"
+				aria-label="Macro scoring tiers across the projection horizon"
+			>
+				<title>Macro scoring tiers across the projection horizon</title>
+				<line
+					x1={padX}
+					x2={width - padX}
+					y1={zeroY}
+					y2={zeroY}
+					stroke="currentColor"
+					strokeWidth="0.4"
+					strokeDasharray="3 3"
+					vectorEffect="non-scaling-stroke"
+					className="text-foreground/30"
+				/>
+				{focusedIndex !== null &&
+					focusedIndex >= 0 &&
+					focusedIndex < tiered.length && (
+						<line
+							x1={xAt(focusedIndex)}
+							x2={xAt(focusedIndex)}
+							y1={padY}
+							y2={height - padY}
+							stroke="currentColor"
+							strokeWidth="0.6"
+							strokeDasharray="2 2"
+							vectorEffect="non-scaling-stroke"
+							className="text-foreground/50 pointer-events-none"
+						/>
+					)}
+				{TIER_LINES.map((line) => (
+					<polyline
+						key={line.key}
+						points={lineFor(line.key)}
+						fill="none"
+						stroke={line.color}
+						strokeWidth={line.strokeWidth}
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						vectorEffect="non-scaling-stroke"
+					>
+						<title>{line.label}</title>
+					</polyline>
+				))}
+				{TIER_LINES.flatMap((line) =>
+					tiered.map((row, i) => (
+						<circle
+							key={`${line.key}-${row.year}`}
+							cx={xAt(i)}
+							cy={yAt(row[line.key])}
+							r={focusedIndex === i ? 1.8 : 1.1}
+							fill={line.color}
+							vectorEffect="non-scaling-stroke"
+						/>
+					)),
+				)}
+			</svg>
+			<div
+				className="mt-1 grid gap-1 text-[9px] tabular-nums text-muted-foreground"
+				style={{
+					gridTemplateColumns: `repeat(${tiered.length}, minmax(0, 1fr))`,
+				}}
+			>
+				{tiered.map((row, i) => (
+					<span
+						key={row.year}
+						className={cn(
+							"min-w-0 truncate",
+							i === 0
+								? "text-left"
+								: i === tiered.length - 1
+									? "text-right"
+									: "text-center",
+							focusedIndex === i && "font-semibold text-foreground",
+						)}
+					>
+						Y{row.year}
+					</span>
+				))}
+			</div>
+			<div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[9px] text-muted-foreground">
+				{TIER_LINES.map((line) => (
+					<span key={line.key} className="inline-flex items-center gap-1.5">
+						<span
+							aria-hidden="true"
+							className="inline-block h-0.5 w-3"
+							style={{ backgroundColor: line.color }}
+						/>
+						<span>{line.label}</span>
+					</span>
+				))}
 			</div>
 		</div>
 	);
