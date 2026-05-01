@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ListChecks } from "lucide-react";
-import { TemplatesDrawer } from "@/components/simulator/templates-drawer";
+import { TemplatesDrawer } from "./templates-drawer";
 import { createDismissManager } from "./sparkline-dismiss-manager";
 import { cn } from "@/lib/utils";
 import type { OBRBaseline } from "@/data/baseline/obr-baseline";

@@ -40,7 +40,7 @@ import {
 } from "@/lib/wizard-state";
 import { ChoiceCard } from "./choice-card";
 import { PolicyScenarioQuickStarts } from "./policy-scenario-quick-starts";
-import type { OutputRailProps } from "@/components/simulator/output-rail";
+import type { OutputRailProps } from "@/components/report/output-rail";
 import type { RefineScenarioPanelProps } from "./refine-scenario-panel";
 
 const RefineScenarioPanel = dynamic<RefineScenarioPanelProps>(
@@ -55,7 +55,7 @@ const RefineScenarioPanel = dynamic<RefineScenarioPanelProps>(
 
 const OutputRail = dynamic<OutputRailProps>(
 	() =>
-		import("@/components/simulator/output-rail").then((mod) => mod.OutputRail),
+		import("@/components/report/output-rail").then((mod) => mod.OutputRail),
 	{
 		loading: () => <ReportSkeleton />,
 	},

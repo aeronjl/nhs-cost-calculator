@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import {
 	HeaderAction,
 	SimulatorHeader,
-} from "@/components/simulator/header";
-import { BorrowingBacktestSection } from "@/components/simulator/borrowing-backtest-section";
-import { BacktestSection } from "@/components/simulator/backtest-section";
-import { FiscalReactionBacktestSection } from "@/components/simulator/fiscal-reaction-backtest-section";
+} from "@/components/header";
+import { BorrowingBacktestSection } from "@/components/report/borrowing-backtest-section";
+import { BacktestSection } from "@/components/report/backtest-section";
+import { FiscalReactionBacktestSection } from "@/components/report/fiscal-reaction-backtest-section";
 import NHSSpendingCalculator from "../NHSSpendingCalculator";
 import PersonalTaxBurden from "../PersonalTaxBurden";
 import InternationalPanel from "../InternationalPanel";

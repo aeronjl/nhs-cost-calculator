@@ -33,7 +33,10 @@ The wizard owns the entire user-facing surface:
   6. **Result** — `<RefineScenarioPanel>` (free-form line edits via the categorised `<LeverRail>`) plus `<OutputRail>` (the analytics report surface)
 - **Wizard state** (`src/lib/wizard-state.ts`) — `useWizardState()` returns `{ committedScenario, previewLines, goal, step, era, mode }`. URL-encoded so share-links + reload survive.
 
-`src/components/simulator/` is misleadingly named: it now hosts the report surface (`OutputRail`, all chart components, scenario diff / compare modals, scenario signature radar, year scrubber, callouts, copy-chart button) consumed inside step 6, not a separate simulator. Rename TBD; treat the path as "report surface" until it moves.
+- **`src/components/report/`** — the report surface mounted inside step 6: `OutputRail`, every chart, modals, scenario signature radar, year scrubber, callouts, copy-chart button, etc.
+- **`src/components/wizard/`** — wizard-only pieces (steps, shell, HUD, refine panel, choice cards, lever rail, templates drawer, era sparkline).
+- **`src/components/header.tsx`** — shared site header (used by `/reference`).
+- **`src/components/ui/`** — shadcn primitives.
 
 **Two real routes**:
 - `/` — the wizard (above).
@@ -43,7 +46,7 @@ The wizard owns the entire user-facing surface:
 
 ### Output rail (the report inside step 6)
 
-`<OutputRail>` (`src/components/simulator/output-rail.tsx`) is the analytics surface step 6 mounts:
+`<OutputRail>` (`src/components/report/output-rail.tsx`) is the analytics surface step 6 mounts:
 
 - **TopZone** (`top-zone.tsx`) — always visible. Animated net £ headline, plain-English narrative, scenario signature radar (5-axis fingerprint), top-3 comparisons, decile + microsim headlines. Supporting stats are drill buttons that scroll to the relevant tab.
 - **Action bar** — `Headline / Analyst / Researcher` mode toggle (persisted in `simulator-rail-mode`), copy-link, MD/JSON appendix exports, audit panel jump, scenario compare modal trigger.
@@ -198,7 +201,7 @@ The `COMPARISONS` catalog doubles as the menu of preset funding targets.
 ### Annotated budgets
 
 - `src/data/budgets/annotated.ts` — `ANNOTATED_BUDGETS`, **16 entries** June 2010 → March 2026, newest-first. Six chancellors (Osborne ×2, Hammond ×2, Sunak ×4, Kwarteng ×1, Hunt ×4, Reeves ×3); three parties. Anchors: Emergency Budget 2010, Budget 2021 (freeze era origin), Mini-budget 2022, Autumn Budget 2024. Each entry: `chancellor`, `party`, `shortDescription`, `notes`, `source`, `caveats`.
-- `src/components/simulator/templates-drawer.tsx` — slide-in panel inside the wizard listing the 16 budgets with party-coloured pills, notes, and a "Replay" button. Loading over a non-empty scenario opens `<ScenarioDiffModal>`. Drawer state persists in URL via `?drawer=templates`.
+- `src/components/wizard/templates-drawer.tsx` — slide-in panel inside the wizard listing the 16 budgets with party-coloured pills, notes, and a "Replay" button. Loading over a non-empty scenario opens `<ScenarioDiffModal>`. Drawer state persists in URL via `?drawer=templates`.
 - "Replay" pushes the budget's serialised scenario into the wizard's URL state (`?wiz=…&wstep=5`); `useWizardState()` re-derives `committedScenario` from the URL and re-mounts step 6 against the new lines. Saved-scenarios + annotated budgets also surface inside the report via the compare picker on the trajectory tab and the side-by-side compare modal in the action bar.
 - `src/app/AnnotatedBudgetsPanel.tsx` — old list-style component, no longer imported anywhere. Dead code; safe to delete in a future cleanup pass.
 

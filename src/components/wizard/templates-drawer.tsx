@@ -14,7 +14,7 @@ import {
 	deserializeScenario,
 	diffScenarios,
 } from "@/lib/scenario";
-import { ScenarioDiffModal } from "./scenario-diff-modal";
+import { ScenarioDiffModal } from "@/components/report/scenario-diff-modal";
 
 const PARTY_COLOURS: Record<AnnotatedBudget["party"], string> = {
 	Labour: "bg-red-50 text-red-800 border-red-200",

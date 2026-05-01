@@ -4,11 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { MethodologyPopover } from "@/components/ui/methodology-popover";
-import { ScenarioDiffModal } from "@/components/simulator/scenario-diff-modal";
+import { ScenarioDiffModal } from "@/components/report/scenario-diff-modal";
 import {
 	LeverRail,
 	type PickerLever,
-} from "@/components/simulator/lever-rail";
+} from "./lever-rail";
 import { BORROWING_STRATEGIES } from "@/data/levers/borrowing";
 import { TAX_LEVERS, getTaxLever } from "@/data/levers/tax-rates";
 import { UK_SPENDING_PROGRAMMES } from "@/data/levers/uk-spending";
